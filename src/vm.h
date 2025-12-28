@@ -9,7 +9,18 @@ extern "C" {
 #endif
 
 typedef void* vm_t;
-typedef struct vm_value vm_value_t;
+typedef struct vm_string_t String;
+
+typedef struct vm_value {
+  enum {
+    VALUE_TYPE_INT,
+    VALUE_TYPE_STR,
+  } type;
+  union {
+    int32_t i32;
+    String* str;
+  } as;
+} vm_value_t;
 
 // A fixed sized (`capacity`) stack of `vm_value_t` for the VM.
 typedef struct {
@@ -54,6 +65,12 @@ void vm_run(vm_t vm);
 // Provides `value` as an i32 in `out` and returns true. If `value` is NULL or
 // is not an i32 then returns false and `out` is untouched.
 bool vm_as_int32(vm_value_t* value, int32_t* out);
+
+// Provides `value` as a C string in `out` and returns length. If `value` is
+// NULL or is not s string then returns 0 and `out` is untouched.
+size_t vm_as_str(vm_value_t* value, char** out);
+
+vm_value_t allocate_str_from_c(const char* str);
 
 #ifdef __cplusplus
 }  // extern "C"

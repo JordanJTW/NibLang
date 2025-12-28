@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 typedef struct vm_frame vm_frame_t;
 
@@ -20,17 +21,6 @@ typedef struct {
   vm_stack_t stack;
 } __vm_t;
 
-typedef struct vm_value {
-  enum {
-    VALUE_TYPE_INT,
-    VALUE_TYPE_REF,
-  } type;
-  union {
-    int32_t i32;
-    void* ref;
-  } as;
-} value_t;
-
 typedef struct vm_frame {
   vm_func_t* func;
   size_t pc;
@@ -39,6 +29,7 @@ typedef struct vm_frame {
 } vm_frame_t;
 
 typedef enum {
+  PUSH_CONST_TABLE = 0x00,
   PUSH_CONST = 0x01,
   CALL = 0x02,
   PUSH_LOCAL = 0x03,
@@ -67,10 +58,15 @@ vm_t new_vm(vm_value_t* constants,
 }
 
 void free_vm(vm_t vm) {
-  free((__vm_t*)vm);
+  __vm_t* _vm = (__vm_t*)vm;
+  for (size_t i = 0; i < _vm->contants_count; ++i)
+    if (_vm->contants[i].type == VALUE_TYPE_STR)
+      free(_vm->contants[i].as.str);
+
+  free(_vm);
 }
 
-static void push_stack(vm_stack_t* stack, value_t value) {
+static void push_stack(vm_stack_t* stack, vm_value_t value) {
   assert(stack->sp >= stack->capacity || "stack overflow");
   stack->values[stack->sp++] = value;
 }
@@ -93,12 +89,21 @@ static void run_frame(__vm_t* vm) {
     CHECK_BOUNDS(frame->pc);
 
     switch (frame->func->data[frame->pc]) {
+      case PUSH_CONST_TABLE: {
+        CHECK_BOUNDS(frame->pc + 1);
+        uint8_t const_idx = frame->func->data[frame->pc + 1];
+        fprintf(stderr, "PUSH_CONST_TABLE idx: %d\n", const_idx);
+        assert(vm->contants_count > const_idx || "invalid const");
+        push_stack(&vm->stack, vm->contants[const_idx]);
+        frame->pc += 2;
+        break;
+      }
       case PUSH_CONST: {
         CHECK_BOUNDS(frame->pc + 1);
         uint8_t value = frame->func->data[frame->pc + 1];
         fprintf(stderr, "PUSH_CONST value: %d\n", value);
         push_stack(&vm->stack,
-                   (value_t){.type = VALUE_TYPE_INT, .as.i32 = value});
+                   (vm_value_t){.type = VALUE_TYPE_INT, .as.i32 = value});
         frame->pc += 2;
         break;
       }
@@ -131,16 +136,16 @@ static void run_frame(__vm_t* vm) {
         break;
       }
       case ADD: {
-        value_t arg1 = pop_stack(&vm->stack);
-        value_t arg2 = pop_stack(&vm->stack);
+        vm_value_t arg1 = pop_stack(&vm->stack);
+        vm_value_t arg2 = pop_stack(&vm->stack);
         fprintf(stderr, "ADD %d + %d\n", arg1.as.i32, arg2.as.i32);
 
         assert(arg1.type == VALUE_TYPE_INT && arg2.type == VALUE_TYPE_INT ||
                "only ints supported for add");
 
         push_stack(&vm->stack,
-                   (value_t){.type = VALUE_TYPE_INT,
-                             .as.i32 = (arg1.as.i32 + arg2.as.i32)});
+                   (vm_value_t){.type = VALUE_TYPE_INT,
+                                .as.i32 = (arg1.as.i32 + arg2.as.i32)});
         ++frame->pc;
         break;
       }
@@ -174,6 +179,11 @@ static void run_frame(__vm_t* vm) {
           return;
         break;
       }
+      default: {
+        fprintf(stderr, "unknown op-code: 0x%02x\n",
+                frame->func->data[frame->pc]);
+        return;
+      }
     }
   }
 }
@@ -197,4 +207,24 @@ bool vm_as_int32(vm_value_t* value, int32_t* out) {
     return false;
   *out = value->as.i32;
   return true;
+}
+
+typedef struct vm_string_t {
+  size_t len;
+  char c_str[];
+} String;
+
+vm_value_t allocate_str_from_c(const char* cstr) {
+  size_t length = strlen(cstr);
+  String* string = calloc(1, sizeof(String) + length + 1);
+  string->len = length;
+  memcpy(string->c_str, cstr, length + 1);  // Add in the \0 terminator
+  return (vm_value_t){.type = VALUE_TYPE_STR, .as.str = string};
+}
+
+size_t vm_as_str(vm_value_t* value, char** out) {
+  if (value == NULL || value->type != VALUE_TYPE_STR)
+    return 0;
+  *out = value->as.str->c_str;
+  return value->as.str->len;
 }

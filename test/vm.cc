@@ -1,6 +1,7 @@
 #include "vm.h"
 
 #include <cstdint>
+#include <string>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -45,7 +46,6 @@ TEST(VM, CallFunc) {
           .data = main_bytecode,
           .data_len = sizeof(main_bytecode),
       },
-
       (vm_func_t){
           .name = "add",
           .arg_count = 2,
@@ -73,6 +73,51 @@ TEST(VM, CallFunc) {
       });
 
   vm_t vm = new_vm(nullptr, 0, funcs, sizeof(funcs), native_funcs,
+                   sizeof(native_funcs));
+  vm_run(vm);
+  free_vm(vm);
+}
+
+TEST(VM, ConstantString) {
+  uint8_t main_bytecode[] = {
+      0x00, 0x00,  // PUSH_CONST_TABLE 0
+      0x06, 0x00,  // CALL_NATIVE 0
+      0x05,        // RETURN
+
+  };
+
+  vm_value_t constants[] = {
+      allocate_str_from_c("hello world"),
+  };
+
+  vm_func_t funcs[] = {
+      (vm_func_t){
+          .name = "main",
+          .arg_count = 0,
+          .local_count = 0,
+          .data = main_bytecode,
+          .data_len = sizeof(main_bytecode),
+      },
+  };
+
+  testing::MockFunction<void(vm_value_t*, size_t)> native_func;
+
+  vm_native_func_t native_funcs[] = {(vm_native_func_t){
+      .name = "print",
+      .arg_count = 1,
+      .func = call_native_func,
+      .userdata = &native_func,
+  }};
+
+  EXPECT_CALL(native_func, Call(_, _))
+      .WillOnce([](vm_value_t* argv, size_t argc) {
+        EXPECT_EQ(argc, 1);
+        char* str;
+        size_t length = vm_as_str(argv, &str);
+        EXPECT_EQ(std::string(str, length), "hello world");
+      });
+
+  vm_t vm = new_vm(constants, 1, funcs, sizeof(funcs), native_funcs,
                    sizeof(native_funcs));
   vm_run(vm);
   free_vm(vm);

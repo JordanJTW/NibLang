@@ -8,6 +8,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef NDEBUG
+#define DEBUG_LOG($fmt, ...)
+#else
+#define DEBUG_LOG($fmt, ...) \
+  fprintf(stderr, "[%s:%d] " $fmt "\n", __FILE_NAME__, __LINE__, ##__VA_ARGS__)
+#endif  // NDEBUG
+
 typedef struct vm_frame vm_frame_t;
 
 typedef struct {
@@ -34,9 +41,16 @@ typedef enum {
   CALL = 0x02,
   PUSH_LOCAL = 0x03,
   ADD = 0x04,
-  LOAD_LOCAL = 0x07,
-  CALL_NATIVE = 0x06,
   RETURN = 0x05,
+  CALL_NATIVE = 0x06,
+  LOAD_LOCAL = 0x07,
+  LESS_THAN = 0x08,
+  LESS_OR_EQ = 0x09,
+  EQUAL = 0x0A,
+  GREAT_OR_EQ = 0x0B,
+  GREATER_THAN = 0x0C,
+  JUMP_IF_FALSE = 0x0D,
+  JMP = 0x0E,
 } op_t;
 
 vm_t new_vm(vm_value_t* constants,
@@ -77,10 +91,10 @@ static vm_value_t pop_stack(vm_stack_t* stack) {
 }
 
 static void run_frame(__vm_t* vm) {
-#define CHECK_BOUNDS($pc)                                                \
-  if ($pc >= frame->func->data_len) {                                    \
-    fprintf(stderr, "data overflow in func: '%s'\n", frame->func->name); \
-    return;                                                              \
+#define CHECK_BOUNDS($pc)                                          \
+  if ($pc >= frame->func->data_len) {                              \
+    DEBUG_LOG("data overflow in func: '%s'\n", frame->func->name); \
+    return;                                                        \
   }
 
   while (1) {
@@ -92,7 +106,7 @@ static void run_frame(__vm_t* vm) {
       case PUSH_CONST_TABLE: {
         CHECK_BOUNDS(frame->pc + 1);
         uint8_t const_idx = frame->func->data[frame->pc + 1];
-        fprintf(stderr, "PUSH_CONST_TABLE idx: %d\n", const_idx);
+        DEBUG_LOG("PUSH_CONST_TABLE idx: %d", const_idx);
         assert(vm->contants_count > const_idx || "invalid const");
         push_stack(&vm->stack, vm->contants[const_idx]);
         frame->pc += 2;
@@ -101,7 +115,7 @@ static void run_frame(__vm_t* vm) {
       case PUSH_CONST: {
         CHECK_BOUNDS(frame->pc + 1);
         uint8_t value = frame->func->data[frame->pc + 1];
-        fprintf(stderr, "PUSH_CONST value: %d\n", value);
+        DEBUG_LOG("PUSH_CONST value: %d", value);
         push_stack(&vm->stack,
                    (vm_value_t){.type = VALUE_TYPE_INT, .as.i32 = value});
         frame->pc += 2;
@@ -112,7 +126,7 @@ static void run_frame(__vm_t* vm) {
         uint8_t func_idx = frame->func->data[frame->pc + 1];
         assert(vm->function_count > func_idx || "invalid func");
         vm_func_t* func = &vm->functions[func_idx];
-        fprintf(stderr, "CALL idx: %d (%s)\n", func_idx, func->name);
+        DEBUG_LOG("CALL idx: %d (%s)", func_idx, func->name);
         vm_frame_t* new_frame = calloc(
             1, sizeof(vm_frame_t) + sizeof(vm_value_t) * func->local_count);
 
@@ -128,7 +142,7 @@ static void run_frame(__vm_t* vm) {
       case PUSH_LOCAL: {
         CHECK_BOUNDS(frame->pc + 1);
         uint8_t local_idx = frame->func->data[frame->pc + 1];
-        fprintf(stderr, "PUSH_LOCAL idx: %d\n", local_idx);
+        DEBUG_LOG("PUSH_LOCAL idx: %d", local_idx);
         assert(frame->func->local_count > local_idx || "invalid local");
         vm_value_t value = vm->current_frame->locals[local_idx];
         push_stack(&vm->stack, value);
@@ -138,7 +152,7 @@ static void run_frame(__vm_t* vm) {
       case ADD: {
         vm_value_t arg1 = pop_stack(&vm->stack);
         vm_value_t arg2 = pop_stack(&vm->stack);
-        fprintf(stderr, "ADD %d + %d\n", arg1.as.i32, arg2.as.i32);
+        DEBUG_LOG("ADD %d + %d", arg1.as.i32, arg2.as.i32);
 
         assert(arg1.type == VALUE_TYPE_INT && arg2.type == VALUE_TYPE_INT ||
                "only ints supported for add");
@@ -152,7 +166,7 @@ static void run_frame(__vm_t* vm) {
       case LOAD_LOCAL: {
         CHECK_BOUNDS(frame->pc + 1);
         uint8_t local_idx = frame->func->data[frame->pc + 1];
-        fprintf(stderr, "LOAD_LOCAL idx: %d\n", local_idx);
+        DEBUG_LOG("LOAD_LOCAL idx: %d", local_idx);
         assert(frame->func->local_count > local_idx || "invalid local");
         frame->locals[local_idx] = pop_stack(&vm->stack);
         frame->pc += 2;
@@ -163,15 +177,18 @@ static void run_frame(__vm_t* vm) {
         uint8_t native_idx = frame->func->data[frame->pc + 1];
         assert(vm->native_function_count > native_idx || "invalid func");
         vm_native_func_t native_func = vm->native_functions[native_idx];
-        fprintf(stderr, "CALL_NATIVE idx: %d (%s)\n", native_idx,
-                native_func.name);
-        native_func.func(vm->stack.values, native_func.arg_count,
-                         native_func.userdata);
+        DEBUG_LOG("CALL_NATIVE idx: %d (%s)", native_idx, native_func.name);
+
+        assert(vm->stack.sp > native_func.arg_count || "stack overflow");
+
+        native_func.func(
+            vm->stack.values + vm->stack.sp - native_func.arg_count,
+            native_func.arg_count, native_func.userdata);
         frame->pc += 2;
         break;
       }
       case RETURN: {
-        fprintf(stderr, "RETURN\n");
+        DEBUG_LOG("RETURN");
         vm_frame_t* current_frame = vm->current_frame;
         vm->current_frame = current_frame->next;
         free(current_frame);
@@ -179,9 +196,52 @@ static void run_frame(__vm_t* vm) {
           return;
         break;
       }
+#define EQUALITY_CASE($op, $condition)                                    \
+  case $op: {                                                             \
+    vm_value_t v2 = pop_stack(&vm->stack);                                \
+    vm_value_t v1 = pop_stack(&vm->stack);                                \
+    assert(v1.type == VALUE_TYPE_INT && v2.type == VALUE_TYPE_INT ||      \
+           "only i32 are comparable");                                    \
+    DEBUG_LOG(#$op " %d" #$condition "%d", v1.as.i32, v2.as.i32);         \
+    push_stack(&vm->stack,                                                \
+               (vm_value_t){.type = VALUE_TYPE_INT,                       \
+                            .as.i32 = (v1.as.i32 $condition v2.as.i32)}); \
+    ++frame->pc;                                                          \
+    break;                                                                \
+  }
+
+        EQUALITY_CASE(LESS_THAN, <)
+        EQUALITY_CASE(LESS_OR_EQ, <=)
+        EQUALITY_CASE(EQUAL, ==)
+        EQUALITY_CASE(GREAT_OR_EQ, >=)
+        EQUALITY_CASE(GREATER_THAN, >)
+
+#undef EQUALITY_CASE
+
+      case JUMP_IF_FALSE: {
+        CHECK_BOUNDS(frame->pc + 1);
+        uint8_t address = frame->func->data[frame->pc + 1];
+        DEBUG_LOG("JUMP_IF_FALSE to 0x%02x", address);
+        vm_value_t condition = pop_stack(&vm->stack);
+        assert(condition.type == VALUE_TYPE_INT || "condition must be i32");
+        if (condition.as.i32 == 0) {
+          frame->pc = address;
+        } else {
+          frame->pc += 2;
+        }
+        break;
+      }
+
+      case JMP: {
+        CHECK_BOUNDS(frame->pc + 1);
+        uint8_t address = frame->func->data[frame->pc + 1];
+        DEBUG_LOG("JMP to 0x%02x", address);
+        frame->pc = address;
+        break;
+      }
+
       default: {
-        fprintf(stderr, "unknown op-code: 0x%02x\n",
-                frame->func->data[frame->pc]);
+        DEBUG_LOG("unknown op-code: 0x%02x", frame->func->data[frame->pc]);
         return;
       }
     }

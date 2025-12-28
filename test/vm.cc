@@ -122,3 +122,60 @@ TEST(VM, ConstantString) {
   vm_run(vm);
   free_vm(vm);
 }
+
+TEST(VM, ForLoop) {
+  // for (int i=0; i < 5; ++i)
+  //   native_func(i);
+  uint8_t main_bytecode[] = {
+      0x01, 0x00,  // PUSH_CONST 0
+      0x07, 0x00,  // LOAD_LOCAL 0
+      0x03, 0x00,  // PUSH_LOCAL 0
+      0x01, 0x05,  // PUSH_CONST 5
+      0x08,        // LESS_THAN
+      0x0D, 0x18,  // JUMP_IF_FALSE
+      0x03, 0x00,  // PUSH_LOCAL 0
+      0x06, 0x00,  // CALL_NATIVE 0
+      0x03, 0x00,  // PUSH_LOCAL 0
+      0x01, 0x01,  // PUSH_CONST 1
+      0x04,        // ADD
+      0x07, 0x00,  // LOAD_LOCAL 0
+      0x0E, 0x04,  // GOTO 0x04
+      0x05,        // RETURN
+  };
+
+  vm_func_t funcs[] = {
+      (vm_func_t){
+          .name = "main",
+          .arg_count = 0,
+          .local_count = 1,
+          .data = main_bytecode,
+          .data_len = sizeof(main_bytecode),
+      },
+  };
+
+  testing::MockFunction<void(vm_value_t*, size_t)> native_func;
+
+  vm_native_func_t native_funcs[] = {(vm_native_func_t){
+      .name = "native",
+      .arg_count = 1,
+      .func = call_native_func,
+      .userdata = &native_func,
+  }};
+
+  EXPECT_CALL(native_func, Call(_, _))
+      .Times(5)
+      .WillRepeatedly([](vm_value_t* argv, size_t argc) {
+        static int32_t values[] = {0, 1, 2, 3, 4};
+        static size_t idx = 0;
+
+        EXPECT_EQ(argc, 1);
+        int32_t result;
+        ASSERT_TRUE(vm_as_int32(argv, &result));
+        EXPECT_EQ(result, values[idx++]);
+      });
+
+  vm_t vm = new_vm(nullptr, 0, funcs, sizeof(funcs), native_funcs,
+                   sizeof(native_funcs));
+  vm_run(vm);
+  free_vm(vm);
+}

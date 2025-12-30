@@ -70,11 +70,11 @@ void vm_run(vm_t vm);
 
 // Provides `value` as an i32 in `out` and returns true. If `value` is NULL or
 // is not an i32 then returns false and `out` is untouched.
-bool vm_as_int32(vm_value_t* value, int32_t* out);
+bool vm_as_int32(const vm_value_t* value, int32_t* out);
 
 // Provides `value` as a C string in `out` and returns length. If `value` is
 // NULL or is not s string then returns 0 and `out` is untouched.
-size_t vm_as_str(vm_value_t* value, char** out);
+size_t vm_as_str(const vm_value_t* value, char** out);
 
 // Allocates a new heap allocated string and returns its ref in `vm_value_t`.
 vm_value_t allocate_str_from_c(const char* str);

@@ -19,7 +19,8 @@
 
 typedef struct vm_frame vm_frame_t;
 
-static void increment_refcount(vm_value_t* value);
+static void rc_increment(vm_value_t* value);
+static void rc_decrement(vm_value_t* value);
 
 typedef struct vm_string_t {
   ref_count_t ref_count;
@@ -28,7 +29,7 @@ typedef struct vm_string_t {
 } String;
 
 typedef struct {
-  vm_value_t* contants;
+  vm_value_t* constants;
   size_t contants_count;
   vm_func_t* functions;
   size_t function_count;
@@ -52,8 +53,13 @@ vm_t new_vm(vm_value_t* constants,
             vm_native_func_t* native_functions,
             size_t native_functions_count) {
   __vm_t* vm = calloc(1, sizeof(__vm_t));
-  vm->contants = constants;
+  vm->constants = constants;
   vm->contants_count = constants_count;
+
+  // Ensure all constants are owned by the VM itself.
+  for (size_t i = 0; i < vm->contants_count; ++i)
+    rc_increment(&vm->constants[i]);
+
   vm->functions = functions;
   vm->function_count = functions_count;
   vm->native_functions = native_functions;
@@ -65,15 +71,15 @@ vm_t new_vm(vm_value_t* constants,
 
 void free_vm(vm_t vm) {
   __vm_t* _vm = (__vm_t*)vm;
+
   for (size_t i = 0; i < _vm->contants_count; ++i)
-    if (_vm->contants[i].type == VALUE_TYPE_STR)
-      free(_vm->contants[i].as.str);
+    rc_decrement(&_vm->constants[i]);
 
   free(_vm->stack.values);
   free(_vm);
 }
 
-static void increment_refcount(vm_value_t* value) {
+static void rc_increment(vm_value_t* value) {
   switch (value->type) {
     case VALUE_TYPE_NULL:
     case VALUE_TYPE_INT:
@@ -86,13 +92,14 @@ static void increment_refcount(vm_value_t* value) {
   }
 }
 
-static void decrement_refcount(vm_value_t* value) {
+static void rc_decrement(vm_value_t* value) {
   switch (value->type) {
     case VALUE_TYPE_NULL:
     case VALUE_TYPE_INT:
       return;
 
     case VALUE_TYPE_STR: {
+      assert(*value->as.ref > 0);
       --(*value->as.ref);
       if (*value->as.ref == 0)
         free(value->as.ref);
@@ -104,7 +111,7 @@ static void decrement_refcount(vm_value_t* value) {
 // Pushes `value` on to the stack. The stack takes ownership of `value`.
 static void push_stack(vm_stack_t* stack, vm_value_t value) {
   assert(stack->sp >= stack->capacity || "stack overflow");
-  increment_refcount(&value);
+  rc_increment(&value);
   stack->values[stack->sp++] = value;
 }
 
@@ -133,7 +140,7 @@ static void run_frame(__vm_t* vm) {
         uint8_t const_idx = frame->func->data[frame->pc + 1];
         DEBUG_LOG("OP_PUSH_CONST_REF idx: %d", const_idx);
         assert(vm->contants_count > const_idx || "invalid const");
-        push_stack(&vm->stack, vm->contants[const_idx]);
+        push_stack(&vm->stack, vm->constants[const_idx]);
         frame->pc += 2;
         break;
       }
@@ -193,7 +200,7 @@ static void run_frame(__vm_t* vm) {
         uint8_t local_idx = frame->func->data[frame->pc + 1];
         DEBUG_LOG("OP_STORE_LOCAL idx: %d", local_idx);
         assert(frame->func->local_count > local_idx || "invalid local");
-        decrement_refcount(&frame->locals[local_idx]);
+        rc_decrement(&frame->locals[local_idx]);
         frame->locals[local_idx] = pop_stack(&vm->stack);
         frame->pc += 2;
         break;
@@ -223,7 +230,7 @@ static void run_frame(__vm_t* vm) {
         vm->current_frame = current_frame->next;
 
         for (size_t i = 0; i < current_frame->func->local_count; ++i)
-          decrement_refcount(&current_frame->locals[i]);
+          rc_decrement(&current_frame->locals[i]);
 
         free(current_frame);
         if (vm->current_frame == NULL)  // Nothing to return to... exit.
@@ -296,7 +303,7 @@ void vm_run(vm_t vm) {
   run_frame(__vm);
 }
 
-bool vm_as_int32(vm_value_t* value, int32_t* out) {
+bool vm_as_int32(const vm_value_t* value, int32_t* out) {
   if (value == NULL || value->type != VALUE_TYPE_INT)
     return false;
   *out = value->as.i32;
@@ -316,7 +323,7 @@ vm_value_t allocate_str_from_c_with_length(const char* str, size_t length) {
   return (vm_value_t){.type = VALUE_TYPE_STR, .as.str = string};
 }
 
-size_t vm_as_str(vm_value_t* value, char** out) {
+size_t vm_as_str(const vm_value_t* value, char** out) {
   if (value == NULL || value->type != VALUE_TYPE_STR)
     return 0;
   *out = value->as.str->c_str;
@@ -324,5 +331,5 @@ size_t vm_as_str(vm_value_t* value, char** out) {
 }
 
 void vm_free_ref(vm_value_t value) {
-  decrement_refcount(&value);
+  rc_decrement(&value);
 }

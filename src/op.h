@@ -1,0 +1,19 @@
+#pragma once
+
+typedef enum {
+  OP_PUSH_CONST_REF = 0x00,
+  OP_PUSH_CONST = 0x01,
+  OP_CALL = 0x02,
+  OP_PUSH_LOCAL = 0x03,
+  OP_ADD = 0x04,
+  OP_RETURN = 0x05,
+  OP_CALL_NATIVE = 0x06,
+  OP_STORE_LOCAL = 0x07,
+  OP_LESS_THAN = 0x08,
+  OP_LESS_OR_EQ = 0x09,
+  OP_EQUAL = 0x0A,
+  OP_GREAT_OR_EQ = 0x0B,
+  OP_GREATER_THAN = 0x0C,
+  OP_JUMP_IF_FALSE = 0x0D,
+  OP_JUMP = 0x0E,
+} op_t;

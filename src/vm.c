@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "src/op.h"
+
 #ifdef NDEBUG
 #define DEBUG_LOG($fmt, ...)
 #else
@@ -34,24 +36,6 @@ typedef struct vm_frame {
   vm_frame_t* next;
   vm_value_t locals[];
 } vm_frame_t;
-
-typedef enum {
-  PUSH_CONST_TABLE = 0x00,
-  PUSH_CONST = 0x01,
-  CALL = 0x02,
-  PUSH_LOCAL = 0x03,
-  ADD = 0x04,
-  RETURN = 0x05,
-  CALL_NATIVE = 0x06,
-  LOAD_LOCAL = 0x07,
-  LESS_THAN = 0x08,
-  LESS_OR_EQ = 0x09,
-  EQUAL = 0x0A,
-  GREAT_OR_EQ = 0x0B,
-  GREATER_THAN = 0x0C,
-  JUMP_IF_FALSE = 0x0D,
-  JMP = 0x0E,
-} op_t;
 
 vm_t new_vm(vm_value_t* constants,
             size_t constants_count,
@@ -103,30 +87,30 @@ static void run_frame(__vm_t* vm) {
     CHECK_BOUNDS(frame->pc);
 
     switch (frame->func->data[frame->pc]) {
-      case PUSH_CONST_TABLE: {
+      case OP_PUSH_CONST_REF: {
         CHECK_BOUNDS(frame->pc + 1);
         uint8_t const_idx = frame->func->data[frame->pc + 1];
-        DEBUG_LOG("PUSH_CONST_TABLE idx: %d", const_idx);
+        DEBUG_LOG("OP_PUSH_CONST_REF idx: %d", const_idx);
         assert(vm->contants_count > const_idx || "invalid const");
         push_stack(&vm->stack, vm->contants[const_idx]);
         frame->pc += 2;
         break;
       }
-      case PUSH_CONST: {
+      case OP_PUSH_CONST: {
         CHECK_BOUNDS(frame->pc + 1);
         uint8_t value = frame->func->data[frame->pc + 1];
-        DEBUG_LOG("PUSH_CONST value: %d", value);
+        DEBUG_LOG("OP_PUSH_CONST value: %d", value);
         push_stack(&vm->stack,
                    (vm_value_t){.type = VALUE_TYPE_INT, .as.i32 = value});
         frame->pc += 2;
         break;
       }
-      case CALL: {
+      case OP_CALL: {
         CHECK_BOUNDS(frame->pc + 1);
         uint8_t func_idx = frame->func->data[frame->pc + 1];
         assert(vm->function_count > func_idx || "invalid func");
         vm_func_t* func = &vm->functions[func_idx];
-        DEBUG_LOG("CALL idx: %d (%s)", func_idx, func->name);
+        DEBUG_LOG("OP_CALL idx: %d (%s)", func_idx, func->name);
         vm_frame_t* new_frame = calloc(
             1, sizeof(vm_frame_t) + sizeof(vm_value_t) * func->local_count);
 
@@ -139,20 +123,20 @@ static void run_frame(__vm_t* vm) {
         frame->pc += 2;
         break;
       }
-      case PUSH_LOCAL: {
+      case OP_PUSH_LOCAL: {
         CHECK_BOUNDS(frame->pc + 1);
         uint8_t local_idx = frame->func->data[frame->pc + 1];
-        DEBUG_LOG("PUSH_LOCAL idx: %d", local_idx);
+        DEBUG_LOG("OP_PUSH_LOCAL idx: %d", local_idx);
         assert(frame->func->local_count > local_idx || "invalid local");
         vm_value_t value = vm->current_frame->locals[local_idx];
         push_stack(&vm->stack, value);
         frame->pc += 2;
         break;
       }
-      case ADD: {
+      case OP_ADD: {
         vm_value_t arg1 = pop_stack(&vm->stack);
         vm_value_t arg2 = pop_stack(&vm->stack);
-        DEBUG_LOG("ADD %d + %d", arg1.as.i32, arg2.as.i32);
+        DEBUG_LOG("OP_ADD %d + %d", arg1.as.i32, arg2.as.i32);
 
         assert(arg1.type == VALUE_TYPE_INT && arg2.type == VALUE_TYPE_INT ||
                "only ints supported for add");
@@ -163,21 +147,21 @@ static void run_frame(__vm_t* vm) {
         ++frame->pc;
         break;
       }
-      case LOAD_LOCAL: {
+      case OP_STORE_LOCAL: {
         CHECK_BOUNDS(frame->pc + 1);
         uint8_t local_idx = frame->func->data[frame->pc + 1];
-        DEBUG_LOG("LOAD_LOCAL idx: %d", local_idx);
+        DEBUG_LOG("OP_STORE_LOCAL idx: %d", local_idx);
         assert(frame->func->local_count > local_idx || "invalid local");
         frame->locals[local_idx] = pop_stack(&vm->stack);
         frame->pc += 2;
         break;
       }
-      case CALL_NATIVE: {
+      case OP_CALL_NATIVE: {
         CHECK_BOUNDS(frame->pc + 1);
         uint8_t native_idx = frame->func->data[frame->pc + 1];
         assert(vm->native_function_count > native_idx || "invalid func");
         vm_native_func_t native_func = vm->native_functions[native_idx];
-        DEBUG_LOG("CALL_NATIVE idx: %d (%s)", native_idx, native_func.name);
+        DEBUG_LOG("OP_CALL_NATIVE idx: %d (%s)", native_idx, native_func.name);
 
         assert(vm->stack.sp > native_func.arg_count || "stack overflow");
 
@@ -187,8 +171,8 @@ static void run_frame(__vm_t* vm) {
         frame->pc += 2;
         break;
       }
-      case RETURN: {
-        DEBUG_LOG("RETURN");
+      case OP_RETURN: {
+        DEBUG_LOG("OP_RETURN");
         vm_frame_t* current_frame = vm->current_frame;
         vm->current_frame = current_frame->next;
         free(current_frame);
@@ -210,18 +194,18 @@ static void run_frame(__vm_t* vm) {
     break;                                                                \
   }
 
-        EQUALITY_CASE(LESS_THAN, <)
-        EQUALITY_CASE(LESS_OR_EQ, <=)
-        EQUALITY_CASE(EQUAL, ==)
-        EQUALITY_CASE(GREAT_OR_EQ, >=)
-        EQUALITY_CASE(GREATER_THAN, >)
+        EQUALITY_CASE(OP_LESS_THAN, <)
+        EQUALITY_CASE(OP_LESS_OR_EQ, <=)
+        EQUALITY_CASE(OP_EQUAL, ==)
+        EQUALITY_CASE(OP_GREAT_OR_EQ, >=)
+        EQUALITY_CASE(OP_GREATER_THAN, >)
 
 #undef EQUALITY_CASE
 
-      case JUMP_IF_FALSE: {
+      case OP_JUMP_IF_FALSE: {
         CHECK_BOUNDS(frame->pc + 1);
         uint8_t address = frame->func->data[frame->pc + 1];
-        DEBUG_LOG("JUMP_IF_FALSE to 0x%02x", address);
+        DEBUG_LOG("OP_JUMP_IF_FALSE to 0x%02x", address);
         vm_value_t condition = pop_stack(&vm->stack);
         assert(condition.type == VALUE_TYPE_INT || "condition must be i32");
         if (condition.as.i32 == 0) {
@@ -232,10 +216,10 @@ static void run_frame(__vm_t* vm) {
         break;
       }
 
-      case JMP: {
+      case OP_JUMP: {
         CHECK_BOUNDS(frame->pc + 1);
         uint8_t address = frame->func->data[frame->pc + 1];
-        DEBUG_LOG("JMP to 0x%02x", address);
+        DEBUG_LOG("OP_JUMP to 0x%02x", address);
         frame->pc = address;
         break;
       }

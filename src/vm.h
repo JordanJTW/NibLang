@@ -59,7 +59,7 @@ vm_t new_vm(vm_value_t* constants,
             size_t native_functions_count);
 void free_vm(vm_t vm);
 
-// Runs `functions[0]` until a RETURN is encountered.
+// Runs `functions[0]` until a OP_RETURN is encountered.
 void vm_run(vm_t vm);
 
 // Provides `value` as an i32 in `out` and returns true. If `value` is NULL or

@@ -1,10 +1,12 @@
-#include "vm.h"
+#include "src/vm.h"
 
 #include <cstdint>
 #include <string>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+
+#include "test/assmbler.h"
 
 using ::testing::_;
 
@@ -21,37 +23,33 @@ void call_native_func(vm_value_t* argv, size_t argc, void* userdata) {
 }
 
 TEST(VM, CallFunc) {
-  uint8_t main_bytecode[] = {
-      0x01, 0x02,  // PUSH_CONST 2
-      0x01, 0x08,  // PUSH_CONST 8
-      0x02, 0x01,  // CALL 1
-      0x07, 0x00,  // LOAD_LOCAL 0
-      0x03, 0x00,  // PUSH_LOCAL 0
-      0x06, 0x00,  // CALL_NATIVE 0
-      0x05,        // RETURN
-  };
+  auto main_bytecode = Assembler()
+                           .PushConst(2)
+                           .PushConst(8)
+                           .Call(1)
+                           .StoreLocal(0)
+                           .PushLocal(0)
+                           .CallNative(0)
+                           .Return()
+                           .Build();
 
-  uint8_t add_bytecode[] = {
-      0x03, 0x00,  // PUSH_LOCAL 0
-      0x03, 0x01,  // PUSH_LOCAL 1
-      0x04,        // ADD
-      0x05,        // RETURN
-  };
+  auto add_bytecode =
+      Assembler().PushLocal(0).PushLocal(1).Add().Return().Build();
 
   vm_func_t funcs[] = {
       (vm_func_t){
           .name = "main",
           .arg_count = 0,
           .local_count = 1,
-          .data = main_bytecode,
-          .data_len = sizeof(main_bytecode),
+          .data = main_bytecode.data(),
+          .data_len = main_bytecode.size(),
       },
       (vm_func_t){
           .name = "add",
           .arg_count = 2,
           .local_count = 2,
-          .data = add_bytecode,
-          .data_len = sizeof(add_bytecode),
+          .data = add_bytecode.data(),
+          .data_len = add_bytecode.size(),
       },
   };
 
@@ -79,12 +77,8 @@ TEST(VM, CallFunc) {
 }
 
 TEST(VM, ConstantString) {
-  uint8_t main_bytecode[] = {
-      0x00, 0x00,  // PUSH_CONST_TABLE 0
-      0x06, 0x00,  // CALL_NATIVE 0
-      0x05,        // RETURN
-
-  };
+  auto main_bytecode =
+      Assembler().PushConstRef(0).CallNative(0).Return().Build();
 
   vm_value_t constants[] = {
       allocate_str_from_c("hello world"),
@@ -95,8 +89,8 @@ TEST(VM, ConstantString) {
           .name = "main",
           .arg_count = 0,
           .local_count = 0,
-          .data = main_bytecode,
-          .data_len = sizeof(main_bytecode),
+          .data = main_bytecode.data(),
+          .data_len = main_bytecode.size(),
       },
   };
 
@@ -126,30 +120,32 @@ TEST(VM, ConstantString) {
 TEST(VM, ForLoop) {
   // for (int i=0; i < 5; ++i)
   //   native_func(i);
-  uint8_t main_bytecode[] = {
-      0x01, 0x00,  // PUSH_CONST 0
-      0x07, 0x00,  // LOAD_LOCAL 0
-      0x03, 0x00,  // PUSH_LOCAL 0
-      0x01, 0x05,  // PUSH_CONST 5
-      0x08,        // LESS_THAN
-      0x0D, 0x18,  // JUMP_IF_FALSE
-      0x03, 0x00,  // PUSH_LOCAL 0
-      0x06, 0x00,  // CALL_NATIVE 0
-      0x03, 0x00,  // PUSH_LOCAL 0
-      0x01, 0x01,  // PUSH_CONST 1
-      0x04,        // ADD
-      0x07, 0x00,  // LOAD_LOCAL 0
-      0x0E, 0x04,  // GOTO 0x04
-      0x05,        // RETURN
-  };
+  auto main_bytecode = Assembler()
+                           .PushConst(0)
+                           .StoreLocal(0)
+                           .Label("loop_start")
+                           .PushLocal(0)
+                           .PushConst(5)
+                           .Compare(OP_LESS_THAN)
+                           .JumpIfFalse("exit")
+                           .PushLocal(0)
+                           .CallNative(0)
+                           .PushLocal(0)
+                           .PushConst(1)
+                           .Add()
+                           .StoreLocal(0)
+                           .Jump("loop_start")
+                           .Label("exit")
+                           .Return()
+                           .Build();
 
   vm_func_t funcs[] = {
       (vm_func_t){
           .name = "main",
           .arg_count = 0,
           .local_count = 1,
-          .data = main_bytecode,
-          .data_len = sizeof(main_bytecode),
+          .data = main_bytecode.data(),
+          .data_len = main_bytecode.size(),
       },
   };
 

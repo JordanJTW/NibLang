@@ -10,15 +10,19 @@ extern "C" {
 
 typedef void* vm_t;
 typedef struct vm_string_t String;
+typedef uint32_t ref_count_t;
 
 typedef struct vm_value {
   enum {
+    VALUE_TYPE_NULL,
     VALUE_TYPE_INT,
     VALUE_TYPE_STR,
   } type;
   union {
     int32_t i32;
     String* str;
+    // All reference (heap-allocated) values start with a `ref_count_t`
+    ref_count_t* ref;
   } as;
 } vm_value_t;
 
@@ -43,9 +47,11 @@ typedef struct {
 
 // Represents a native function `func`. `func` is invoked with a pointer to the
 // head of the current stack in `argv`, `arg_count` in `argc`, and `userdata`.
+// Ownership of the `argv` arguments is passed to `func` and must be explicitly
+// freed if not retained (see `vm_free_ref()`).
 typedef struct {
   size_t arg_count;
-  void (*func)(vm_value_t* argv, size_t argc, void* userdata);
+  vm_value_t (*func)(vm_value_t* argv, size_t argc, void* userdata);
   void* userdata;
   const char* name;
 } vm_native_func_t;
@@ -70,7 +76,13 @@ bool vm_as_int32(vm_value_t* value, int32_t* out);
 // NULL or is not s string then returns 0 and `out` is untouched.
 size_t vm_as_str(vm_value_t* value, char** out);
 
+// Allocates a new heap allocated string and returns its ref in `vm_value_t`.
 vm_value_t allocate_str_from_c(const char* str);
+vm_value_t allocate_str_from_c_with_length(const char* str, size_t len);
+
+// If `value` is a reference type (i.e. heap allocated), this function will
+// free ownership of the reference. If `value` is not a reference this is no-op.
+void vm_free_ref(vm_value_t value);
 
 #ifdef __cplusplus
 }  // extern "C"

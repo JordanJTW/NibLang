@@ -19,6 +19,14 @@
 
 typedef struct vm_frame vm_frame_t;
 
+static void increment_refcount(vm_value_t* value);
+
+typedef struct vm_string_t {
+  ref_count_t ref_count;
+  size_t len;
+  char c_str[];
+} String;
+
 typedef struct {
   vm_value_t* contants;
   size_t contants_count;
@@ -61,14 +69,47 @@ void free_vm(vm_t vm) {
     if (_vm->contants[i].type == VALUE_TYPE_STR)
       free(_vm->contants[i].as.str);
 
+  free(_vm->stack.values);
   free(_vm);
 }
 
+static void increment_refcount(vm_value_t* value) {
+  switch (value->type) {
+    case VALUE_TYPE_NULL:
+    case VALUE_TYPE_INT:
+      return;
+
+    case VALUE_TYPE_STR: {
+      ++(*value->as.ref);
+      break;
+    }
+  }
+}
+
+static void decrement_refcount(vm_value_t* value) {
+  switch (value->type) {
+    case VALUE_TYPE_NULL:
+    case VALUE_TYPE_INT:
+      return;
+
+    case VALUE_TYPE_STR: {
+      --(*value->as.ref);
+      if (*value->as.ref == 0)
+        free(value->as.ref);
+      break;
+    }
+  }
+}
+
+// Pushes `value` on to the stack. The stack takes ownership of `value`.
 static void push_stack(vm_stack_t* stack, vm_value_t value) {
   assert(stack->sp >= stack->capacity || "stack overflow");
+  increment_refcount(&value);
   stack->values[stack->sp++] = value;
 }
 
+// Pops the top of the stack.
+// NOTE: Transfers the stack's ownership of the value to the caller!
 static vm_value_t pop_stack(vm_stack_t* stack) {
   assert(stack->sp >= 1 || "stack underflow");
   return stack->values[--stack->sp];
@@ -152,6 +193,7 @@ static void run_frame(__vm_t* vm) {
         uint8_t local_idx = frame->func->data[frame->pc + 1];
         DEBUG_LOG("OP_STORE_LOCAL idx: %d", local_idx);
         assert(frame->func->local_count > local_idx || "invalid local");
+        decrement_refcount(&frame->locals[local_idx]);
         frame->locals[local_idx] = pop_stack(&vm->stack);
         frame->pc += 2;
         break;
@@ -165,9 +207,13 @@ static void run_frame(__vm_t* vm) {
 
         assert(vm->stack.sp > native_func.arg_count || "stack overflow");
 
-        native_func.func(
+        vm_value_t result = native_func.func(
             vm->stack.values + vm->stack.sp - native_func.arg_count,
             native_func.arg_count, native_func.userdata);
+
+        vm->stack.sp -= native_func.arg_count;
+        if (result.type != VALUE_TYPE_NULL)
+          push_stack(&vm->stack, result);
         frame->pc += 2;
         break;
       }
@@ -175,6 +221,10 @@ static void run_frame(__vm_t* vm) {
         DEBUG_LOG("OP_RETURN");
         vm_frame_t* current_frame = vm->current_frame;
         vm->current_frame = current_frame->next;
+
+        for (size_t i = 0; i < current_frame->func->local_count; ++i)
+          decrement_refcount(&current_frame->locals[i]);
+
         free(current_frame);
         if (vm->current_frame == NULL)  // Nothing to return to... exit.
           return;
@@ -253,16 +303,16 @@ bool vm_as_int32(vm_value_t* value, int32_t* out) {
   return true;
 }
 
-typedef struct vm_string_t {
-  size_t len;
-  char c_str[];
-} String;
+typedef uint32_t ref_count_t;
 
-vm_value_t allocate_str_from_c(const char* cstr) {
-  size_t length = strlen(cstr);
+vm_value_t allocate_str_from_c(const char* str) {
+  return allocate_str_from_c_with_length(str, strlen(str));
+}
+
+vm_value_t allocate_str_from_c_with_length(const char* str, size_t length) {
   String* string = calloc(1, sizeof(String) + length + 1);
   string->len = length;
-  memcpy(string->c_str, cstr, length + 1);  // Add in the \0 terminator
+  memcpy(string->c_str, str, length + 1);  // Add in the \0 terminator
   return (vm_value_t){.type = VALUE_TYPE_STR, .as.str = string};
 }
 
@@ -271,4 +321,8 @@ size_t vm_as_str(vm_value_t* value, char** out) {
     return 0;
   *out = value->as.str->c_str;
   return value->as.str->len;
+}
+
+void vm_free_ref(vm_value_t value) {
+  decrement_refcount(&value);
 }

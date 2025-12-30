@@ -16,10 +16,11 @@ TEST(VM, Init) {
   free_vm(vm);
 }
 
-void call_native_func(vm_value_t* argv, size_t argc, void* userdata) {
+vm_value_t call_native_func(vm_value_t* argv, size_t argc, void* userdata) {
   auto* native_func =
-      static_cast<testing::MockFunction<void(vm_value_t*, size_t)>*>(userdata);
-  native_func->Call(argv, argc);
+      static_cast<testing::MockFunction<vm_value_t(vm_value_t*, size_t)>*>(
+          userdata);
+  return native_func->Call(argv, argc);
 }
 
 TEST(VM, CallFunc) {
@@ -53,7 +54,7 @@ TEST(VM, CallFunc) {
       },
   };
 
-  testing::MockFunction<void(vm_value_t*, size_t)> native_func;
+  testing::MockFunction<vm_value_t(vm_value_t*, size_t)> native_func;
 
   vm_native_func_t native_funcs[] = {(vm_native_func_t){
       .name = "result",
@@ -63,11 +64,12 @@ TEST(VM, CallFunc) {
   }};
 
   EXPECT_CALL(native_func, Call(_, _))
-      .WillOnce([](vm_value_t* argv, size_t argc) {
+      .WillOnce([](vm_value_t* argv, size_t argc) -> vm_value_t {
         EXPECT_EQ(argc, 1);
         int32_t result;
-        ASSERT_TRUE(vm_as_int32(argv, &result));
+        EXPECT_TRUE(vm_as_int32(argv, &result));
         EXPECT_EQ(result, 10);
+        return (vm_value_t){.type = vm_value::VALUE_TYPE_NULL};
       });
 
   vm_t vm = new_vm(nullptr, 0, funcs, sizeof(funcs), native_funcs,
@@ -94,7 +96,7 @@ TEST(VM, ConstantString) {
       },
   };
 
-  testing::MockFunction<void(vm_value_t*, size_t)> native_func;
+  testing::MockFunction<vm_value_t(vm_value_t*, size_t)> native_func;
 
   vm_native_func_t native_funcs[] = {(vm_native_func_t){
       .name = "print",
@@ -109,6 +111,7 @@ TEST(VM, ConstantString) {
         char* str;
         size_t length = vm_as_str(argv, &str);
         EXPECT_EQ(std::string(str, length), "hello world");
+        return (vm_value_t){.type = vm_value::VALUE_TYPE_NULL};
       });
 
   vm_t vm = new_vm(constants, 1, funcs, sizeof(funcs), native_funcs,
@@ -149,7 +152,7 @@ TEST(VM, ForLoop) {
       },
   };
 
-  testing::MockFunction<void(vm_value_t*, size_t)> native_func;
+  testing::MockFunction<vm_value_t(vm_value_t*, size_t)> native_func;
 
   vm_native_func_t native_funcs[] = {(vm_native_func_t){
       .name = "native",
@@ -160,18 +163,109 @@ TEST(VM, ForLoop) {
 
   EXPECT_CALL(native_func, Call(_, _))
       .Times(5)
-      .WillRepeatedly([](vm_value_t* argv, size_t argc) {
+      .WillRepeatedly([](vm_value_t* argv, size_t argc) -> vm_value_t {
         static int32_t values[] = {0, 1, 2, 3, 4};
         static size_t idx = 0;
 
         EXPECT_EQ(argc, 1);
         int32_t result;
-        ASSERT_TRUE(vm_as_int32(argv, &result));
+        EXPECT_TRUE(vm_as_int32(argv, &result));
         EXPECT_EQ(result, values[idx++]);
+        return (vm_value_t){.type = vm_value::VALUE_TYPE_NULL};
       });
 
   vm_t vm = new_vm(nullptr, 0, funcs, sizeof(funcs), native_funcs,
                    sizeof(native_funcs));
+  vm_run(vm);
+  free_vm(vm);
+}
+
+TEST(VM, RefCountString) {
+  auto main_bytecode = Assembler()
+                           .PushConstRef(0)
+                           .PushConst(2)
+                           .PushConst(4)
+                           .CallNative(0)  // substring
+                           .StoreLocal(0)
+                           .PushLocal(0)
+                           .StoreLocal(0)
+                           .PushConstRef(0)
+                           .PushConst(8)
+                           .PushConst(11)
+                           .CallNative(0)  // substring
+                           .StoreLocal(1)
+                           .PushLocal(0)
+                           .CallNative(1)  // print
+                           .PushLocal(1)
+                           .CallNative(1)  // print
+                           .Return()
+                           .Build();
+
+  vm_func_t funcs[] = {
+      (vm_func_t){
+          .name = "main",
+          .arg_count = 0,
+          .local_count = 2,
+          .data = main_bytecode.data(),
+          .data_len = main_bytecode.size(),
+      },
+  };
+
+  testing::MockFunction<vm_value_t(vm_value_t*, size_t)> substring_func;
+  testing::MockFunction<vm_value_t(vm_value_t*, size_t)> print_func;
+
+  vm_native_func_t native_funcs[] = {(vm_native_func_t){
+                                         .name = "substring",
+                                         .arg_count = 3,
+                                         .func = call_native_func,
+                                         .userdata = &substring_func,
+                                     },
+                                     (vm_native_func_t){
+                                         .name = "print",
+                                         .arg_count = 1,
+                                         .func = call_native_func,
+                                         .userdata = &print_func,
+                                     }};
+
+  EXPECT_CALL(substring_func, Call(_, _))
+      .WillRepeatedly([](vm_value_t* argv, size_t argc) -> vm_value_t {
+        char* string;
+        size_t string_len = vm_as_str(&argv[0], &string);
+
+        int32_t start, end;
+        EXPECT_TRUE(vm_as_int32(&argv[1], &start) &&
+                    vm_as_int32(&argv[2], &end));
+        EXPECT_LE(start, string_len);
+        EXPECT_LE(end, string_len);
+        EXPECT_LT(start, end);
+
+        return allocate_str_from_c_with_length(string + start, end - start);
+      });
+
+  EXPECT_CALL(print_func, Call(_, _))
+      .WillOnce([](vm_value_t* argv, size_t argc) -> vm_value_t {
+        char* string;
+        size_t string_len = vm_as_str(&argv[0], &string);
+
+        EXPECT_EQ(std::string(string, string_len), "ll");
+        vm_free_ref(argv[0]);
+        return (vm_value_t){.type = vm_value::VALUE_TYPE_NULL};
+      })
+      .WillOnce([](vm_value_t* argv, size_t argc) -> vm_value_t {
+        char* string;
+        size_t string_len = vm_as_str(&argv[0], &string);
+
+        EXPECT_EQ(std::string(string, string_len), "rld");
+        vm_free_ref(argv[0]);
+        return (vm_value_t){.type = vm_value::VALUE_TYPE_NULL};
+      });
+
+  vm_value_t constants[] = {
+      allocate_str_from_c("hello world"),
+  };
+
+  vm_t vm = new_vm(constants, sizeof(constants), funcs, sizeof(funcs),
+                   native_funcs, sizeof(native_funcs));
   vm_run(vm);
   free_vm(vm);
 }

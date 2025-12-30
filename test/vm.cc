@@ -72,8 +72,9 @@ TEST(VM, CallFunc) {
         return (vm_value_t){.type = vm_value::VALUE_TYPE_NULL};
       });
 
-  vm_t vm = new_vm(nullptr, 0, funcs, sizeof(funcs), native_funcs,
-                   sizeof(native_funcs));
+  vm_t vm =
+      new_vm(nullptr, 0, funcs, sizeof(funcs) / sizeof(vm_func_t), native_funcs,
+             sizeof(native_funcs) / sizeof(vm_native_func_t));
   vm_run(vm);
   free_vm(vm);
 }
@@ -114,8 +115,9 @@ TEST(VM, ConstantString) {
         return (vm_value_t){.type = vm_value::VALUE_TYPE_NULL};
       });
 
-  vm_t vm = new_vm(constants, 1, funcs, sizeof(funcs), native_funcs,
-                   sizeof(native_funcs));
+  vm_t vm = new_vm(constants, sizeof(constants) / sizeof(vm_value_t), funcs,
+                   sizeof(funcs) / sizeof(vm_func_t), native_funcs,
+                   sizeof(native_funcs) / sizeof(vm_native_func_t));
   vm_run(vm);
   free_vm(vm);
 }
@@ -174,8 +176,9 @@ TEST(VM, ForLoop) {
         return (vm_value_t){.type = vm_value::VALUE_TYPE_NULL};
       });
 
-  vm_t vm = new_vm(nullptr, 0, funcs, sizeof(funcs), native_funcs,
-                   sizeof(native_funcs));
+  vm_t vm =
+      new_vm(nullptr, 0, funcs, sizeof(funcs) / sizeof(vm_func_t), native_funcs,
+             sizeof(native_funcs) / sizeof(vm_native_func_t));
   vm_run(vm);
   free_vm(vm);
 }
@@ -264,8 +267,9 @@ TEST(VM, RefCountString) {
       allocate_str_from_c("hello world"),
   };
 
-  vm_t vm = new_vm(constants, sizeof(constants), funcs, sizeof(funcs),
-                   native_funcs, sizeof(native_funcs));
+  vm_t vm = new_vm(constants, sizeof(constants) / sizeof(vm_value_t), funcs,
+                   sizeof(funcs) / sizeof(vm_func_t), native_funcs,
+                   sizeof(native_funcs) / sizeof(vm_native_func_t));
   vm_run(vm);
   free_vm(vm);
 }

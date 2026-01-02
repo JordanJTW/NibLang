@@ -16,10 +16,12 @@ typedef struct vm_value {
   enum {
     VALUE_TYPE_NULL,
     VALUE_TYPE_INT,
+    VALUE_TYPE_FLOAT,
     VALUE_TYPE_STR,
   } type;
   union {
     int32_t i32;
+    float f32;
     String* str;
     // All reference (heap-allocated) values start with a `ref_count_t`
     ref_count_t* ref;

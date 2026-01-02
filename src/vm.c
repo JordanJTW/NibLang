@@ -83,6 +83,7 @@ static void rc_increment(vm_value_t* value) {
   switch (value->type) {
     case VALUE_TYPE_NULL:
     case VALUE_TYPE_INT:
+    case VALUE_TYPE_FLOAT:
       return;
 
     case VALUE_TYPE_STR: {
@@ -96,6 +97,7 @@ static void rc_decrement(vm_value_t* value) {
   switch (value->type) {
     case VALUE_TYPE_NULL:
     case VALUE_TYPE_INT:
+    case VALUE_TYPE_FLOAT:
       return;
 
     case VALUE_TYPE_STR: {
@@ -184,14 +186,33 @@ static void run_frame(__vm_t* vm) {
       case OP_ADD: {
         vm_value_t arg1 = pop_stack(&vm->stack);
         vm_value_t arg2 = pop_stack(&vm->stack);
-        DEBUG_LOG("OP_ADD %d + %d", arg1.as.i32, arg2.as.i32);
 
-        assert(arg1.type == VALUE_TYPE_INT && arg2.type == VALUE_TYPE_INT ||
-               "only ints supported for add");
-
-        push_stack(&vm->stack,
-                   (vm_value_t){.type = VALUE_TYPE_INT,
-                                .as.i32 = (arg1.as.i32 + arg2.as.i32)});
+        if (arg1.type == VALUE_TYPE_INT && arg2.type == VALUE_TYPE_INT) {
+          DEBUG_LOG("OP_ADD %d + %d", arg1.as.i32, arg2.as.i32);
+          push_stack(&vm->stack,
+                     (vm_value_t){.type = VALUE_TYPE_INT,
+                                  .as.i32 = (arg1.as.i32 + arg2.as.i32)});
+        } else if (arg1.type == VALUE_TYPE_FLOAT &&
+                   arg2.type == VALUE_TYPE_FLOAT) {
+          DEBUG_LOG("OP_ADD %f + %f", arg1.as.f32, arg2.as.f32);
+          push_stack(&vm->stack,
+                     (vm_value_t){.type = VALUE_TYPE_FLOAT,
+                                  .as.f32 = (arg1.as.f32 + arg2.as.f32)});
+        } else if (arg1.type == VALUE_TYPE_INT &&
+                   arg2.type == VALUE_TYPE_FLOAT) {
+          DEBUG_LOG("OP_ADD %d + %f", arg1.as.i32, arg2.as.f32);
+          push_stack(&vm->stack,
+                     (vm_value_t){.type = VALUE_TYPE_FLOAT,
+                                  .as.f32 = (arg1.as.i32 + arg2.as.f32)});
+        } else if (arg1.type == VALUE_TYPE_FLOAT &&
+                   arg2.type == VALUE_TYPE_INT) {
+          DEBUG_LOG("OP_ADD %f + %d", arg1.as.f32, arg2.as.i32);
+          push_stack(&vm->stack,
+                     (vm_value_t){.type = VALUE_TYPE_FLOAT,
+                                  .as.f32 = (arg1.as.f32 + arg2.as.i32)});
+        } else {
+          assert("only ints and floats supported for add");
+        }
         ++frame->pc;
         break;
       }

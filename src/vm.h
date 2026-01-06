@@ -12,14 +12,7 @@ extern "C" {
 
 typedef void* vm_t;
 
-// A fixed sized (`capacity`) stack of `vm_value_t` for the VM.
-typedef struct {
-  vm_value_t* values;
-  size_t sp;
-  size_t capacity;
-} vm_stack_t;
-
-// Represents an interpretted function with `data_len` bytes of bytecode in
+// Represents an interpreted function with `data_len` bytes of bytecode in
 // `data`. `arg_count` is the number of arguments this function takes and
 // `local_count` is count of ALL local variables (i.e. `local_count` ⊇
 // `arg_count`). `name` is used for debugging.
@@ -69,6 +62,19 @@ vm_value_t allocate_str_from_c_with_length(const char* str, size_t len);
 // If `value` is a reference type (i.e. heap allocated), this function will
 // free ownership of the reference. If `value` is not a reference this is no-op.
 void vm_free_ref(vm_value_t value);
+
+typedef struct vm_function_t {
+  enum { NATIVE, FUNC_IDX } type;
+  union {
+    vm_native_func_t native;
+    size_t func_idx;
+  } is;
+} Function;
+
+vm_value_t vm_call_function(vm_t vm,
+                            Function* fn,
+                            size_t argc,
+                            vm_value_t* argv);
 
 #ifdef __cplusplus
 }  // extern "C"

@@ -34,6 +34,8 @@ typedef enum : uint8_t {
 
 typedef uint32_t ref_count_t;
 typedef struct MapNode MapNode;
+typedef struct vm_function_t Function;
+typedef struct vm_promise_t Promise;
 
 typedef struct vm_string_t {
   ref_count_t ref_count;
@@ -57,6 +59,8 @@ typedef struct vm_value {
     VALUE_TYPE_FLOAT,
     VALUE_TYPE_STR,
     VALUE_TYPE_MAP,
+    VALUE_TYPE_FUNCTION,
+    VALUE_TYPE_PROMISE,
   } type;
   union {
     bool boolean;
@@ -64,7 +68,22 @@ typedef struct vm_value {
     float f32;
     String* str;
     Map* map;
+    Function* fn;
+    Promise* promise;
     // All reference (heap-allocated) values start with a `ref_count_t`
     ref_count_t* ref;
   } as;
 } vm_value_t;
+
+typedef struct vm_promise_then_t vm_promise_then_t;
+
+typedef struct vm_promise_t {
+  ref_count_t ref_count;
+  enum state_t {
+    PROMISE_STATE_PENDING,
+    PROMISE_STATE_FULFILLED,
+    PROMISE_STATE_REJECTED,
+  } state;
+  vm_value_t value;
+  vm_promise_then_t* then_list;
+} Promise;

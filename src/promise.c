@@ -1,0 +1,198 @@
+#include "src/promise.h"
+
+#include <assert.h>
+#include <stdbool.h>
+#include <stdlib.h>
+
+#include "src/vm.h"
+
+typedef struct vm_promise_then_t {
+  vm_value_t on_fulfilled_fn;
+  vm_value_t on_rejected_fn;
+  vm_value_t next_promise;
+  struct vm_promise_then_t* next;
+} vm_promise_then_t;
+
+typedef struct vm_job_t {
+  vm_value_t fn;
+  vm_value_t value;
+  vm_value_t next_promise;
+  bool rejected;
+  struct vm_job_t* next;
+} vm_job_t;
+
+typedef struct vm_job_queue_t {
+  vm_job_t* job_queue_head;
+  vm_job_t* job_queue_tail;
+} vm_job_queue_t;
+
+static bool is_promise(vm_value_t value) {
+  return value.type == VALUE_TYPE_PROMISE;
+}
+
+vm_value_t allocate_promise() {
+  Promise* promise = calloc(1, sizeof(Promise));
+  promise->state = PROMISE_STATE_PENDING;
+  return (vm_value_t){.type = VALUE_TYPE_PROMISE, .as.promise = promise};
+}
+
+void free_promise(Promise* promise) {
+  vm_free_ref(promise->value);
+  free(promise);
+}
+
+vm_job_queue_t* init_job_queue() {
+  vm_job_queue_t* job_queue = calloc(1, sizeof(vm_job_queue_t));
+  return job_queue;
+}
+void free_job_queue(vm_job_queue_t* job_queue) {
+  assert(job_queue->job_queue_head == NULL && "job queue not empty on free");
+  free(job_queue);
+}
+
+void enqueue_promise_job(vm_job_queue_t* job_queue,
+                         vm_value_t fn,
+                         vm_value_t value,
+                         vm_value_t next_promise,
+                         bool rejected) {
+  vm_job_t* job = calloc(1, sizeof(vm_job_t));
+  job->fn = fn;
+  job->value = value;
+  job->next_promise = next_promise;
+  job->rejected = rejected;
+  job->next = NULL;
+
+  if (job_queue->job_queue_tail) {
+    job_queue->job_queue_tail->next = job;
+    job_queue->job_queue_tail = job;
+  } else {
+    job_queue->job_queue_head = job_queue->job_queue_tail = job;
+  }
+}
+
+vm_value_t promise_then(vm_job_queue_t* job_queue,
+                        vm_value_t source_promise,
+                        vm_value_t on_fulfilled_fn,
+                        vm_value_t on_rejected_fn) {
+  assert(is_promise(source_promise) && "promise_then called on non-promise");
+
+  vm_value_t new_promise = allocate_promise();
+
+  vm_promise_then_t* then = calloc(1, sizeof(vm_promise_then_t));
+  then->on_fulfilled_fn = on_fulfilled_fn;
+  then->on_rejected_fn = on_rejected_fn;
+  then->next_promise = new_promise;
+
+  Promise* const source = source_promise.as.promise;
+  then->next = source->then_list;
+  source->then_list = then;
+
+  // If source already settled, enqueue immediately
+  if (source->state != PROMISE_STATE_PENDING) {
+    vm_value_t fn = source->state == PROMISE_STATE_REJECTED ? on_rejected_fn
+                                                            : on_fulfilled_fn;
+    enqueue_promise_job(job_queue, fn, source->value, new_promise,
+                        /*rejected=*/source->state == PROMISE_STATE_REJECTED);
+  }
+
+  return new_promise;
+}
+
+void promise_resolve(vm_job_queue_t* job_queue,
+                     vm_value_t promise,
+                     vm_value_t value,
+                     bool rejected) {
+  assert(is_promise(promise) && "promise_resolve called on non-promise");
+  Promise* p = promise.as.promise;
+
+  if (p->state != PROMISE_STATE_PENDING)
+    return;
+
+  p->state = rejected ? PROMISE_STATE_REJECTED : PROMISE_STATE_FULFILLED;
+  p->value = value;
+
+  for (vm_promise_then_t* t = p->then_list; t; t = t->next) {
+    enqueue_promise_job(job_queue,
+                        rejected ? t->on_rejected_fn : t->on_fulfilled_fn,
+                        value, t->next_promise, rejected);
+  }
+}
+
+struct forward_ctx_t {
+  vm_job_queue_t* job_queue;
+  vm_value_t target_promise;
+};
+
+vm_value_t chain_fulfill_fn(vm_value_t* argv, size_t argc, void* userdata) {
+  struct forward_ctx_t* ctx = userdata;
+  promise_resolve(ctx->job_queue, ctx->target_promise, argv[0], false);
+  free(userdata);
+  return (vm_value_t){.type = VALUE_TYPE_NULL};
+}
+
+vm_value_t chain_reject_fn(vm_value_t* argv, size_t argc, void* userdata) {
+  struct forward_ctx_t* ctx = userdata;
+  promise_resolve(ctx->job_queue, ctx->target_promise, argv[0], true);
+  free(userdata);
+  return (vm_value_t){.type = VALUE_TYPE_NULL};
+}
+
+vm_value_t wrap_native_func(vm_job_queue_t* job_queue,
+                            vm_value_t target_promise,
+                            vm_value_t (*func)(vm_value_t* argv,
+                                               size_t argc,
+                                               void* userdata)) {
+  struct forward_ctx_t* ctx = malloc(sizeof(struct forward_ctx_t));
+  ctx->job_queue = job_queue;
+  ctx->target_promise = target_promise;
+
+  Function* fn = calloc(1, sizeof(Function) + sizeof(vm_value_t) * 0);
+  fn->type = NATIVE;
+  fn->is.native.func = func;
+  fn->is.native.userdata = ctx;
+  fn->is.native.arg_count = 1;
+  fn->is.native.name = "wrapped_native_func";
+  return (vm_value_t){.type = VALUE_TYPE_FUNCTION, .as.fn = fn};
+}
+
+void promise_chain(vm_job_queue_t* job_queue,
+                   vm_value_t source_promise,
+                   vm_value_t target_promise) {
+  assert(is_promise(source_promise) && is_promise(target_promise) &&
+         "promise_chain called on non-promise");
+  if (source_promise.as.promise == target_promise.as.promise) {
+    // TODO: Resolve with an Exception!
+    return;
+  }
+
+  promise_then(job_queue, source_promise,
+               wrap_native_func(job_queue, target_promise, &chain_fulfill_fn),
+               wrap_native_func(job_queue, target_promise, &chain_reject_fn));
+}
+
+bool run_promise_jobs(vm_t vm, vm_job_queue_t* job_queue) {
+  bool had_jobs = job_queue->job_queue_head != NULL;
+  while (job_queue->job_queue_head) {
+    vm_job_t* job = job_queue->job_queue_head;
+    job_queue->job_queue_head = job->next;
+    if (!job_queue->job_queue_head)
+      job_queue->job_queue_tail = NULL;
+
+    vm_value_t result;
+
+    // TODO: Handle exceptions.
+    if (job->fn.type == VALUE_TYPE_FUNCTION) {
+      result = vm_call_function(vm, job->fn.as.fn, /*argc=*/1, &job->value);
+    } else {
+      result = job->value;  // Forward along if no handler is found
+    }
+
+    if (is_promise(result)) {
+      promise_chain(job_queue, result, job->next_promise);
+    } else {
+      promise_resolve(vm, job->next_promise, result, /*rejected=*/false);
+    }
+    free(job);
+  }
+  return had_jobs;
+}

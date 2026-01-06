@@ -55,6 +55,13 @@ uint32_t read_u32_le(const uint8_t* data) {
          ((uint32_t)data[2] << 16) | ((uint32_t)data[3] << 24);
 }
 
+// A fixed sized (`capacity`) stack of `vm_value_t` for the VM.
+typedef struct {
+  vm_value_t* values;
+  size_t sp;
+  size_t capacity;
+} vm_stack_t;
+
 typedef struct {
   vm_value_t* constants;
   size_t contants_count;
@@ -118,7 +125,9 @@ static void rc_increment(vm_value_t* value) {
       return;
 
     case VALUE_TYPE_MAP:
-    case VALUE_TYPE_STR: {
+    case VALUE_TYPE_STR:
+    case VALUE_TYPE_FUNCTION:
+    case VALUE_TYPE_PROMISE: {
       ++(*value->as.ref);
       break;
     }
@@ -134,7 +143,9 @@ static void rc_decrement(vm_value_t* value) {
       return;
 
     case VALUE_TYPE_MAP:
-    case VALUE_TYPE_STR: {
+    case VALUE_TYPE_STR:
+    case VALUE_TYPE_FUNCTION:
+    case VALUE_TYPE_PROMISE: {
       assert(*value->as.ref > 0);
       --(*value->as.ref);
       if (*value->as.ref == 0)
@@ -496,4 +507,31 @@ static vm_value_t handle_number_op(num_op_t op, vm_value_t a, vm_value_t b) {
 promote_to_float:
   return (vm_value_t){.type = VALUE_TYPE_FLOAT,
                       .as.f32 = (float)a.as.i32 + (float)b.as.i32};
+}
+
+vm_value_t vm_call_function(vm_t __vm,
+                            Function* fn,
+                            size_t argc,
+                            vm_value_t* argv) {
+  switch (fn->type) {
+    case NATIVE: {
+      return fn->is.native.func(argv, argc, fn->is.native.userdata);
+    }
+    case FUNC_IDX: {
+      __vm_t* vm = (__vm_t*)__vm;
+      vm_func_t* func = &vm->functions[fn->is.func_idx];
+      vm_frame_t* new_frame = calloc(
+          1, sizeof(vm_frame_t) + sizeof(vm_value_t) * func->local_count);
+
+      new_frame->func = func;
+      for (size_t arg_idx = 0; arg_idx < func->arg_count; ++arg_idx) {
+        new_frame->locals[arg_idx] = argv[arg_idx];
+      }
+      new_frame->next = vm->current_frame;
+      vm->current_frame = new_frame;
+      run_frame(vm);
+      vm_value_t result = pop_stack(&vm->stack);
+      return result;
+    }
+  }
 }

@@ -62,7 +62,7 @@ typedef struct {
   size_t capacity;
 } vm_stack_t;
 
-typedef struct {
+typedef struct vm_t {
   vm_value_t* constants;
   size_t contants_count;
   vm_func_t* functions;
@@ -71,7 +71,7 @@ typedef struct {
   size_t native_function_count;
   vm_frame_t* current_frame;
   vm_stack_t stack;
-} __vm_t;
+} vm_t;
 
 typedef struct vm_frame {
   vm_func_t* func;
@@ -80,13 +80,13 @@ typedef struct vm_frame {
   vm_value_t locals[];
 } vm_frame_t;
 
-vm_t new_vm(vm_value_t* constants,
-            size_t constants_count,
-            vm_func_t* functions,
-            size_t functions_count,
-            vm_native_func_t* native_functions,
-            size_t native_functions_count) {
-  __vm_t* vm = calloc(1, sizeof(__vm_t));
+vm_t* new_vm(vm_value_t* constants,
+             size_t constants_count,
+             vm_func_t* functions,
+             size_t functions_count,
+             vm_native_func_t* native_functions,
+             size_t native_functions_count) {
+  vm_t* const vm = calloc(1, sizeof(vm_t));
   vm->constants = constants;
   vm->contants_count = constants_count;
 
@@ -103,17 +103,15 @@ vm_t new_vm(vm_value_t* constants,
   return vm;
 }
 
-void free_vm(vm_t vm) {
-  __vm_t* _vm = (__vm_t*)vm;
+void free_vm(vm_t* vm) {
+  for (size_t i = 0; i < vm->contants_count; ++i)
+    rc_decrement(&vm->constants[i]);
 
-  for (size_t i = 0; i < _vm->contants_count; ++i)
-    rc_decrement(&_vm->constants[i]);
+  assert(vm->current_frame == NULL && "leaked frames exist");
+  assert(vm->stack.sp == 0 && "stack not empty on free");
 
-  assert(_vm->current_frame == NULL && "leaked frames exist");
-  assert(_vm->stack.sp == 0 && "stack not empty on free");
-
-  free(_vm->stack.values);
-  free(_vm);
+  free(vm->stack.values);
+  free(vm);
 }
 
 static void rc_increment(vm_value_t* value) {
@@ -169,7 +167,7 @@ static vm_value_t pop_stack(vm_stack_t* stack) {
   return stack->values[--stack->sp];
 }
 
-static void run_frame(__vm_t* vm) {
+static void run_frame(vm_t* vm) {
 #define CHECK_BOUNDS($pc)                                          \
   if ($pc >= frame->func->data_len) {                              \
     DEBUG_LOG("data overflow in func: '%s'\n", frame->func->name); \
@@ -398,18 +396,16 @@ static void run_frame(__vm_t* vm) {
   }
 }
 
-void vm_run(vm_t vm) {
-  __vm_t* __vm = (__vm_t*)vm;
+void vm_run(vm_t* vm) {
+  assert(vm->function_count >= 1 && "must have main() function");
 
-  assert(__vm->function_count >= 1 && "must have main() function");
-
-  vm_func_t* func = &__vm->functions[0];
+  vm_func_t* func = &vm->functions[0];
   vm_frame_t* frame =
       calloc(1, sizeof(vm_frame_t) + sizeof(vm_value_t) * func->local_count);
 
   frame->func = func;
-  __vm->current_frame = frame;
-  run_frame(__vm);
+  vm->current_frame = frame;
+  run_frame(vm);
 }
 
 bool vm_as_int32(const vm_value_t* value, int32_t* out) {
@@ -509,7 +505,7 @@ promote_to_float:
                       .as.f32 = (float)a.as.i32 + (float)b.as.i32};
 }
 
-vm_value_t vm_call_function(vm_t __vm,
+vm_value_t vm_call_function(vm_t* vm,
                             Function* fn,
                             size_t argc,
                             vm_value_t* argv) {
@@ -518,7 +514,7 @@ vm_value_t vm_call_function(vm_t __vm,
       return fn->is.native.func(argv, argc, fn->is.native.userdata);
     }
     case FUNC_IDX: {
-      __vm_t* vm = (__vm_t*)__vm;
+
       vm_func_t* func = &vm->functions[fn->is.func_idx];
       vm_frame_t* new_frame = calloc(
           1, sizeof(vm_frame_t) + sizeof(vm_value_t) * func->local_count);

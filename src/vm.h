@@ -10,8 +10,6 @@
 extern "C" {
 #endif
 
-typedef void* vm_t;
-
 // Represents an interpreted function with `data_len` bytes of bytecode in
 // `data`. `arg_count` is the number of arguments this function takes and
 // `local_count` is count of ALL local variables (i.e. `local_count` ⊇
@@ -36,16 +34,16 @@ typedef struct {
 } vm_native_func_t;
 
 // Allocates a new VM.
-vm_t new_vm(vm_value_t* constants,
-            size_t constants_count,
-            vm_func_t* functions,
-            size_t functions_count,
-            vm_native_func_t* native_functions,
-            size_t native_functions_count);
-void free_vm(vm_t vm);
+vm_t* new_vm(vm_value_t* constants,
+             size_t constants_count,
+             vm_func_t* functions,
+             size_t functions_count,
+             vm_native_func_t* native_functions,
+             size_t native_functions_count);
+void free_vm(vm_t* vm);
 
 // Runs `functions[0]` until a OP_RETURN is encountered.
-void vm_run(vm_t vm);
+void vm_run(vm_t* vm);
 
 // Provides `value` as an i32 in `out` and returns true. If `value` is NULL or
 // is not an i32 then returns false and `out` is untouched.
@@ -71,7 +69,7 @@ typedef struct vm_function_t {
   } is;
 } Function;
 
-vm_value_t vm_call_function(vm_t vm,
+vm_value_t vm_call_function(vm_t* vm,
                             Function* fn,
                             size_t argc,
                             vm_value_t* argv);

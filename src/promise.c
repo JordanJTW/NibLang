@@ -170,7 +170,7 @@ void promise_chain(vm_job_queue_t* job_queue,
                wrap_native_func(job_queue, target_promise, &chain_reject_fn));
 }
 
-bool run_promise_jobs(vm_t vm, vm_job_queue_t* job_queue) {
+bool run_promise_jobs(vm_t* vm, vm_job_queue_t* job_queue) {
   bool had_jobs = job_queue->job_queue_head != NULL;
   while (job_queue->job_queue_head) {
     vm_job_t* job = job_queue->job_queue_head;
@@ -190,7 +190,7 @@ bool run_promise_jobs(vm_t vm, vm_job_queue_t* job_queue) {
     if (is_promise(result)) {
       promise_chain(job_queue, result, job->next_promise);
     } else {
-      promise_resolve(vm, job->next_promise, result, /*rejected=*/false);
+      promise_resolve(job_queue, job->next_promise, result, /*rejected=*/false);
     }
     free(job);
   }

@@ -32,6 +32,7 @@ typedef enum : uint8_t {
   OP_JUMP,
 } op_t;
 
+typedef struct vm_t vm_t;
 typedef uint32_t ref_count_t;
 typedef struct MapNode MapNode;
 typedef struct vm_function_t Function;

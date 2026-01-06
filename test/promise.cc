@@ -91,7 +91,7 @@ class PromiseTest : public ::testing::Test {
     free_vm(vm_);
   }
 
-  vm_t vm_;
+  vm_t* vm_;
   vm_job_queue_t* job_queue_;
 };
 

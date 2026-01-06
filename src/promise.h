@@ -38,7 +38,7 @@ vm_value_t promise_then(vm_job_queue_t* job_queue,
 
 // Runs any pending callbacks queued by `promise_resolve()`. This should be
 // called at a fairly regular cadence. If any jobs were executed returns true.
-bool run_promise_jobs(vm_t vm, vm_job_queue_t* job_queue);
+bool run_promise_jobs(vm_t* vm, vm_job_queue_t* job_queue);
 
 
 #ifdef __cplusplus

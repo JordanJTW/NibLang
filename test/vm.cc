@@ -50,7 +50,7 @@ vm_value_t native_trampoline(vm_value_t* argv, size_t argc, void* userdata) {
 }
 
 TEST(VM, Init) {
-  vm_t vm = new_vm(nullptr, 0, nullptr, 0, nullptr, 0);
+  vm_t* vm = new_vm(nullptr, 0, nullptr, 0, nullptr, 0);
   EXPECT_NE(vm, nullptr);
   free_vm(vm);
 }
@@ -98,7 +98,7 @@ TEST(VM, CallFunc) {
   EXPECT_CALL(native_func, Call(ElementsAre(Int32Type(10))))
       .WillOnce(ReturnNullType());
 
-  vm_t vm =
+  vm_t* vm =
       new_vm(nullptr, 0, funcs, sizeof(funcs) / sizeof(vm_func_t), native_funcs,
              sizeof(native_funcs) / sizeof(vm_native_func_t));
   vm_run(vm);
@@ -135,9 +135,9 @@ TEST(VM, ConstantString) {
   EXPECT_CALL(native_func, Call(ElementsAre(StringType("hello world"))))
       .WillOnce(FreeArgsAndReturnNullType());
 
-  vm_t vm = new_vm(constants, sizeof(constants) / sizeof(vm_value_t), funcs,
-                   sizeof(funcs) / sizeof(vm_func_t), native_funcs,
-                   sizeof(native_funcs) / sizeof(vm_native_func_t));
+  vm_t* vm = new_vm(constants, sizeof(constants) / sizeof(vm_value_t), funcs,
+                    sizeof(funcs) / sizeof(vm_func_t), native_funcs,
+                    sizeof(native_funcs) / sizeof(vm_native_func_t));
   vm_run(vm);
   free_vm(vm);
 }
@@ -190,7 +190,7 @@ TEST(VM, ForLoop) {
         .WillOnce(ReturnNullType());
   }
 
-  vm_t vm =
+  vm_t* vm =
       new_vm(nullptr, 0, funcs, sizeof(funcs) / sizeof(vm_func_t), native_funcs,
              sizeof(native_funcs) / sizeof(vm_native_func_t));
   vm_run(vm);
@@ -271,9 +271,9 @@ TEST(VM, RefCountString) {
       allocate_str_from_c("hello world"),
   };
 
-  vm_t vm = new_vm(constants, sizeof(constants) / sizeof(vm_value_t), funcs,
-                   sizeof(funcs) / sizeof(vm_func_t), native_funcs,
-                   sizeof(native_funcs) / sizeof(vm_native_func_t));
+  vm_t* vm = new_vm(constants, sizeof(constants) / sizeof(vm_value_t), funcs,
+                    sizeof(funcs) / sizeof(vm_func_t), native_funcs,
+                    sizeof(native_funcs) / sizeof(vm_native_func_t));
   vm_run(vm);
   free_vm(vm);
 }

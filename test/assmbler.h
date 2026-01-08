@@ -16,10 +16,18 @@ class Assembler {
   Assembler& PushConstRef(uint32_t idx);
   Assembler& PushConst(int32_t value);
   Assembler& Call(uint32_t idx);
+  Assembler& Bind(uint32_t idx, uint32_t argc);
   Assembler& PushLocal(uint32_t idx);
   Assembler& Add();
+  Assembler& Subtract();
+  Assembler& Multiply();
+  Assembler& Divide();
+  Assembler& And();
+  Assembler& Or();
+  Assembler& Not();
   Assembler& Return();
   Assembler& CallNative(uint32_t idx);
+  Assembler& CallBuiltIn(uint32_t idx);
   Assembler& StoreLocal(uint32_t idx);
   Assembler& Compare(op_t operation);
   Assembler& JumpIfFalse(uint32_t pc);

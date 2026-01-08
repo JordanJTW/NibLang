@@ -9,8 +9,6 @@
 extern "C" {
 #endif
 
-typedef struct vm_job_queue_t vm_job_queue_t;
-
 vm_job_queue_t* init_job_queue();
 void free_job_queue(vm_job_queue_t* job_queue);
 
@@ -40,6 +38,10 @@ vm_value_t promise_then(vm_job_queue_t* job_queue,
 // called at a fairly regular cadence. If any jobs were executed returns true.
 bool run_promise_jobs(vm_t* vm, vm_job_queue_t* job_queue);
 
+// Trampolines for calling from VM code.
+vm_value_t vm_promise_fulfill(vm_value_t* argv, size_t argc, void*);
+vm_value_t vm_promise_reject(vm_value_t* argv, size_t argc, void*);
+vm_value_t vm_promise_then(vm_value_t* argv, size_t argc, void*);
 
 #ifdef __cplusplus
 }  // extern "C"

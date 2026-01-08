@@ -41,6 +41,10 @@ void free_promise(Promise* promise) {
   free(promise);
 }
 
+static bool is_function(vm_value_t value) {
+  return value.type == VALUE_TYPE_FUNCTION;
+}
+
 vm_job_queue_t* init_job_queue() {
   vm_job_queue_t* job_queue = calloc(1, sizeof(vm_job_queue_t));
   return job_queue;
@@ -50,11 +54,11 @@ void free_job_queue(vm_job_queue_t* job_queue) {
   free(job_queue);
 }
 
-void enqueue_promise_job(vm_job_queue_t* job_queue,
-                         vm_value_t fn,
-                         vm_value_t value,
-                         vm_value_t next_promise,
-                         bool rejected) {
+static void enqueue_promise_job(vm_job_queue_t* job_queue,
+                                vm_value_t fn,
+                                vm_value_t value,
+                                vm_value_t next_promise,
+                                bool rejected) {
   vm_job_t* job = calloc(1, sizeof(vm_job_t));
   job->fn = fn;
   job->value = value;
@@ -118,46 +122,10 @@ void promise_resolve(vm_job_queue_t* job_queue,
   }
 }
 
-struct forward_ctx_t {
-  vm_job_queue_t* job_queue;
-  vm_value_t target_promise;
-};
-
-vm_value_t chain_fulfill_fn(vm_value_t* argv, size_t argc, void* userdata) {
-  struct forward_ctx_t* ctx = userdata;
-  promise_resolve(ctx->job_queue, ctx->target_promise, argv[0], false);
-  free(userdata);
-  return (vm_value_t){.type = VALUE_TYPE_NULL};
-}
-
-vm_value_t chain_reject_fn(vm_value_t* argv, size_t argc, void* userdata) {
-  struct forward_ctx_t* ctx = userdata;
-  promise_resolve(ctx->job_queue, ctx->target_promise, argv[0], true);
-  free(userdata);
-  return (vm_value_t){.type = VALUE_TYPE_NULL};
-}
-
-vm_value_t wrap_native_func(vm_job_queue_t* job_queue,
-                            vm_value_t target_promise,
-                            vm_value_t (*func)(vm_value_t* argv,
-                                               size_t argc,
-                                               void* userdata)) {
-  struct forward_ctx_t* ctx = malloc(sizeof(struct forward_ctx_t));
-  ctx->job_queue = job_queue;
-  ctx->target_promise = target_promise;
-
-  Function* fn = calloc(1, sizeof(Function) + sizeof(vm_value_t) * 0);
-  fn->type = NATIVE;
-  fn->is.native.func = func;
-  fn->is.native.userdata = ctx;
-  fn->is.native.arg_count = 1;
-  fn->is.native.name = "wrapped_native_func";
-  return (vm_value_t){.type = VALUE_TYPE_FUNCTION, .as.fn = fn};
-}
-
-void promise_chain(vm_job_queue_t* job_queue,
-                   vm_value_t source_promise,
-                   vm_value_t target_promise) {
+static void promise_chain(vm_t* vm,
+                          vm_job_queue_t* job_queue,
+                          vm_value_t source_promise,
+                          vm_value_t target_promise) {
   assert(is_promise(source_promise) && is_promise(target_promise) &&
          "promise_chain called on non-promise");
   if (source_promise.as.promise == target_promise.as.promise) {
@@ -165,9 +133,12 @@ void promise_chain(vm_job_queue_t* job_queue,
     return;
   }
 
-  promise_then(job_queue, source_promise,
-               wrap_native_func(job_queue, target_promise, &chain_fulfill_fn),
-               wrap_native_func(job_queue, target_promise, &chain_reject_fn));
+  promise_then(
+      job_queue, source_promise,
+      bind_to_function(vm, 1 /*Promise.fulfill*/ | VM_BUILTIN_SELECT_BITMASK,
+                       &target_promise, /*argc=*/1),
+      bind_to_function(vm, 2 /*Promise.reject*/ | VM_BUILTIN_SELECT_BITMASK,
+                       &target_promise, /*argc=*/1));
 }
 
 bool run_promise_jobs(vm_t* vm, vm_job_queue_t* job_queue) {
@@ -182,17 +153,40 @@ bool run_promise_jobs(vm_t* vm, vm_job_queue_t* job_queue) {
 
     // TODO: Handle exceptions.
     if (job->fn.type == VALUE_TYPE_FUNCTION) {
-      result = vm_call_function(vm, job->fn.as.fn, /*argc=*/1, &job->value);
+      result = vm_call_function(vm, job->fn.as.fn, &job->value, /*argc=*/1);
     } else {
       result = job->value;  // Forward along if no handler is found
     }
 
     if (is_promise(result)) {
-      promise_chain(job_queue, result, job->next_promise);
+      promise_chain(vm, job_queue, result, job->next_promise);
     } else {
       promise_resolve(job_queue, job->next_promise, result, /*rejected=*/false);
     }
     free(job);
   }
   return had_jobs;
+}
+
+vm_value_t vm_promise_fulfill(vm_value_t* argv, size_t argc, void* userdata) {
+  assert(argc == 2 && is_promise(argv[0]) &&
+         "Promise.fulfill must be invoked with $this and a value");
+
+  promise_resolve(vm_get_job_queue(userdata), argv[0], argv[1],
+                  /*rejected=*/false);
+  return (vm_value_t){.type = VALUE_TYPE_NULL};
+}
+vm_value_t vm_promise_reject(vm_value_t* argv, size_t argc, void* userdata) {
+  assert(argc == 2 && is_promise(argv[0]) &&
+         "Promise.reject must be invoked with $this and a value");
+
+  promise_resolve(vm_get_job_queue(userdata), argv[0], argv[1],
+                  /*rejected=*/true);
+  return (vm_value_t){.type = VALUE_TYPE_NULL};
+}
+vm_value_t vm_promise_then(vm_value_t* argv, size_t argc, void* userdata) {
+  assert(argc == 3 && is_promise(argv[0]) &&
+         "Promise.then must be invoked with $this and two functions");
+
+  return promise_then(vm_get_job_queue(userdata), argv[0], argv[1], argv[2]);
 }

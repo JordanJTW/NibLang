@@ -12,7 +12,7 @@ typedef enum : uint8_t {
   // Functions
   OP_CALL,
   OP_RETURN,
-  OP_CALL_NATIVE,
+  OP_BIND,
   // Operators
   OP_ADD,
   OP_SUB,
@@ -33,10 +33,11 @@ typedef enum : uint8_t {
 } op_t;
 
 typedef struct vm_t vm_t;
+typedef struct vm_job_queue_t vm_job_queue_t;
 typedef uint32_t ref_count_t;
 typedef struct MapNode MapNode;
-typedef struct vm_function_t Function;
 typedef struct vm_promise_t Promise;
+typedef struct vm_closure_t Closure;
 
 typedef struct vm_string_t {
   ref_count_t ref_count;
@@ -69,7 +70,7 @@ typedef struct vm_value {
     float f32;
     String* str;
     Map* map;
-    Function* fn;
+    Closure* fn;
     Promise* promise;
     // All reference (heap-allocated) values start with a `ref_count_t`
     ref_count_t* ref;

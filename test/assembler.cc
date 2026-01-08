@@ -12,6 +12,14 @@ Assembler& Assembler::Call(uint32_t idx) {
   PushOpAndArg32(OP_CALL, idx);
   return *this;
 }
+Assembler& Assembler::Bind(uint32_t idx, uint32_t argc) {
+  data_.insert(data_.end(),
+               {OP_BIND, uint8_t(idx & 0xFF), uint8_t((idx >> 8) & 0xFF),
+                uint8_t((idx >> 16) & 0xFF), uint8_t((idx >> 24) & 0xFF),
+                uint8_t(argc & 0xFF), uint8_t((argc >> 8) & 0xFF),
+                uint8_t((argc >> 16) & 0xFF), uint8_t((argc >> 24) & 0xFF)});
+  return *this;
+}
 Assembler& Assembler::PushLocal(uint32_t idx) {
   PushOpAndArg32(OP_PUSH_LOCAL, idx);
   return *this;
@@ -20,12 +28,36 @@ Assembler& Assembler::Add() {
   data_.push_back(OP_ADD);
   return *this;
 }
+Assembler& Assembler::Subtract() {
+  data_.push_back(OP_SUB);
+  return *this;
+}
+Assembler& Assembler::Multiply() {
+  data_.push_back(OP_MUL);
+  return *this;
+}
+Assembler& Assembler::Divide() {
+  data_.push_back(OP_DIV);
+  return *this;
+}
+Assembler& Assembler::And() {
+  data_.push_back(OP_AND);
+  return *this;
+}
+Assembler& Assembler::Or() {
+  data_.push_back(OP_OR);
+  return *this;
+}
+Assembler& Assembler::Not() {
+  data_.push_back(OP_NOT);
+  return *this;
+}
 Assembler& Assembler::Return() {
   data_.push_back(OP_RETURN);
   return *this;
 }
-Assembler& Assembler::CallNative(uint32_t idx) {
-  PushOpAndArg32(OP_CALL_NATIVE, idx);
+Assembler& Assembler::CallBuiltIn(uint32_t idx) {
+  PushOpAndArg32(OP_CALL, idx | 0x80000000u);
   return *this;
 }
 Assembler& Assembler::StoreLocal(uint32_t idx) {
@@ -112,7 +144,7 @@ std::string GetOpName(op_t op) {
     CASE_OP_NAME(OP_STORE_LOCAL);
     CASE_OP_NAME(OP_CALL);
     CASE_OP_NAME(OP_RETURN);
-    CASE_OP_NAME(OP_CALL_NATIVE);
+    CASE_OP_NAME(OP_BIND);
     CASE_OP_NAME(OP_ADD);
     CASE_OP_NAME(OP_SUB);
     CASE_OP_NAME(OP_MUL);
@@ -139,7 +171,6 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
       case OP_PUSH_CONST:
       case OP_CALL:
       case OP_PUSH_LOCAL:
-      case OP_CALL_NATIVE:
       case OP_STORE_LOCAL: {
         uint32_t arg = bytecode[pc + 1] | (bytecode[pc + 2] << 8) |
                        (bytecode[pc + 3] << 16) | (bytecode[pc + 4] << 24);
@@ -160,6 +191,22 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
             " // %04zx: %s 0x%x \n",
             bytecode[pc], bytecode[pc + 1], bytecode[pc + 2], bytecode[pc + 3],
             bytecode[pc + 4], pc, GetOpName(op).c_str(), arg);
+        pc += 5;
+        break;
+      }
+      case OP_BIND: {
+        uint32_t idx = bytecode[pc + 1] | (bytecode[pc + 2] << 8) |
+                       (bytecode[pc + 3] << 16) | (bytecode[pc + 4] << 24);
+        uint32_t argc = bytecode[pc + 5] | (bytecode[pc + 6] << 8) |
+                        (bytecode[pc + 7] << 16) | (bytecode[pc + 8] << 24);
+        printf(
+            "0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x,"
+            " // %04zx: %s idx: %d argc: %d\n"
+            "      0x%02x 0x%02x 0x%02x 0x%02x,",
+            bytecode[pc], bytecode[pc + 1], bytecode[pc + 2], bytecode[pc + 3],
+            bytecode[pc + 4], pc, GetOpName(op).c_str(), idx, argc,
+            bytecode[pc + 5], bytecode[pc + 6], bytecode[pc + 7],
+            bytecode[pc + 8]);
         pc += 5;
         break;
       }

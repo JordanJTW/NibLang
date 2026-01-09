@@ -157,14 +157,14 @@ TEST(VM, RefCountString) {
                            .PushConstRef(0)
                            .PushConst(2)
                            .PushConst(4)
-                           .Call(1)  // substring
+                           .Call(VM_BUILTIN(4))  // String.substring
                            .StoreLocal(0)
                            .PushLocal(0)
                            .StoreLocal(0)
                            .PushConstRef(0)
                            .PushConst(8)
                            .PushConst(11)
-                           .Call(1)  // substring
+                           .Call(VM_BUILTIN(4))  // String.substring
                            .StoreLocal(1)
                            .PushLocal(0)
                            .Call(2)  // print
@@ -194,23 +194,6 @@ TEST(VM, RefCountString) {
        .type = vm_function_t::VM_NATIVE_FUNC,
        .argument_count = 1,
        .as.native = {.fn = native_trampoline, .userdata = &print_func}}};
-
-  EXPECT_CALL(substring_func, Call(_))
-      .WillRepeatedly([](std::vector<vm_value_t> args) -> vm_value_t {
-        char* string;
-        size_t string_len = vm_as_str(&args[0], &string);
-
-        int32_t start, end;
-        EXPECT_TRUE(vm_as_int32(&args[1], &start) &&
-                    vm_as_int32(&args[2], &end));
-        EXPECT_LE(start, string_len);
-        EXPECT_LE(end, string_len);
-        EXPECT_LT(start, end);
-
-        vm_free_ref(args[0]);  // Free string passed to us.
-
-        return allocate_str_from_c_with_length(string + start, end - start);
-      });
 
   ::testing::Sequence seq;
   for (const auto& expected_str : {"ll", "rld"}) {

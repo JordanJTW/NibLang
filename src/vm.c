@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "src/promise.h"
+#include "src/strings.h"
 #include "src/types.h"
 
 #define LOG($fmt, ...) \
@@ -25,7 +26,7 @@ static bool is_number_type(vm_value_t value) {
 #define DEBUG_LOG($fmt, ...) LOG($fmt, ##__VA_ARGS__)
 #endif  // NDEBUG
 
-#define VM_BUILTIN_FUNCTION_COUNT 4
+#define VM_BUILTIN_FUNCTION_COUNT 5
 
 typedef struct vm_frame vm_frame_t;
 
@@ -603,6 +604,7 @@ static void install_builtins(vm_t* vm) {
   INSTALL(1, vm_promise_fulfill, 2);
   INSTALL(2, vm_promise_reject, 2);
   INSTALL(3, vm_promise_then, 3);
+  INSTALL(4, vm_strings_substring, 3);
 }
 
 static void free_closure(void* self) {

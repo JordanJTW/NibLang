@@ -285,6 +285,7 @@ TEST(VM, CallBuiltInPromise) {
        .as.native = {.fn = native_trampoline, .userdata = &verifyResult}}};
 
   vm_value_t root_promise = allocate_promise();
+  vm_adopt_ref(root_promise);  // Hold on a reference to `root_promise`
 
   EXPECT_CALL(getPromiseNative, Call(_)).WillOnce(Return(root_promise));
 
@@ -303,5 +304,8 @@ TEST(VM, CallBuiltInPromise) {
 
   EXPECT_THAT(root_promise, IsFulfilledWith(Int32Type(109)));
   EXPECT_THAT(final_promise, IsFulfilledWith(Int32Type(151)));
+
+  vm_free_ref(root_promise);
+  vm_free_ref(final_promise);  // Ownership was transferred in the function call
   free_vm(vm);
 }

@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "src/vm.h"
@@ -30,15 +31,26 @@ static bool is_promise(vm_value_t value) {
   return value.type == VALUE_TYPE_PROMISE;
 }
 
+void free_promise(void* self) {
+  Promise* promise = self;
+  vm_free_ref(promise->value);
+  vm_promise_then_t* entry = promise->then_list;
+  while (entry) {
+    vm_free_ref(entry->on_fulfilled_fn);
+    vm_free_ref(entry->on_rejected_fn);
+
+    vm_promise_then_t* next = entry->next;
+    free(entry);
+    entry = next;
+  }
+  free(promise);
+}
+
 vm_value_t allocate_promise() {
   Promise* promise = calloc(1, sizeof(Promise));
   promise->state = PROMISE_STATE_PENDING;
+  promise->ref_count.deleter = &free_promise;
   return (vm_value_t){.type = VALUE_TYPE_PROMISE, .as.promise = promise};
-}
-
-void free_promise(Promise* promise) {
-  vm_free_ref(promise->value);
-  free(promise);
 }
 
 static bool is_function(vm_value_t value) {
@@ -174,6 +186,7 @@ vm_value_t vm_promise_fulfill(vm_value_t* argv, size_t argc, void* userdata) {
 
   promise_resolve(vm_get_job_queue(userdata), argv[0], argv[1],
                   /*rejected=*/false);
+  vm_free_ref(argv[0]);  // We do not retain ownership of `self`
   return (vm_value_t){.type = VALUE_TYPE_NULL};
 }
 vm_value_t vm_promise_reject(vm_value_t* argv, size_t argc, void* userdata) {
@@ -182,11 +195,15 @@ vm_value_t vm_promise_reject(vm_value_t* argv, size_t argc, void* userdata) {
 
   promise_resolve(vm_get_job_queue(userdata), argv[0], argv[1],
                   /*rejected=*/true);
+  vm_free_ref(argv[0]);  // We do not retain ownership of `self`
   return (vm_value_t){.type = VALUE_TYPE_NULL};
 }
 vm_value_t vm_promise_then(vm_value_t* argv, size_t argc, void* userdata) {
   assert(argc == 3 && is_promise(argv[0]) &&
          "Promise.then must be invoked with $this and two functions");
 
-  return promise_then(vm_get_job_queue(userdata), argv[0], argv[1], argv[2]);
+  vm_value_t new_promise =
+      promise_then(vm_get_job_queue(userdata), argv[0], argv[1], argv[2]);
+  vm_free_ref(argv[0]);  // We do not retain ownership of `source`
+  return new_promise;
 }

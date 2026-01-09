@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "src/types.h"
+#include "src/vm.h"
 
 Map* init_map(size_t bucket_count) {
   Map* map = (Map*)calloc(1, sizeof(Map) + sizeof(MapNode*) * bucket_count);
@@ -109,11 +110,27 @@ bool map_remove(Map* map, vm_value_t key) {
   return false;
 }
 
+void delete_map(void* self) {
+  Map* map = self;
+  for (size_t i = 0; i < map->bucket_count; ++i) {
+    MapNode* node = map->buckets[i];
+    while (node) {
+      MapNode* next = node->next;
+      vm_free_ref(node->key);
+      vm_free_ref(node->value);
+      free(node);
+      node = next;
+    }
+  }
+  free(map);
+}
+
 vm_value_t allocate_map(uint32_t bucket_count) {
   Map* map = init_map(bucket_count);
   if (map == NULL) {
     return (vm_value_t){.type = VALUE_TYPE_NULL};
   }
+  map->ref_count.deleter = &delete_map;
   static uint32_t next_id = 0;
   map->id = ++next_id;
   return (vm_value_t){.type = VALUE_TYPE_MAP, .as.map = map};

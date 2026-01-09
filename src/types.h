@@ -34,13 +34,17 @@ typedef enum : uint8_t {
 
 typedef struct vm_t vm_t;
 typedef struct vm_job_queue_t vm_job_queue_t;
-typedef uint32_t ref_count_t;
 typedef struct MapNode MapNode;
 typedef struct vm_promise_t Promise;
 typedef struct vm_closure_t Closure;
 
+typedef struct ref_count_t {
+  uint32_t count;
+  void (*deleter)(void* self);
+} ref_count_t;
+
 typedef struct vm_string_t {
-  ref_count_t ref_count;
+  ref_count_t rc;
   size_t len;
   char c_str[];
 } String;

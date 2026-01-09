@@ -143,7 +143,7 @@ static void rc_increment(vm_value_t* value) {
     case VALUE_TYPE_STR:
     case VALUE_TYPE_FUNCTION:
     case VALUE_TYPE_PROMISE: {
-      ++(*value->as.ref);
+      ++(value->as.ref->count);
       break;
     }
   }
@@ -161,10 +161,10 @@ static void rc_decrement(vm_value_t* value) {
     case VALUE_TYPE_STR:
     case VALUE_TYPE_FUNCTION:
     case VALUE_TYPE_PROMISE: {
-      assert(*value->as.ref > 0);
-      --(*value->as.ref);
-      if (*value->as.ref == 0)
-        free(value->as.ref);
+      assert(value->as.ref->count > 0);
+      --(value->as.ref->count);
+      if (value->as.ref->count == 0)
+        value->as.ref->deleter(value->as.ref);
       break;
     }
   }
@@ -375,6 +375,9 @@ static void run_frame(vm_t* vm, const char* name) {
         vm_value_t bound_fn = bind_to_function(
             vm, idx, vm->stack.values + vm->stack.sp - to_bind_argc,
             to_bind_argc);
+        for (size_t i = 0; i < to_bind_argc; ++i)
+          rc_decrement(vm->stack.values + (vm->stack.sp - to_bind_argc + i));
+        vm->stack.sp -= to_bind_argc;
         push_stack(&vm->stack, bound_fn);
         frame->pc += 9;
         break;
@@ -452,8 +455,6 @@ bool vm_as_int32(const vm_value_t* value, int32_t* out) {
   return true;
 }
 
-typedef uint32_t ref_count_t;
-
 vm_value_t allocate_str_from_c(const char* str) {
   return allocate_str_from_c_with_length(str, strlen(str));
 }
@@ -462,6 +463,7 @@ vm_value_t allocate_str_from_c_with_length(const char* str, size_t length) {
   String* string = calloc(1, sizeof(String) + length + 1);
   string->len = length;
   memcpy(string->c_str, str, length + 1);  // Add in the \0 terminator
+  string->rc.deleter = &free;
   return (vm_value_t){.type = VALUE_TYPE_STR, .as.str = string};
 }
 
@@ -470,6 +472,10 @@ size_t vm_as_str(const vm_value_t* value, char** out) {
     return 0;
   *out = value->as.str->c_str;
   return value->as.str->len;
+}
+
+void vm_adopt_ref(vm_value_t value) {
+  rc_increment(&value);
 }
 
 void vm_free_ref(vm_value_t value) {
@@ -554,7 +560,10 @@ vm_value_t vm_call_function(vm_t* vm,
                         sizeof(vm_value_t) * fn->as.bytecode.local_count);
 
       new_frame->code = &fn->as.bytecode;
-      memcpy(&new_frame->locals, argv, argc * sizeof(vm_value_t));
+      for (size_t i = 0; i < argc; ++i) {
+        new_frame->locals[i] = argv[i];
+        rc_increment(&new_frame->locals[i]);
+      }
 
       new_frame->next = vm->current_frame;
       vm->current_frame = new_frame;
@@ -596,6 +605,14 @@ static void install_builtins(vm_t* vm) {
   INSTALL(3, vm_promise_then, 3);
 }
 
+static void free_closure(void* self) {
+  Closure* fn = self;
+  for (size_t i = 0; i < fn->bound_argc; ++i) {
+    vm_free_ref(fn->argument_storage[i]);
+  }
+  free(fn);
+}
+
 vm_value_t bind_to_function(vm_t* vm,
                             size_t idx,
                             vm_value_t* argv,
@@ -608,7 +625,10 @@ vm_value_t bind_to_function(vm_t* vm,
       calloc(1, sizeof(Closure) + sizeof(vm_value_t) * storage_size);
   func->fn = fn;
   func->bound_argc = argc;
+  func->ref_count.deleter = &free_closure;
   memcpy(func->argument_storage, argv, argc * sizeof(vm_value_t));
+  for (size_t i = 0; i < argc; ++i)
+    rc_increment(&func->argument_storage[i]);
   return (vm_value_t){.type = VALUE_TYPE_FUNCTION, .as.fn = func};
 }
 

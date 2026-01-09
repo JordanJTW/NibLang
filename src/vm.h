@@ -71,6 +71,10 @@ vm_value_t allocate_str_from_c_with_length(const char* str, size_t len);
 // free ownership of the reference. If `value` is not a reference this is no-op.
 void vm_free_ref(vm_value_t value);
 
+// If `value` is a reference type (i.e. heap allocated), this function will
+// "adopt" the `value` (increment the ref count) so that ownerhip is retained.
+void vm_adopt_ref(vm_value_t value);
+
 vm_value_t vm_call_function(vm_t* vm,
                             Closure* fn,
                             vm_value_t* argv,

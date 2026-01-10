@@ -64,7 +64,7 @@ TEST(VM, CallFunc) {
       .WillOnce(ReturnNullType());
 
   vm_t* vm = new_vm(nullptr, 0, funcs, sizeof(funcs) / sizeof(vm_function_t));
-  vm_run(vm, /*entry_point_idx=*/0);
+  vm_run(vm, /*entry_point_idx=*/0, false);
   free_vm(vm);
 }
 
@@ -97,7 +97,7 @@ TEST(VM, ConstantString) {
 
   vm_t* vm = new_vm(constants, sizeof(constants) / sizeof(vm_value_t), funcs,
                     sizeof(funcs) / sizeof(vm_function_t));
-  vm_run(vm, /*entry_point_idx=*/0);
+  vm_run(vm, /*entry_point_idx=*/0, false);
   free_vm(vm);
 }
 
@@ -148,7 +148,7 @@ TEST(VM, ForLoop) {
   }
 
   vm_t* vm = new_vm(nullptr, 0, funcs, sizeof(funcs) / sizeof(vm_function_t));
-  vm_run(vm, /*entry_point_idx=*/0);
+  vm_run(vm, /*entry_point_idx=*/0, false);
   free_vm(vm);
 }
 
@@ -207,7 +207,7 @@ TEST(VM, RefCountString) {
 
   vm_t* vm = new_vm(constants, sizeof(constants) / sizeof(vm_value_t), funcs,
                     sizeof(funcs) / sizeof(vm_function_t));
-  vm_run(vm, /*entry_point_idx=*/0);
+  vm_run(vm, /*entry_point_idx=*/0, false);
   free_vm(vm);
 }
 
@@ -281,7 +281,7 @@ TEST(VM, CallBuiltInPromise) {
       });
 
   vm_t* vm = new_vm(NULL, 0, funcs, sizeof(funcs) / sizeof(vm_function_t));
-  vm_run(vm, /*entry_point_idx=*/0);
+  vm_run(vm, /*entry_point_idx=*/0, false);
 
   EXPECT_TRUE(run_promise_jobs(vm, vm_get_job_queue(vm)));
 

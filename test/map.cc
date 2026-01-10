@@ -53,7 +53,7 @@ TEST(Map, StoreAndGet_StringKey) {
 TEST(Map, StoreAndGet_MapKey) {
   Map* map = init_map(13);
 
-  vm_value_t key = allocate_map(5);
+  vm_value_t key = allocate_map();
   vm_value_t value = allocate_str_from_c("from map key");
 
   EXPECT_TRUE(map_insert(map, key, value));

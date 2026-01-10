@@ -37,7 +37,13 @@ class Assembler {
   Assembler& Jump(const std::string& label);
   Assembler& JumpIfFalse(const std::string& label);
 
-  std::vector<uint8_t> Build();
+  Assembler& DebugString(const std::string& message);
+
+  struct Metadata {
+    uint32_t max_local_index;
+  };
+
+  std::vector<uint8_t> Build(Metadata* metadata = nullptr);
 
  private:
   void PushOpAndArg32(op_t op, uint32_t arg);
@@ -47,6 +53,8 @@ class Assembler {
   std::map<std::string, uint32_t> label_to_location;
   // Targets for labels that need to be patched during `Assemble()`
   std::map<uint32_t, std::string> patch_locations;
+  // The maximum local storage index referenced in the bytecode
+  uint32_t max_local_index = 0;
 };
 
 void DumpByteCode(const std::vector<uint8_t>& bytecode);

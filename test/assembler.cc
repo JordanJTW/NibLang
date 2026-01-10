@@ -1,5 +1,10 @@
 #include "test/assmbler.h"
 
+#include <algorithm>
+#include <cassert>
+
+#include "src/vm.h"
+
 Assembler& Assembler::PushConstRef(uint32_t idx) {
   PushOpAndArg32(OP_PUSH_CONST_REF, idx);
   return *this;
@@ -21,6 +26,7 @@ Assembler& Assembler::Bind(uint32_t idx, uint32_t argc) {
   return *this;
 }
 Assembler& Assembler::PushLocal(uint32_t idx) {
+  max_local_index = std::max(max_local_index, idx);
   PushOpAndArg32(OP_PUSH_LOCAL, idx);
   return *this;
 }
@@ -61,6 +67,7 @@ Assembler& Assembler::CallBuiltIn(uint32_t idx) {
   return *this;
 }
 Assembler& Assembler::StoreLocal(uint32_t idx) {
+  max_local_index = std::max(max_local_index, idx);
   PushOpAndArg32(OP_STORE_LOCAL, idx);
   return *this;
 }
@@ -108,7 +115,17 @@ Assembler& Assembler::JumpIfFalse(const std::string& label) {
   return *this;
 }
 
-std::vector<uint8_t> Assembler::Build() {
+Assembler& Assembler::DebugString(const std::string& message) {
+  assert(message.size() < 256 && "message can only be 255 chars");
+  data_.push_back(OP_DEBUG);
+  data_.push_back(static_cast<uint8_t>(message.size()));
+  for (char c : message) {
+    data_.push_back(static_cast<uint8_t>(c));
+  }
+  return *this;
+}
+
+std::vector<uint8_t> Assembler::Build(Metadata* metadata) {
   for (const auto& [pc, label] : patch_locations) {
     if (auto iter = label_to_location.find(label);
         iter != label_to_location.cend()) {
@@ -121,6 +138,9 @@ std::vector<uint8_t> Assembler::Build() {
       fprintf(stderr, "label '%s' was never defined", label.c_str());
       std::abort();
     }
+  }
+  if (metadata != nullptr) {
+    metadata->max_local_index = max_local_index;
   }
   return data_;
 }
@@ -159,6 +179,7 @@ std::string GetOpName(op_t op) {
     CASE_OP_NAME(OP_GREATER_THAN);
     CASE_OP_NAME(OP_JUMP_IF_FALSE);
     CASE_OP_NAME(OP_JUMP);
+    CASE_OP_NAME(OP_DEBUG);
 #undef CASE_OP_NAME
   }
 }
@@ -207,7 +228,15 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
             bytecode[pc + 4], pc, GetOpName(op).c_str(), idx, argc,
             bytecode[pc + 5], bytecode[pc + 6], bytecode[pc + 7],
             bytecode[pc + 8]);
-        pc += 5;
+        pc += 9;
+        break;
+      }
+      case OP_DEBUG: {
+        uint8_t strlen = bytecode[pc + 1];
+        printf("strlen: %d\n", strlen);
+        fprintf(stderr, "  %04zx => %.*s\n", pc, (int)strlen,
+                (char*)(bytecode.data() + pc + 2));
+        pc += 2 + strlen;
         break;
       }
       case OP_ADD:

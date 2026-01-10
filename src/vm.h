@@ -13,6 +13,17 @@ extern "C" {
 #define VM_BUILTIN_SELECT_BITMASK 0x80000000u
 #define VM_BUILTIN($idx) $idx | VM_BUILTIN_SELECT_BITMASK
 
+enum {
+  VM_BUILTIN_PROMISE_NEW = VM_BUILTIN(0),
+  VM_BUILTIN_PROMISE_FULFILL = VM_BUILTIN(1),
+  VM_BUILTIN_PROMISE_REJECT = VM_BUILTIN(2),
+  VM_BUILTIN_PROMISE_THEN = VM_BUILTIN(3),
+  VM_BUILTIN_STRINGS_SUBSTRING = VM_BUILTIN(4),
+  VM_BUILTIN_MAP_NEW = VM_BUILTIN(5),
+  VM_BUILTIN_STRINGS_GET = VM_BUILTIN(6),
+  VM_BUILTIN_MAP_SET = VM_BUILTIN(7),
+};
+
 typedef struct vm_function_t {
   enum { VM_BYTECODE, VM_NATIVE_FUNC } type;
   size_t argument_count;
@@ -53,7 +64,7 @@ vm_t* new_vm(vm_value_t* constants,
 void free_vm(vm_t* vm);
 
 // Runs the function at `entery_point_idx` until OP_RETURN is encountered.
-void vm_run(vm_t* vm, size_t entry_point_idx);
+vm_value_t vm_run(vm_t* vm, size_t entry_point_idx, bool pop_return);
 
 // Provides `value` as an i32 in `out` and returns true. If `value` is NULL or
 // is not an i32 then returns false and `out` is untouched.

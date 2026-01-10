@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "src/map.h"
 #include "src/promise.h"
 #include "src/strings.h"
 #include "src/types.h"
@@ -26,14 +27,16 @@ static bool is_number_type(vm_value_t value) {
 #define DEBUG_LOG($fmt, ...) LOG($fmt, ##__VA_ARGS__)
 #endif  // NDEBUG
 
-#define VM_BUILTIN_FUNCTION_COUNT 5
+#define VM_BUILTIN_FUNCTION_COUNT 8
 
 typedef struct vm_frame vm_frame_t;
 
 static size_t patch_function_idx(size_t func_idx) {
   bool is_builtin_function = (func_idx & VM_BUILTIN_SELECT_BITMASK) != 0;
-  return (func_idx & ~VM_BUILTIN_SELECT_BITMASK) +
-         (is_builtin_function ? 0 : VM_BUILTIN_FUNCTION_COUNT);
+  size_t idx = (func_idx & ~VM_BUILTIN_SELECT_BITMASK);
+  assert((!is_builtin_function || idx < VM_BUILTIN_FUNCTION_COUNT) &&
+         "invoking built-in out of bounds");
+  return idx + (is_builtin_function ? 0 : VM_BUILTIN_FUNCTION_COUNT);
 }
 
 static void rc_increment(vm_value_t* value);
@@ -114,7 +117,7 @@ vm_t* new_vm(vm_value_t* constants,
   for (size_t i = 0; i < vm->contants_count; ++i)
     rc_increment(&vm->constants[i]);
 
-  vm->stack.capacity = 64;
+  vm->stack.capacity = 256;
   vm->stack.values = calloc(vm->stack.capacity, sizeof(vm_value_t));
   vm->job_queue = init_job_queue();
   return vm;
@@ -225,6 +228,7 @@ static void run_frame(vm_t* vm, const char* name) {
         vm_function_t* fn = &vm->functions[func_idx];
         DEBUG_LOG("OP_CALL idx: %d:%d (%s)", func_idx, fn->type, fn->name);
 
+        assert(vm->stack.sp >= fn->argument_count && "stack overflow");
         switch (fn->type) {
           case VM_BYTECODE: {
             vm_frame_t* new_frame =
@@ -242,8 +246,6 @@ static void run_frame(vm_t* vm, const char* name) {
             break;
           }
           case VM_NATIVE_FUNC: {
-            assert(vm->stack.sp >= fn->argument_count && "stack overflow");
-
             vm_value_t result = fn->as.native.fn(
                 vm->stack.values + vm->stack.sp - fn->argument_count,
                 fn->argument_count, fn->as.native.userdata);
@@ -427,6 +429,18 @@ static void run_frame(vm_t* vm, const char* name) {
         break;
       }
 
+      case OP_DEBUG: {
+        CHECK_BOUNDS(frame->pc + 1);
+        DEBUG_LOG("OP_DEBUG");
+        uint8_t strlen = frame->code->data[frame->pc + 1];
+        CHECK_BOUNDS(frame->pc + 2 + strlen);
+        fprintf(stderr, "  %04zx => %.*s\n", frame->pc, (int)strlen,
+                frame->code->data + frame->pc + 2);
+
+        frame->pc += 2 + strlen;
+        break;
+      }
+
       default: {
         DEBUG_LOG("unknown op-code: 0x%02x", frame->code->data[frame->pc]);
         return;
@@ -435,7 +449,7 @@ static void run_frame(vm_t* vm, const char* name) {
   }
 }
 
-void vm_run(vm_t* vm, size_t entry_point_idx) {
+vm_value_t vm_run(vm_t* vm, size_t entry_point_idx, bool pop_return) {
   size_t idx = VM_BUILTIN_FUNCTION_COUNT + entry_point_idx;
   assert(idx < vm->functions_count && "invalid entry point idx");
 
@@ -447,6 +461,11 @@ void vm_run(vm_t* vm, size_t entry_point_idx) {
   frame->code = &fn->as.bytecode;
   vm->current_frame = frame;
   run_frame(vm, fn->name);
+
+  if (pop_return)
+    return pop_stack(&vm->stack);
+
+  return (vm_value_t){.type = VALUE_TYPE_NULL};
 }
 
 bool vm_as_int32(const vm_value_t* value, int32_t* out) {
@@ -605,6 +624,9 @@ static void install_builtins(vm_t* vm) {
   INSTALL(2, vm_promise_reject, 2);
   INSTALL(3, vm_promise_then, 3);
   INSTALL(4, vm_strings_substring, 3);
+  INSTALL(5, allocate_map, 0);
+  INSTALL(6, vm_strings_get, 2);
+  INSTALL(7, vm_map_set, 3);
 }
 
 static void free_closure(void* self) {

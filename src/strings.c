@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "src/vm.h"
 
@@ -28,7 +30,7 @@ vm_value_t vm_strings_substring(vm_value_t* argv, size_t argc, void*) {
     return (vm_value_t){.type = VALUE_TYPE_NULL};
   }
 
-  if (start > len || start < 0 || end > len || end < 0 || start > end) {
+  if (start >= len || start < 0 || end >= len || end < 0 || start > end) {
     vm_free_ref(argv[0]);  // Free ownership of self
     return (vm_value_t){.type = VALUE_TYPE_NULL};
   }
@@ -36,4 +38,22 @@ vm_value_t vm_strings_substring(vm_value_t* argv, size_t argc, void*) {
   vm_value_t result = allocate_str_from_c_with_length(str + start, end - start);
   vm_free_ref(argv[0]);  // Free ownership of self
   return result;
+}
+
+vm_value_t vm_strings_get(vm_value_t* argv, size_t argc, void*) {
+  assert(argc == 2 && is_string(argv[0]) && is_int32(argv[1]) &&
+         "incorrect number of args or arg types");
+
+  char* str;
+  size_t len = vm_as_str(&argv[0], &str);
+
+  int32_t idx;
+  if (!vm_as_int32(&argv[1], &idx) || idx >= len || idx < 0) {
+    vm_free_ref(argv[0]);  // Free ownership of self
+    return (vm_value_t){.type = VALUE_TYPE_INT, .as.i32 = 0};
+  }
+
+  int32_t ch = str[idx];
+  vm_free_ref(argv[0]);  // Free ownership of self
+  return (vm_value_t){.type = VALUE_TYPE_INT, .as.i32 = ch};
 }

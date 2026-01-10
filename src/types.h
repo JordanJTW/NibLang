@@ -31,6 +31,8 @@ typedef enum : uint8_t {
   // Control Flow
   OP_JUMP_IF_FALSE,
   OP_JUMP,
+
+  OP_DEBUG,
 } op_t;
 
 typedef struct vm_t vm_t;

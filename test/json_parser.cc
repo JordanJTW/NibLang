@@ -24,6 +24,7 @@ int main() {
     FN_PARSE_STRING,
     FN_SKIP_WS,
     FN_IS_WHITESPACE,
+    FN_PARSE_BOOL,
   };
 
   BYTECODE_FUNCTION(is_whitespace, 1,
@@ -260,6 +261,41 @@ int main() {
                   .PushLocal(1)
                   .Return());
 
+  BYTECODE_FUNCTION(parse_bool, 2,
+      Assembler()
+        // $str.startswith("true", $idx)      
+        .PushLocal(0)
+        .PushConstRef(1)
+        .PushLocal(1)
+        .Call(VM_BUILTIN_STRINGS_STARTWITH)
+        .JumpIfFalse("check_false")
+            .PushConst(4)     // $idx += 4;
+            .PushLocal(1)
+            .Add()
+            .StoreLocal(1)
+            .PushConstRef(3)  // result = true;
+            .PushLocal(1)
+            .PushConstRef(3)  // return true; (handled)
+            .Return()
+        .Label("check_false")
+        // $str.startswith("false", $idx)      
+        .PushLocal(0)
+        .PushConstRef(2)
+        .PushLocal(1)
+        .Call(VM_BUILTIN_STRINGS_STARTWITH)
+        .JumpIfFalse("not_handled")
+            .PushConst(5)     // $idx += 5;
+            .PushLocal(1)
+            .Add()
+            .StoreLocal(1)
+            .PushConstRef(4)  // result = false;
+            .PushLocal(1)
+            .PushConstRef(3)  // return true; (handled)
+            .Return()
+        .Label("not_handled")
+        .PushConstRef(4)  // return false;
+        .Return());
+
   BYTECODE_FUNCTION(parse_value, 2,
       Assembler()
           .PushLocal(0)
@@ -285,11 +321,19 @@ int main() {
           .PushLocal(2)
           .PushConst('[')
           .Compare(OP_EQUAL)
-          .JumpIfFalse("parse_string")
+          .JumpIfFalse("parse_bool")
               // .PushLocal(0)
               // .PushLocal(1)
               // .Call(FN_PARSE_ARRAY)
               .Return()
+
+          .Label("parse_bool")
+          .PushLocal(0)
+          .PushLocal(1)
+          .Call(FN_PARSE_BOOL)
+          .JumpIfFalse("parse_string")
+              .Return()
+
 
           .Label("parse_string")
               .PushLocal(0)
@@ -319,14 +363,16 @@ int main() {
 
   vm_function_t parse_array = {.name = "null"};
 
-  vm_function_t funcs[] = {main,         parse_value,  parse_object,
-                           parse_array,  parse_string, skip_whitespace,
-                           is_whitespace};
+  vm_function_t funcs[] = {main,          parse_value,  parse_object,
+                           parse_array,   parse_string, skip_whitespace,
+                           is_whitespace, parse_bool};
 
   const char* json_blob =
       "{"
+      "\"sucks\": false, "
       "\"name\": \"ChatGPT\", "
       "\"version\": \"5.0\", "
+      "\"bool\": true,"
       "\"features\": {"
       "\"nlp\": \"advanced\", "
       "\"reasoning\": \"strong\", "
@@ -343,10 +389,13 @@ int main() {
       "}";
 
   vm_value_t constants[] = {
-      allocate_str_from_c(json_blob),
-  };
+      allocate_str_from_c(json_blob), allocate_str_from_c("true"),
+      allocate_str_from_c("false"),
+      (vm_value_t){.type = vm_value_t::VALUE_TYPE_BOOL, .as.boolean = true},
+      (vm_value_t){.type = vm_value_t::VALUE_TYPE_BOOL, .as.boolean = false}};
 
-  vm_t* vm = new_vm(constants, 1, funcs, sizeof(funcs) / sizeof(vm_function_t));
+  vm_t* vm = new_vm(constants, sizeof(constants) / sizeof(vm_value_t), funcs,
+                    sizeof(funcs) / sizeof(vm_function_t));
 
   vm_value_t map = vm_run(vm, 0, true);
 

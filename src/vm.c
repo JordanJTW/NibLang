@@ -27,7 +27,7 @@ static bool is_number_type(vm_value_t value) {
 #define DEBUG_LOG($fmt, ...) LOG($fmt, ##__VA_ARGS__)
 #endif  // NDEBUG
 
-#define VM_BUILTIN_FUNCTION_COUNT 8
+#define VM_BUILTIN_FUNCTION_COUNT 9
 
 typedef struct vm_frame vm_frame_t;
 
@@ -638,6 +638,7 @@ static void install_builtins(vm_t* vm) {
   INSTALL(5, allocate_map, 0);
   INSTALL(6, vm_strings_get, 2);
   INSTALL(7, vm_map_set, 3);
+  INSTALL(8, vm_strings_starts_with, 3);
 }
 
 static void free_closure(void* self) {

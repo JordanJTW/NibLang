@@ -24,7 +24,7 @@ int main() {
     FN_PARSE_STRING,
     FN_SKIP_WS,
     FN_IS_WHITESPACE,
-    FN_PARSE_BOOL,
+    FN_PARSE_LITERAL,
   };
 
   BYTECODE_FUNCTION(is_whitespace, 1,
@@ -261,7 +261,7 @@ int main() {
                   .PushLocal(1)
                   .Return());
 
-  BYTECODE_FUNCTION(parse_bool, 2,
+  BYTECODE_FUNCTION(parse_literal, 2,
       Assembler()
         // $str.startswith("true", $idx)      
         .PushLocal(0)
@@ -273,27 +273,40 @@ int main() {
             .PushLocal(1)
             .Add()
             .StoreLocal(1)
-            .PushConstRef(3)  // result = true;
+            .PushConstRef(4)  // result = true;
             .PushLocal(1)
-            .PushConstRef(3)  // return true; (handled)
+            .PushConstRef(4)  // return true; (handled)
             .Return()
         .Label("check_false")
-        // $str.startswith("false", $idx)      
         .PushLocal(0)
         .PushConstRef(2)
         .PushLocal(1)
         .Call(VM_BUILTIN_STRINGS_STARTWITH)
-        .JumpIfFalse("not_handled")
+        .JumpIfFalse("check_null")
             .PushConst(5)     // $idx += 5;
             .PushLocal(1)
             .Add()
             .StoreLocal(1)
-            .PushConstRef(4)  // result = false;
+            .PushConstRef(5)  // result = false;
             .PushLocal(1)
-            .PushConstRef(3)  // return true; (handled)
+            .PushConstRef(4)  // return true; (handled)
+            .Return()
+        .Label("check_null")
+        .PushLocal(0)
+        .PushConstRef(3)
+        .PushLocal(1)
+        .Call(VM_BUILTIN_STRINGS_STARTWITH)
+        .JumpIfFalse("not_handled")
+            .PushConst(4)     // $idx += 5;
+            .PushLocal(1)
+            .Add()
+            .StoreLocal(1)
+            .PushLocal(2)     // Push empty local (NULL)
+            .PushLocal(1)
+            .PushConstRef(4)  // return true; (handled)
             .Return()
         .Label("not_handled")
-        .PushConstRef(4)  // return false;
+        .PushConstRef(5)  // return false;
         .Return());
 
   BYTECODE_FUNCTION(parse_value, 2,
@@ -321,16 +334,16 @@ int main() {
           .PushLocal(2)
           .PushConst('[')
           .Compare(OP_EQUAL)
-          .JumpIfFalse("parse_bool")
+          .JumpIfFalse("parse_literal")
               // .PushLocal(0)
               // .PushLocal(1)
               // .Call(FN_PARSE_ARRAY)
               .Return()
 
-          .Label("parse_bool")
+          .Label("parse_literal")
           .PushLocal(0)
           .PushLocal(1)
-          .Call(FN_PARSE_BOOL)
+          .Call(FN_PARSE_LITERAL)
           .JumpIfFalse("parse_string")
               .Return()
 
@@ -365,7 +378,7 @@ int main() {
 
   vm_function_t funcs[] = {main,          parse_value,  parse_object,
                            parse_array,   parse_string, skip_whitespace,
-                           is_whitespace, parse_bool};
+                           is_whitespace, parse_literal};
 
   const char* json_blob =
       "{"
@@ -374,6 +387,7 @@ int main() {
       "\"version\": \"5.0\", "
       "\"bool\": true,"
       "\"features\": {"
+      "\"null_test\": null,"
       "\"nlp\": \"advanced\", "
       "\"reasoning\": \"strong\", "
       "\"nested\": {"
@@ -390,7 +404,7 @@ int main() {
 
   vm_value_t constants[] = {
       allocate_str_from_c(json_blob), allocate_str_from_c("true"),
-      allocate_str_from_c("false"),
+      allocate_str_from_c("false"), allocate_str_from_c("null"),
       (vm_value_t){.type = vm_value_t::VALUE_TYPE_BOOL, .as.boolean = true},
       (vm_value_t){.type = vm_value_t::VALUE_TYPE_BOOL, .as.boolean = false}};
 

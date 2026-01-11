@@ -22,6 +22,7 @@ typedef enum : uint8_t {
   OP_AND,
   OP_OR,
   OP_NOT,
+  OP_INC,
   // Comparisons
   OP_LESS_THAN,
   OP_LESS_OR_EQ,

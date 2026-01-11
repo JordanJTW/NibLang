@@ -25,6 +25,7 @@ class Assembler {
   Assembler& And();
   Assembler& Or();
   Assembler& Not();
+  Assembler& Increment(uint32_t idx);
   Assembler& Return();
   Assembler& CallNative(uint32_t idx);
   Assembler& CallBuiltIn(uint32_t idx);

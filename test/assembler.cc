@@ -58,6 +58,10 @@ Assembler& Assembler::Not() {
   data_.push_back(OP_NOT);
   return *this;
 }
+Assembler& Assembler::Increment(uint32_t idx) {
+  PushOpAndArg32(OP_INC, idx);
+  return *this;
+}
 Assembler& Assembler::Return() {
   data_.push_back(OP_RETURN);
   return *this;
@@ -172,6 +176,7 @@ std::string GetOpName(op_t op) {
     CASE_OP_NAME(OP_AND);
     CASE_OP_NAME(OP_OR);
     CASE_OP_NAME(OP_NOT);
+    CASE_OP_NAME(OP_INC);
     CASE_OP_NAME(OP_LESS_THAN);
     CASE_OP_NAME(OP_LESS_OR_EQ);
     CASE_OP_NAME(OP_EQUAL);
@@ -251,7 +256,8 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
       case OP_DIV:
       case OP_AND:
       case OP_OR:
-      case OP_NOT: {
+      case OP_NOT:
+      case OP_INC: {
         printf("0x%02x, // %04zx: %s\n", bytecode[pc], pc,
                GetOpName(op).c_str());
         pc += 1;

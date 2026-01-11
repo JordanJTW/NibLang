@@ -23,7 +23,6 @@ int main() {
     FN_PARSE_ARRAY,
     FN_PARSE_STRING,
     FN_SKIP_WS,
-    FN_ADVANCE,
     FN_IS_WHITESPACE,
   };
 
@@ -57,9 +56,6 @@ int main() {
                         .And()
                         .Return());
 
-  BYTECODE_FUNCTION(increment, 1,
-                    Assembler().PushLocal(0).PushConst(1).Add().Return());
-
   // clang-format off
   BYTECODE_FUNCTION(skip_whitespace, 2,
                     Assembler()
@@ -74,9 +70,7 @@ int main() {
                             .Call(FN_IS_WHITESPACE)
                             .JumpIfFalse("end")
 
-                            .PushLocal(1)      // index
-                            .Call(FN_ADVANCE)  // increment index
-                            .StoreLocal(1)
+                            .Increment(1)
                             .Jump("loop")
                         .Label("end")
                         .PushLocal(1)
@@ -85,9 +79,7 @@ int main() {
   BYTECODE_FUNCTION(parse_string, 2,
       Assembler()
           .DebugString("enter parse_string")
-          .PushLocal(1)              // $index
-          .Call(FN_ADVANCE)          // skip opening '"'
-          .StoreLocal(1)
+          .Increment(1)          // ++$index to skip opening '"'
 
           .PushLocal(1)
           .StoreLocal(2)          // start_index = index
@@ -107,14 +99,12 @@ int main() {
                   .PushLocal(2)      // start_index
                   .PushLocal(1)      // current index
                   .Call(VM_BUILTIN_STRINGS_SUBSTRING)
+                  .Increment(1)  // skip closing '"'
                   .PushLocal(1)
-                  .Call(FN_ADVANCE)  // skip closing '"'
                   .Return()
 
           .Label("advance_char")
-              .PushLocal(1)
-              .Call(FN_ADVANCE)
-              .StoreLocal(1)
+              .Increment(1)
               .Jump("string_loop"));
 
 
@@ -183,10 +173,8 @@ int main() {
 
   BYTECODE_FUNCTION(parse_object, 2,
       Assembler()
-          .PushLocal(1)
-          .Call(FN_ADVANCE)          // skip '{'
-          .StoreLocal(1)
-
+          .Increment(1)         // skip '{'
+          
           .PushLocal(0)
           .PushLocal(1)
           .Call(FN_SKIP_WS)
@@ -204,8 +192,8 @@ int main() {
           .Compare(OP_EQUAL)
           .JumpIfFalse("object_loop")
               .PushLocal(2)
+              .Increment(1)
               .PushLocal(1)
-              .Call(FN_ADVANCE)
               .Return()
 
           .Label("object_loop")
@@ -226,9 +214,7 @@ int main() {
               .Call(FN_SKIP_WS)
               .StoreLocal(1)
 
-              .PushLocal(1)
-              .Call(FN_ADVANCE)      // skip ':'
-              .StoreLocal(1)
+              .Increment(1)      // skip ':'
 
               .DebugString("begin reading value")
               .PushLocal(0)
@@ -257,9 +243,7 @@ int main() {
               .Compare(OP_EQUAL)
               .DebugString("Checking for ,")
               .JumpIfFalse("check_end_object")
-                  .PushLocal(1)
-                  .Call(FN_ADVANCE)
-                  .StoreLocal(1)
+                  .Increment(1)
                   .Jump("object_loop")
 
           .Label("check_end_object")
@@ -272,8 +256,8 @@ int main() {
               .JumpIfFalse("object_loop")
                   .DebugString("END") 
                   .PushLocal(2)
+                  .Increment(1)
                   .PushLocal(1)
-                  .Call(FN_ADVANCE)
                   .Return());
 
   BYTECODE_FUNCTION(parse_value, 2,
@@ -335,9 +319,9 @@ int main() {
 
   vm_function_t parse_array = {.name = "null"};
 
-  vm_function_t funcs[] = {main,        parse_value,  parse_object,
-                           parse_array, parse_string, skip_whitespace,
-                           increment,   is_whitespace};
+  vm_function_t funcs[] = {main,         parse_value,  parse_object,
+                           parse_array,  parse_string, skip_whitespace,
+                           is_whitespace};
 
   const char* json_blob =
       "{"

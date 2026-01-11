@@ -346,6 +346,17 @@ static void run_frame(vm_t* vm, const char* name) {
         ++frame->pc;
         break;
       }
+      case OP_INC: {
+        CHECK_BOUNDS(frame->pc + 4);
+        uint32_t local_idx = read_u32_arg(frame, 0);
+        DEBUG_LOG("OP_INC idx: %d", local_idx);
+        assert(frame->code->local_count > local_idx && "invalid local idx");
+        assert(frame->locals[local_idx].type == VALUE_TYPE_INT &&
+               "only i32 supported");
+        ++(frame->locals[local_idx].as.i32);
+        frame->pc += 5;
+        break;
+      }
       case OP_STORE_LOCAL: {
         CHECK_BOUNDS(frame->pc + 4);
         uint32_t local_idx = read_u32_arg(frame, 0);

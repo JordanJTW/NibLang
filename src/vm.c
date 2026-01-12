@@ -632,7 +632,7 @@ vm_value_t vm_call_function(vm_t* vm,
   }
 }
 
-static vm_value_t math_pow(vm_value_t* argv, size_t argc, void*) {
+static vm_value_t math_pow(vm_value_t* argv, size_t argc, void* vm) {
   assert(argc == 2 && is_number_type(argv[0]) && is_number_type(argv[1]) &&
          "wrong number or type of args");
 

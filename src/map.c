@@ -141,14 +141,12 @@ vm_value_t allocate_map() {
   return (vm_value_t){.type = VALUE_TYPE_MAP, .as.map = map};
 }
 
-vm_value_t vm_map_set(vm_value_t* argv, size_t argc, void*) {
+vm_value_t vm_map_set(vm_value_t* argv, size_t argc, void* vm) {
   assert(argc == 3 && is_map(argv[0]) &&
          "incorrect number of args or arg types");
 
   Map* map = argv[0].as.map;
   map_insert(map, argv[1], argv[2]);
-  printf("key: \"%.*s\"\n", argv[1].as.str->len, argv[1].as.str->c_str);
-
   return (vm_value_t){.type = VALUE_TYPE_NULL};
 }
 

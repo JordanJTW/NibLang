@@ -18,7 +18,7 @@ static bool is_int32(vm_value_t i32) {
   return i32.type == VALUE_TYPE_INT;
 }
 
-vm_value_t vm_strings_substring(vm_value_t* argv, size_t argc, void*) {
+vm_value_t vm_strings_substring(vm_value_t* argv, size_t argc, void* vm) {
   assert(argc == 3 && is_string(argv[0]) && is_int32(argv[1]) &&
          is_int32(argv[2]) && "incorrect number of args or arg types");
 
@@ -41,7 +41,7 @@ vm_value_t vm_strings_substring(vm_value_t* argv, size_t argc, void*) {
   return result;
 }
 
-vm_value_t vm_strings_get(vm_value_t* argv, size_t argc, void*) {
+vm_value_t vm_strings_get(vm_value_t* argv, size_t argc, void* vm) {
   assert(argc == 2 && is_string(argv[0]) && is_int32(argv[1]) &&
          "incorrect number of args or arg types");
 
@@ -59,7 +59,7 @@ vm_value_t vm_strings_get(vm_value_t* argv, size_t argc, void*) {
   return (vm_value_t){.type = VALUE_TYPE_INT, .as.i32 = ch};
 }
 
-vm_value_t vm_strings_starts_with(vm_value_t* argv, size_t argc, void*) {
+vm_value_t vm_strings_starts_with(vm_value_t* argv, size_t argc, void* vm) {
   assert(argc == 3 && is_string(argv[0]) && is_string(argv[1]) &&
          "incorrect number of args or arg types");
 

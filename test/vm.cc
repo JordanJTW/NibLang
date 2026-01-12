@@ -22,8 +22,8 @@ TEST(VM, Init) {
 
 TEST(VM, CallFunc) {
   auto main_bytecode = Assembler()
-                           .PushConst(2)
-                           .PushConst(8)
+                           .PushInt32(2)
+                           .PushInt32(8)
                            .Call(1)
                            .StoreLocal(0)
                            .PushLocal(0)
@@ -105,17 +105,17 @@ TEST(VM, ForLoop) {
   // for (int i=0; i < 5; ++i)
   //   native_func(i);
   auto main_bytecode = Assembler()
-                           .PushConst(0)
+                           .PushInt32(0)
                            .StoreLocal(0)
                            .Label("loop_start")
                            .PushLocal(0)
-                           .PushConst(5)
+                           .PushInt32(5)
                            .Compare(OP_LESS_THAN)
                            .JumpIfFalse("exit")
                            .PushLocal(0)
                            .Call(1)
                            .PushLocal(0)
-                           .PushConst(1)
+                           .PushInt32(1)
                            .Add()
                            .StoreLocal(0)
                            .Jump("loop_start")
@@ -155,15 +155,15 @@ TEST(VM, ForLoop) {
 TEST(VM, RefCountString) {
   auto main_bytecode = Assembler()
                            .PushConstRef(0)
-                           .PushConst(2)
-                           .PushConst(4)
+                           .PushInt32(2)
+                           .PushInt32(4)
                            .Call(VM_BUILTIN(4))  // String.substring
                            .StoreLocal(0)
                            .PushLocal(0)
                            .StoreLocal(0)
                            .PushConstRef(0)
-                           .PushConst(8)
-                           .PushConst(11)
+                           .PushInt32(8)
+                           .PushInt32(11)
                            .Call(VM_BUILTIN(4))  // String.substring
                            .StoreLocal(1)
                            .PushLocal(0)
@@ -220,7 +220,7 @@ TEST(VM, CallBuiltInPromise) {
 
   // Returns x + 42
   auto returnValueByteCode =
-      Assembler().PushConst(42).PushLocal(0).Add().Return().Build();
+      Assembler().PushInt32(42).PushLocal(0).Add().Return().Build();
 
   auto main_bytecode = Assembler()
                            .Call(2 /*getPromiseNative()*/)
@@ -230,7 +230,7 @@ TEST(VM, CallBuiltInPromise) {
                            .PushLocal(2 /*undefined*/)
                            .Call(VM_BUILTIN(3) /*Promise.then*/)
                            .PushLocal(0)
-                           .PushConst(109)
+                           .PushInt32(109)
                            .Call(VM_BUILTIN(1) /*Promise.fulfill*/)
                            .Call(3 /*verifyResult*/)
                            .Return()

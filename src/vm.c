@@ -1,6 +1,7 @@
 #include "vm.h"
 
 #include <assert.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -27,7 +28,7 @@ static bool is_number_type(vm_value_t value) {
 #define DEBUG_LOG($fmt, ...) LOG($fmt, ##__VA_ARGS__)
 #endif  // NDEBUG
 
-#define VM_BUILTIN_FUNCTION_COUNT 9
+#define VM_BUILTIN_FUNCTION_COUNT 10
 
 typedef struct vm_frame vm_frame_t;
 
@@ -210,12 +211,22 @@ static void run_frame(vm_t* vm, const char* name) {
         frame->pc += 5;
         break;
       }
-      case OP_PUSH_CONST: {
+      case OP_PUSH_I32: {
         CHECK_BOUNDS(frame->pc + 4);
         int32_t value = read_u32_arg(frame, 0);
-        DEBUG_LOG("OP_PUSH_CONST value: %d", value);
+        DEBUG_LOG("OP_PUSH_I32 value: %d", value);
         push_stack(&vm->stack,
                    (vm_value_t){.type = VALUE_TYPE_INT, .as.i32 = value});
+        frame->pc += 5;
+        break;
+      }
+      case OP_PUSH_F32: {
+        CHECK_BOUNDS(frame->pc + 4);
+        float value = 0;
+        memcpy(&value, &frame->code->data[frame->pc + 1], sizeof(float));
+        DEBUG_LOG("OP_PUSH_F32 value: %f", value);
+        push_stack(&vm->stack,
+                   (vm_value_t){.type = VALUE_TYPE_FLOAT, .as.f32 = value});
         frame->pc += 5;
         break;
       }
@@ -530,12 +541,14 @@ static vm_value_t handle_number_op(num_op_t op, vm_value_t a, vm_value_t b) {
     float result;
     switch (op) {
       case NUM_OP_ADD:
+        DEBUG_LOG("OP_ADD %f + %f", f1, f2);
         result = f1 + f2;
         break;
       case NUM_OP_SUB:
         result = f1 - f2;
         break;
       case NUM_OP_MUL:
+        DEBUG_LOG("OP_MUL %f * %f", f1, f2);
         result = f1 * f2;
         break;
       case NUM_OP_DIV:
@@ -619,6 +632,18 @@ vm_value_t vm_call_function(vm_t* vm,
   }
 }
 
+static vm_value_t math_pow(vm_value_t* argv, size_t argc, void*) {
+  assert(argc == 2 && is_number_type(argv[0]) && is_number_type(argv[1]) &&
+         "wrong number or type of args");
+
+  float base = value_to_float(argv[0]);
+  float exponent = value_to_float(argv[1]);
+
+  printf("POW %f ^ %f = %f\n", base, exponent, powf(base, exponent));
+
+  return (vm_value_t){.type = VALUE_TYPE_FLOAT, .as.f32 = powf(base, exponent)};
+}
+
 static void install_builtins(vm_t* vm) {
 #define INSTALL($idx, $fn, $argc)                                           \
   static_assert($idx < VM_BUILTIN_FUNCTION_COUNT, "unable to install idx"); \
@@ -639,6 +664,7 @@ static void install_builtins(vm_t* vm) {
   INSTALL(6, vm_strings_get, 2);
   INSTALL(7, vm_map_set, 3);
   INSTALL(8, vm_strings_starts_with, 3);
+  INSTALL(9, math_pow, 2);
 }
 
 static void free_closure(void* self) {

@@ -14,7 +14,8 @@ class Assembler {
   ~Assembler() = default;
 
   Assembler& PushConstRef(uint32_t idx);
-  Assembler& PushConst(int32_t value);
+  Assembler& PushInt32(int32_t value);
+  Assembler& PushFloat(float value);
   Assembler& Call(uint32_t idx);
   Assembler& Bind(uint32_t idx, uint32_t argc);
   Assembler& PushLocal(uint32_t idx);

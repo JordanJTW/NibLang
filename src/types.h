@@ -7,7 +7,8 @@
 typedef enum : uint8_t {
   // Variables
   OP_PUSH_CONST_REF,
-  OP_PUSH_CONST,
+  OP_PUSH_I32,
+  OP_PUSH_F32,
   OP_PUSH_LOCAL,
   OP_STORE_LOCAL,
   // Functions

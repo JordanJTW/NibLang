@@ -1,3 +1,5 @@
+#include <assert.h>
+
 #include "src/map.h"
 #include "src/vm.h"
 #include "test/assmbler.h"
@@ -25,23 +27,26 @@ int main() {
     FN_SKIP_WS,
     FN_IS_WHITESPACE,
     FN_PARSE_LITERAL,
+    FN_IS_DIGIT,
+    FN_IS_EXPONENT_CHAR,
+    FN_PARSE_NUMBER,
   };
 
   BYTECODE_FUNCTION(is_whitespace, 1,
                     Assembler()
                         .PushLocal(0)
-                        .PushConst(' ')
+                        .PushInt32(' ')
                         .Compare(OP_EQUAL)
                         .PushLocal(0)
-                        .PushConst('\n')
-                        .Compare(OP_EQUAL)
-                        .Or()
-                        .PushLocal(0)
-                        .PushConst('\r')
+                        .PushInt32('\n')
                         .Compare(OP_EQUAL)
                         .Or()
                         .PushLocal(0)
-                        .PushConst('\t')
+                        .PushInt32('\r')
+                        .Compare(OP_EQUAL)
+                        .Or()
+                        .PushLocal(0)
+                        .PushInt32('\t')
                         .Compare(OP_EQUAL)
                         .Or()
                         .Return());
@@ -49,12 +54,23 @@ int main() {
   BYTECODE_FUNCTION(is_digit, 1,
                     Assembler()
                         .PushLocal(0)
-                        .PushConst('0')
+                        .PushInt32('0')
                         .Compare(OP_GREAT_OR_EQ)
                         .PushLocal(0)
-                        .PushConst('9')
+                        .PushInt32('9')
                         .Compare(OP_LESS_OR_EQ)
                         .And()
+                        .Return());
+
+  BYTECODE_FUNCTION(is_exponent_char, 1,
+                    Assembler()
+                        .PushLocal(0)
+                        .PushInt32('e')
+                        .Compare(OP_EQUAL)
+                        .PushLocal(0)
+                        .PushInt32('E')
+                        .Compare(OP_EQUAL)
+                        .Or()
                         .Return());
 
   // clang-format off
@@ -90,7 +106,7 @@ int main() {
               .PushLocal(0)
               .PushLocal(1)
               .Call(VM_BUILTIN_STRINGS_GET)
-              .PushConst('"')
+              .PushInt32('"')
               .Compare(OP_EQUAL)
               .JumpIfFalse("advance_char")
                   .DebugString("reached end of string")
@@ -127,7 +143,7 @@ int main() {
   //         .PushLocal(0)
   //         .PushLocal(1)
   //         .Call(VM_BUILTIN_STRINGS_GET)
-  //         .PushConst(']')
+  //         .PushInt32(']')
   //         .Compare(OP_EQUAL)
   //         .JumpIfFalse("array_loop")
   //             .PushLocal(1)
@@ -151,7 +167,7 @@ int main() {
   //             .PushLocal(0)
   //             .PushLocal(1)
   //             .Call(VM_BUILTIN_STRINGS_GET)
-  //             .PushConst(',')
+  //             .PushInt32(',')
   //             .Compare(OP_EQUAL)
   //             .JumpIfFalse("check_end_array")
   //                 .PushLocal(1)
@@ -163,7 +179,7 @@ int main() {
   //             .PushLocal(0)
   //             .PushLocal(1)
   //             .Call(VM_BUILTIN_STRINGS_GET)
-  //             .PushConst(']')
+  //             .PushInt32(']')
   //             .Compare(OP_EQUAL)
   //             .JumpIfFalse("array_loop")
   //                 .PushLocal(1)
@@ -188,7 +204,7 @@ int main() {
           .PushLocal(0)
           .PushLocal(1)
           .Call(VM_BUILTIN_STRINGS_GET)
-          .PushConst('}')
+          .PushInt32('}')
           .DebugString("check for empty object")
           .Compare(OP_EQUAL)
           .JumpIfFalse("object_loop")
@@ -240,7 +256,7 @@ int main() {
               .PushLocal(0)
               .PushLocal(1)
               .Call(VM_BUILTIN_STRINGS_GET)
-              .PushConst(',')
+              .PushInt32(',')
               .Compare(OP_EQUAL)
               .DebugString("Checking for ,")
               .JumpIfFalse("check_end_object")
@@ -252,7 +268,7 @@ int main() {
               .PushLocal(0)
               .PushLocal(1)
               .Call(VM_BUILTIN_STRINGS_GET)
-              .PushConst('}')
+              .PushInt32('}')
               .Compare(OP_EQUAL)
               .JumpIfFalse("object_loop")
                   .DebugString("END") 
@@ -269,7 +285,7 @@ int main() {
         .PushLocal(1)
         .Call(VM_BUILTIN_STRINGS_STARTWITH)
         .JumpIfFalse("check_false")
-            .PushConst(4)     // $idx += 4;
+            .PushInt32(4)     // $idx += 4;
             .PushLocal(1)
             .Add()
             .StoreLocal(1)
@@ -283,7 +299,7 @@ int main() {
         .PushLocal(1)
         .Call(VM_BUILTIN_STRINGS_STARTWITH)
         .JumpIfFalse("check_null")
-            .PushConst(5)     // $idx += 5;
+            .PushInt32(5)     // $idx += 5;
             .PushLocal(1)
             .Add()
             .StoreLocal(1)
@@ -297,7 +313,7 @@ int main() {
         .PushLocal(1)
         .Call(VM_BUILTIN_STRINGS_STARTWITH)
         .JumpIfFalse("not_handled")
-            .PushConst(4)     // $idx += 5;
+            .PushInt32(4)     // $idx += 5;
             .PushLocal(1)
             .Add()
             .StoreLocal(1)
@@ -322,7 +338,7 @@ int main() {
           .StoreLocal(2)             // ch
 
           .PushLocal(2)
-          .PushConst('{')
+          .PushInt32('{')
           .Compare(OP_EQUAL)
           .JumpIfFalse("check_array")
               .PushLocal(0)
@@ -332,7 +348,7 @@ int main() {
 
           .Label("check_array")
           .PushLocal(2)
-          .PushConst('[')
+          .PushInt32('[')
           .Compare(OP_EQUAL)
           .JumpIfFalse("parse_literal")
               // .PushLocal(0)
@@ -344,6 +360,13 @@ int main() {
           .PushLocal(0)
           .PushLocal(1)
           .Call(FN_PARSE_LITERAL)
+          .JumpIfFalse("parse_number")
+              .Return()
+
+          .Label("parse_number")
+          .PushLocal(0)
+          .PushLocal(1)
+          .Call(FN_PARSE_NUMBER)
           .JumpIfFalse("parse_string")
               .Return()
 
@@ -353,6 +376,195 @@ int main() {
               .PushLocal(1)
               .Call(FN_PARSE_STRING)
               .Return());
+
+  BYTECODE_FUNCTION(parse_number, 2,
+      Assembler()
+      // sign = 1
+      .PushInt32(1)
+      .StoreLocal(2)
+
+      // if s[i] == '-'
+      .PushLocal(0)
+      .PushLocal(1)
+      .Call(VM_BUILTIN_STRINGS_GET)
+      .PushInt32('-')
+      .Compare(OP_EQUAL)
+      .JumpIfFalse("parse_int")
+          .PushInt32(-1)
+          .StoreLocal(2)
+          .Increment(1)
+
+      .Label("parse_int")
+          // integer = 0
+          .PushInt32(0)
+          .StoreLocal(3)
+
+          // first digit
+          .PushLocal(0)
+          .PushLocal(1)
+          .Call(VM_BUILTIN_STRINGS_GET)
+          .PushInt32('0')
+          .Compare(OP_EQUAL)
+          .JumpIfFalse("non_zero_int")
+              // exactly "0"
+              .Increment(1)
+              .Jump("after_int")
+
+      .Label("non_zero_int")
+          // must be 1–9
+          .PushLocal(0)
+          .PushLocal(1)
+          .Call(VM_BUILTIN_STRINGS_GET)   
+          .Call(FN_IS_DIGIT)  // THIS IS WRONG AND SHOULD NOT INCLUDE 0
+          .JumpIfFalse("error")
+
+      .Label("int_loop")
+          .PushLocal(3)
+          .PushInt32(10)
+          .Multiply()
+
+          .PushLocal(0)
+          .PushLocal(1)
+          .Call(VM_BUILTIN_STRINGS_GET)
+          .PushInt32('0')
+          .Subtract()
+
+          .Add()
+          .StoreLocal(3)
+
+          .Increment(1)
+
+          // while digit
+          .PushLocal(0)
+          .PushLocal(1)
+          .Call(VM_BUILTIN_STRINGS_GET)
+          .Call(FN_IS_DIGIT)
+          .Not()
+          .JumpIfFalse("int_loop")
+
+      .Label("after_int")
+          // fraction?
+          .PushLocal(0)
+          .PushLocal(1)
+          .Call(VM_BUILTIN_STRINGS_GET)
+          .PushInt32('.')
+          .Compare(OP_EQUAL)
+          .JumpIfFalse("check_exp")
+
+              .Increment(1)
+              .PushInt32(0)
+              .StoreLocal(4)        // fraction
+              .PushFloat(0.1)
+              .StoreLocal(5)        // scale
+
+          .Label("frac_loop")
+              .PushLocal(0)
+              .PushLocal(1)
+              .Call(VM_BUILTIN_STRINGS_GET)
+              .Call(FN_IS_DIGIT)
+              .JumpIfFalse("error")   // must have at least one digit
+
+              .PushLocal(4)
+              .PushLocal(0)
+              .PushLocal(1)
+              .Call(VM_BUILTIN_STRINGS_GET)
+              .PushInt32('0')
+              .Subtract()
+              .PushLocal(5)
+              .Multiply()
+              .Add()
+              .StoreLocal(4)
+
+              .PushLocal(5)
+              .PushFloat(0.1)
+              .Multiply()
+              .StoreLocal(5)
+
+              .Increment(1)
+
+              .PushLocal(0)
+              .PushLocal(1)
+              .Call(VM_BUILTIN_STRINGS_GET)
+              .Call(FN_IS_DIGIT)
+              .Not()
+              .JumpIfFalse("frac_loop")
+
+      .Label("check_exp")
+          // exponent?
+          .PushLocal(0)
+          .PushLocal(1)
+          .Call(VM_BUILTIN_STRINGS_GET)
+          .Call(FN_IS_EXPONENT_CHAR) // e or E
+          .JumpIfFalse("finish")
+
+              .Increment(1)
+              .PushInt32(1)
+              .StoreLocal(6) // exp sign
+              .PushInt32(0)
+              .StoreLocal(7) // exp value
+
+              // optional sign
+              .PushLocal(0)
+              .PushLocal(1)
+              .Call(VM_BUILTIN_STRINGS_GET)
+              .PushInt32('-')
+              .Compare(OP_EQUAL)
+              .JumpIfFalse("exp_digits")
+
+                  .PushInt32(-1)
+                  .StoreLocal(6)
+                  .Increment(1)
+
+          .Label("exp_digits")
+              // must have digit
+              .PushLocal(0)
+              .PushLocal(1)
+              .Call(VM_BUILTIN_STRINGS_GET)
+              .Call(FN_IS_DIGIT)
+              .JumpIfFalse("error")
+
+          .Label("exp_loop")
+              .PushLocal(7)
+              .PushInt32(10)
+              .Multiply()
+
+              .PushLocal(0)
+              .PushLocal(1)
+              .Call(VM_BUILTIN_STRINGS_GET)
+              .PushInt32('0')
+              .Subtract()
+              .Add()
+              .StoreLocal(7)
+
+              .Increment(1)
+
+              .PushLocal(0)
+              .PushLocal(1)
+              .Call(VM_BUILTIN_STRINGS_GET)
+              .Call(FN_IS_DIGIT)
+              .Not()
+              .JumpIfFalse("exp_loop")
+
+      .Label("finish")
+          // number = sign * (int + frac) * 10^(exp)
+          .PushLocal(3)
+          .PushLocal(4)
+          .Add()
+          .PushLocal(2)
+          .Multiply()
+          .PushFloat(10)
+          .PushLocal(7)
+          .PushLocal(6)
+          .Multiply()
+          .Call(VM_BUILTIN_MATH_POW)
+          .Multiply()
+          .PushLocal(1)
+          .PushConstRef(4)
+          .Return()
+      .Label("error")
+          .DebugString("ERROR")
+          .PushConstRef(5)
+          .Return());
   // clang-format on
 
   BYTECODE_FUNCTION(main, 0,
@@ -361,13 +573,13 @@ int main() {
                         .StoreLocal(0)  // local0 = input string
 
                         // Initialize index to 0
-                        .PushConst(0)
+                        .PushInt32(0)
                         .StoreLocal(1)  // local1 = index
 
                         // Call parse_value(input, index)
-                        .PushLocal(0)           // input string
-                        .PushLocal(1)           // index
-                        .Call(FN_PARSE_OBJECT)  // returns parsed object/array
+                        .PushLocal(0)          // input string
+                        .PushLocal(1)          // index
+                        .Call(FN_PARSE_VALUE)  // returns parsed object/array
                         .StoreLocal(1)
                         .Return()  // return parsed value
   );
@@ -376,16 +588,18 @@ int main() {
 
   vm_function_t parse_array = {.name = "null"};
 
-  vm_function_t funcs[] = {main,          parse_value,  parse_object,
-                           parse_array,   parse_string, skip_whitespace,
-                           is_whitespace, parse_literal};
+  vm_function_t funcs[] = {
+      main,         parse_value,      parse_object,  parse_array,
+      parse_string, skip_whitespace,  is_whitespace, parse_literal,
+      is_digit,     is_exponent_char, parse_number};
 
-  const char* json_blob =
+  const char* json_blob =  //"{\"sucks\": false, \"value\": 10}";
       "{"
       "\"sucks\": false, "
       "\"name\": \"ChatGPT\", "
-      "\"version\": \"5.0\", "
+      "\"version\": 5.0, "
       "\"bool\": true,"
+      "\"exp\": 0.90210E5,"
       "\"features\": {"
       "\"null_test\": null,"
       "\"nlp\": \"advanced\", "
@@ -393,7 +607,8 @@ int main() {
       "\"nested\": {"
       "\"level1\": {"
       "\"level2\": {"
-      "\"deep\": \"value\""
+      "\"deep\": \"value\","
+      "\"number\": 12.3456"
       "}"
       "}"
       "}"
@@ -403,8 +618,10 @@ int main() {
       "}";
 
   vm_value_t constants[] = {
-      allocate_str_from_c(json_blob), allocate_str_from_c("true"),
-      allocate_str_from_c("false"), allocate_str_from_c("null"),
+      allocate_str_from_c(json_blob),
+      allocate_str_from_c("true"),
+      allocate_str_from_c("false"),
+      allocate_str_from_c("null"),
       (vm_value_t){.type = vm_value_t::VALUE_TYPE_BOOL, .as.boolean = true},
       (vm_value_t){.type = vm_value_t::VALUE_TYPE_BOOL, .as.boolean = false}};
 
@@ -414,7 +631,6 @@ int main() {
   vm_value_t map = vm_run(vm, 0, true);
 
   DumpMap(map.as.map);
-
   free_vm(vm);
 
   return 0;

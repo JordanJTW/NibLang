@@ -9,8 +9,15 @@ Assembler& Assembler::PushConstRef(uint32_t idx) {
   PushOpAndArg32(OP_PUSH_CONST_REF, idx);
   return *this;
 }
-Assembler& Assembler::PushConst(int32_t value) {
-  PushOpAndArg32(OP_PUSH_CONST, static_cast<uint32_t>(value));
+Assembler& Assembler::PushInt32(int32_t value) {
+  PushOpAndArg32(OP_PUSH_I32, static_cast<uint32_t>(value));
+  return *this;
+}
+Assembler& Assembler::PushFloat(float value) {
+  data_.push_back(OP_PUSH_F32);
+  size_t current_size = data_.size();
+  data_.resize(current_size + sizeof(float));
+  memcpy(data_.data() + current_size, &value, sizeof(float));
   return *this;
 }
 Assembler& Assembler::Call(uint32_t idx) {
@@ -163,7 +170,8 @@ std::string GetOpName(op_t op) {
     return #$op
 
     CASE_OP_NAME(OP_PUSH_CONST_REF);
-    CASE_OP_NAME(OP_PUSH_CONST);
+    CASE_OP_NAME(OP_PUSH_I32);
+    CASE_OP_NAME(OP_PUSH_F32);
     CASE_OP_NAME(OP_PUSH_LOCAL);
     CASE_OP_NAME(OP_STORE_LOCAL);
     CASE_OP_NAME(OP_CALL);
@@ -194,7 +202,7 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
     op_t op = static_cast<op_t>(bytecode[pc]);
     switch (op) {
       case OP_PUSH_CONST_REF:
-      case OP_PUSH_CONST:
+      case OP_PUSH_I32:
       case OP_CALL:
       case OP_PUSH_LOCAL:
       case OP_STORE_LOCAL: {
@@ -203,6 +211,17 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
         printf(
             "0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x,"
             " // %04zx: %s %d \n",
+            bytecode[pc], bytecode[pc + 1], bytecode[pc + 2], bytecode[pc + 3],
+            bytecode[pc + 4], pc, GetOpName(op).c_str(), arg);
+        pc += 5;
+        break;
+      }
+      case OP_PUSH_F32: {
+        float arg = bytecode[pc + 1] | (bytecode[pc + 2] << 8) |
+                    (bytecode[pc + 3] << 16) | (bytecode[pc + 4] << 24);
+        printf(
+            "0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x,"
+            " // %04zx: %s %f \n",
             bytecode[pc], bytecode[pc + 1], bytecode[pc + 2], bytecode[pc + 3],
             bytecode[pc + 4], pc, GetOpName(op).c_str(), arg);
         pc += 5;

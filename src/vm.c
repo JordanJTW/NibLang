@@ -73,7 +73,7 @@ typedef struct {
 
 typedef struct vm_t {
   vm_value_t* constants;
-  size_t contants_count;
+  size_t constants_count;
   vm_frame_t* current_frame;
   vm_stack_t stack;
   vm_job_queue_t* job_queue;
@@ -111,11 +111,12 @@ vm_t* new_vm(vm_value_t* constants,
          functions_count * sizeof(vm_function_t));
   vm->functions_count = total_functions_count;
 
-  vm->constants = constants;
-  vm->contants_count = constants_count;
+  vm->constants = calloc(constants_count, sizeof(vm_value_t));
+  memcpy(vm->constants, constants, constants_count * sizeof(vm_value_t));
+  vm->constants_count = constants_count;
 
   // Ensure all constants are owned by the VM itself.
-  for (size_t i = 0; i < vm->contants_count; ++i)
+  for (size_t i = 0; i < vm->constants_count; ++i)
     rc_increment(&vm->constants[i]);
 
   vm->stack.capacity = 256;
@@ -125,7 +126,7 @@ vm_t* new_vm(vm_value_t* constants,
 }
 
 void free_vm(vm_t* vm) {
-  for (size_t i = 0; i < vm->contants_count; ++i)
+  for (size_t i = 0; i < vm->constants_count; ++i)
     rc_decrement(&vm->constants[i]);
 
   assert(vm->current_frame == NULL && "leaked frames exist");
@@ -206,7 +207,7 @@ static void run_frame(vm_t* vm, const char* name) {
         CHECK_BOUNDS(frame->pc + 4);
         uint32_t const_idx = read_u32_arg(frame, 0);
         DEBUG_LOG("OP_PUSH_CONST_REF idx: %d", const_idx);
-        assert(vm->contants_count > const_idx && "invalid const");
+        assert(vm->constants_count > const_idx && "invalid const");
         push_stack(&vm->stack, vm->constants[const_idx]);
         frame->pc += 5;
         break;

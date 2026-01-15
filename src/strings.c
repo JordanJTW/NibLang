@@ -31,7 +31,7 @@ vm_value_t vm_strings_substring(vm_value_t* argv, size_t argc, void* vm) {
     return (vm_value_t){.type = VALUE_TYPE_NULL};
   }
 
-  if (start >= len || start < 0 || end >= len || end < 0 || start > end) {
+  if (start < 0 || end < 0 || end > len || start > end) {
     vm_free_ref(argv[0]);  // Free ownership of self
     return (vm_value_t){.type = VALUE_TYPE_NULL};
   }

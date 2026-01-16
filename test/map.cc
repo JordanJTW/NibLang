@@ -35,8 +35,10 @@ TEST(Map, StoreAndGet_IntKey) {
 TEST(Map, StoreAndGet_StringKey) {
   Map* map = init_map(13);
 
-  vm_value_t key = allocate_str_from_c("hello");
-  vm_value_t value = allocate_str_from_c("world");
+  RC_AUTOFREE vm_value_t key = allocate_str_from_c("hello");
+  vm_adopt_ref(key);
+  RC_AUTOFREE vm_value_t value = allocate_str_from_c("world");
+  vm_adopt_ref(value);
 
   EXPECT_TRUE(map_insert(map, key, value));
 
@@ -53,8 +55,10 @@ TEST(Map, StoreAndGet_StringKey) {
 TEST(Map, StoreAndGet_MapKey) {
   Map* map = init_map(13);
 
-  vm_value_t key = allocate_map();
-  vm_value_t value = allocate_str_from_c("from map key");
+  RC_AUTOFREE vm_value_t key = allocate_map();
+  vm_adopt_ref(key);
+  RC_AUTOFREE vm_value_t value = allocate_str_from_c("from map key");
+  vm_adopt_ref(value);
 
   EXPECT_TRUE(map_insert(map, key, value));
 
@@ -71,13 +75,23 @@ TEST(Map, StoreAndGet_MapKey) {
 TEST(Map, StoreAndGet_FullBucket) {
   Map* map = init_map(1);
 
-  vm_value_t key_hello = allocate_str_from_c("hello");
-  vm_value_t key_foo = allocate_str_from_c("foo");
-  vm_value_t key_key = allocate_str_from_c("key");
+  RC_AUTOFREE vm_value_t key_hello = allocate_str_from_c("hello");
+  vm_adopt_ref(key_hello);
+  RC_AUTOFREE vm_value_t key_foo = allocate_str_from_c("foo");
+  vm_adopt_ref(key_foo);
+  RC_AUTOFREE vm_value_t key_key = allocate_str_from_c("key");
+  vm_adopt_ref(key_key);
 
-  EXPECT_TRUE(map_insert(map, key_hello, allocate_str_from_c("world")));
-  EXPECT_TRUE(map_insert(map, key_foo, allocate_str_from_c("bar")));
-  EXPECT_TRUE(map_insert(map, key_key, allocate_str_from_c("value")));
+  RC_AUTOFREE vm_value_t value_world = allocate_str_from_c("world");
+  vm_adopt_ref(value_world);
+  RC_AUTOFREE vm_value_t value_bar = allocate_str_from_c("bar");
+  vm_adopt_ref(value_bar);
+  RC_AUTOFREE vm_value_t value_value = allocate_str_from_c("value");
+  vm_adopt_ref(value_value);
+
+  EXPECT_TRUE(map_insert(map, key_hello, value_world));
+  EXPECT_TRUE(map_insert(map, key_foo, value_bar));
+  EXPECT_TRUE(map_insert(map, key_key, value_value));
 
   {
     vm_value_t* retrieved = map_get(map, key_hello);
@@ -109,7 +123,8 @@ TEST(Map, StoreAndGet_FullBucket) {
 TEST(Map, StoreAndGet_ReplaceValue) {
   Map* map = init_map(13);
 
-  vm_value_t key = allocate_str_from_c("hello");
+  RC_AUTOFREE vm_value_t key = allocate_str_from_c("hello");
+  vm_adopt_ref(key);
 
   EXPECT_TRUE(map_insert(
       map, key, (vm_value_t){.type = vm_value::VALUE_TYPE_INT, .as.i32 = 123}));

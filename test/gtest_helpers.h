@@ -33,23 +33,43 @@ MATCHER_P(StringType, expected, "is a String vm_value_t") {
   return std::string(str, length) == expected;
 }
 
-// Matches a vm_value_t with VALUE_TYPE_PROMISE (and it's value)
-MATCHER_P(IsFulfilledWith,
-          value_matcher,
-          "is a fulfilled promise with matching value") {
+MATCHER_P2(IsPromiseWithStateAndValue,
+           expceted_state,
+           value_matcher,
+           "is promise with state and matching value") {
   if (arg.type != vm_value::VALUE_TYPE_PROMISE) {
     *result_listener << "value is not a promise";
     return false;
   }
 
-  if (arg.as.promise->state != vm_promise_t::PROMISE_STATE_FULFILLED) {
+  if (arg.as.promise->state != expceted_state) {
     *result_listener << "promise state is " << arg.as.promise->state
-                     << ", expected FULFILLED";
+                     << ", expected " << expceted_state;
     return false;
   }
 
   return ExplainMatchResult(value_matcher, arg.as.promise->value,
                             result_listener);
+}
+
+// Matches VALUE_TYPE_PROMISE in FULFILLED state with the given value
+MATCHER_P(IsFulfilledWith,
+          value_matcher,
+          "is a fulfilled promise with matching value") {
+  return ExplainMatchResult(
+      IsPromiseWithStateAndValue(vm_promise_t::PROMISE_STATE_FULFILLED,
+                                 value_matcher),
+      arg, result_listener);
+}
+
+// Matches VALUE_TYPE_PROMISE in REJECTED state with the given value
+MATCHER_P(IsRejectedWith,
+          value_matcher,
+          "is a rejected promise with matching value") {
+  return ExplainMatchResult(
+      IsPromiseWithStateAndValue(vm_promise_t::PROMISE_STATE_REJECTED,
+                                 value_matcher),
+      arg, result_listener);
 }
 
 ACTION(ReturnNullType) {
@@ -58,7 +78,7 @@ ACTION(ReturnNullType) {
 
 ACTION(FreeArgsAndReturnNullType) {
   for (const auto& arg : arg0) {
-    vm_free_ref(arg);
+    vm_free_ref(const_cast<vm_value_t*>(&arg));
   }
   return vm_value_t{.type = vm_value::VALUE_TYPE_NULL};
 }

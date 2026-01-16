@@ -283,8 +283,8 @@ TEST(VM, CallBuiltInPromise) {
   EXPECT_THAT(root_promise, IsFulfilledWith(Int32Type(109)));
   EXPECT_THAT(final_promise, IsFulfilledWith(Int32Type(151)));
 
-  vm_free_ref(root_promise);
-  vm_free_ref(final_promise);  // Ownership was transferred in the function call
+  vm_free_ref(&root_promise);
+  vm_free_ref(&final_promise);  // Ownership was transferred in the function call
   free_vm(vm);
 }
 

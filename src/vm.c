@@ -364,7 +364,7 @@ static void run_frame(vm_t* vm, const char* name) {
         vm_value_t arg1 = pop_stack(&vm->stack);
         vm_value_t arg2 = pop_stack(&vm->stack);
         assert(is_number_type(arg1) && is_number_type(arg2) &&
-               "only ints and floats are subtractable");
+               "only ints and floats are multiplicative");
 
         vm_value_t result = handle_number_op(NUM_OP_MUL, arg1, arg2);
         push_stack(&vm->stack, result);
@@ -376,7 +376,7 @@ static void run_frame(vm_t* vm, const char* name) {
         vm_value_t arg1 = pop_stack(&vm->stack);
 
         assert(is_number_type(arg1) && is_number_type(arg2) &&
-               "only ints and floats are subtractable");
+               "only ints and floats are divisible");
 
         vm_value_t result = handle_number_op(NUM_OP_DIV, arg1, arg2);
         push_stack(&vm->stack, result);
@@ -602,8 +602,8 @@ void vm_adopt_ref(vm_value_t value) {
   rc_increment(&value);
 }
 
-void vm_free_ref(vm_value_t value) {
-  rc_decrement(&value);
+void vm_free_ref(vm_value_t* value) {
+  rc_decrement(value);
 }
 
 static float value_to_float(vm_value_t value) {
@@ -708,6 +708,10 @@ vm_value_t vm_call_function(vm_t* vm,
         to_bind_argc = to_bind_argc > argc ? to_bind_argc : argc;
         memcpy(closure->argument_storage + closure->bound_argc, argv,
                to_bind_argc * sizeof(vm_value_t));
+        // The function will consume its arguments (ownership is transferred in
+        // function calls) BUT the closure must retain its copy incase of reuse
+        for (size_t i = 0; i < closure->bound_argc; ++i)
+          rc_increment(&closure->argument_storage[i]);
         return fn->as.native.fn(closure->argument_storage, fn->argument_count,
                                 fn->as.native.userdata);
       }
@@ -752,7 +756,7 @@ static void install_builtins(vm_t* vm) {
 static void free_closure(void* self) {
   Closure* fn = self;
   for (size_t i = 0; i < fn->bound_argc; ++i) {
-    vm_free_ref(fn->argument_storage[i]);
+    vm_free_ref(&fn->argument_storage[i]);
   }
   free(fn);
 }

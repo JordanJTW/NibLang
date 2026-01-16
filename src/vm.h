@@ -82,7 +82,12 @@ vm_value_t allocate_str_from_c_with_length(const char* str, size_t len);
 
 // If `value` is a reference type (i.e. heap allocated), this function will
 // free ownership of the reference. If `value` is not a reference this is no-op.
-void vm_free_ref(vm_value_t value);
+void vm_free_ref(vm_value_t* value);
+
+// Uses GCC attribute to automatically call `vm_free_ref` on stack unwind.
+// Example Usage:
+//   RC_AUTOFREE vm_value_t this = argv[0];
+#define RC_AUTOFREE __attribute__((cleanup(vm_free_ref)))
 
 // If `value` is a reference type (i.e. heap allocated), this function will
 // "adopt" the `value` (increment the ref count) so that ownerhip is retained.

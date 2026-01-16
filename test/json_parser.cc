@@ -449,7 +449,7 @@ int main() {
           .Call(VM_BUILTIN_STRINGS_GET)
           .PushInt32('.')
           .Compare(OP_EQUAL)
-          .JumpIfFalse("check_exp")
+          .JumpIfFalse("finish")
 
               .Increment(1)
               .PushInt32(0)
@@ -489,61 +489,61 @@ int main() {
               .Not()
               .JumpIfFalse("frac_loop")
 
-      .Label("check_exp")
-          // exponent?
-          .PushLocal(0)
-          .PushLocal(1)
-          .Call(VM_BUILTIN_STRINGS_GET)
-          .Call(FN_IS_EXPONENT_CHAR) // e or E
-          .JumpIfFalse("finish")
+    //   .Label("check_exp")
+    //       // exponent?
+    //       .PushLocal(0)
+    //       .PushLocal(1)
+    //       .Call(VM_BUILTIN_STRINGS_GET)
+    //       .Call(FN_IS_EXPONENT_CHAR) // e or E
+    //       .JumpIfFalse("finish")
 
-              .Increment(1)
-              .PushInt32(1)
-              .StoreLocal(6) // exp sign
-              .PushInt32(0)
-              .StoreLocal(7) // exp value
+    //           .Increment(1)
+    //           .PushInt32(1)
+    //           .StoreLocal(6) // exp sign
+    //           .PushInt32(0)
+    //           .StoreLocal(7) // exp value
 
-              // optional sign
-              .PushLocal(0)
-              .PushLocal(1)
-              .Call(VM_BUILTIN_STRINGS_GET)
-              .PushInt32('-')
-              .Compare(OP_EQUAL)
-              .JumpIfFalse("exp_digits")
+    //           // optional sign
+    //           .PushLocal(0)
+    //           .PushLocal(1)
+    //           .Call(VM_BUILTIN_STRINGS_GET)
+    //           .PushInt32('-')
+    //           .Compare(OP_EQUAL)
+    //           .JumpIfFalse("exp_digits")
 
-                  .PushInt32(-1)
-                  .StoreLocal(6)
-                  .Increment(1)
+    //               .PushInt32(-1)
+    //               .StoreLocal(6)
+    //               .Increment(1)
 
-          .Label("exp_digits")
-              // must have digit
-              .PushLocal(0)
-              .PushLocal(1)
-              .Call(VM_BUILTIN_STRINGS_GET)
-              .Call(FN_IS_DIGIT)
-              .JumpIfFalse("error")
+    //       .Label("exp_digits")
+    //           // must have digit
+    //           .PushLocal(0)
+    //           .PushLocal(1)
+    //           .Call(VM_BUILTIN_STRINGS_GET)
+    //           .Call(FN_IS_DIGIT)
+    //           .JumpIfFalse("error")
 
-          .Label("exp_loop")
-              .PushLocal(7)
-              .PushInt32(10)
-              .Multiply()
+    //       .Label("exp_loop")
+    //           .PushLocal(7)
+    //           .PushInt32(10)
+    //           .Multiply()
 
-              .PushLocal(0)
-              .PushLocal(1)
-              .Call(VM_BUILTIN_STRINGS_GET)
-              .PushInt32('0')
-              .Subtract()
-              .Add()
-              .StoreLocal(7)
+    //           .PushLocal(0)
+    //           .PushLocal(1)
+    //           .Call(VM_BUILTIN_STRINGS_GET)
+    //           .PushInt32('0')
+    //           .Subtract()
+    //           .Add()
+    //           .StoreLocal(7)
 
-              .Increment(1)
+    //           .Increment(1)
 
-              .PushLocal(0)
-              .PushLocal(1)
-              .Call(VM_BUILTIN_STRINGS_GET)
-              .Call(FN_IS_DIGIT)
-              .Not()
-              .JumpIfFalse("exp_loop")
+    //           .PushLocal(0)
+    //           .PushLocal(1)
+    //           .Call(VM_BUILTIN_STRINGS_GET)
+    //           .Call(FN_IS_DIGIT)
+    //           .Not()
+    //           .JumpIfFalse("exp_loop")
 
       .Label("finish")
           // number = sign * (int + frac) * 10^(exp)
@@ -552,12 +552,12 @@ int main() {
           .Add()
           .PushLocal(2)
           .Multiply()
-          .PushFloat(10)
-          .PushLocal(7)
-          .PushLocal(6)
-          .Multiply()
-          .Call(VM_BUILTIN_MATH_POW)
-          .Multiply()
+        //   .PushFloat(10)
+        //   .PushLocal(7)
+        //   .PushLocal(6)
+        //   .Multiply()
+        //   .Call(VM_BUILTIN_MATH_POW)
+        //   .Multiply()
           .PushLocal(1)
           .PushConstRef(4)
           .Return()
@@ -631,6 +631,7 @@ int main() {
   vm_value_t map = vm_run(vm, 0, true);
 
   DumpMap(map.as.map);
+  vm_free_ref(&map);
   free_vm(vm);
 
   return 0;

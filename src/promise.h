@@ -13,7 +13,6 @@ vm_job_queue_t* init_job_queue();
 void free_job_queue(vm_job_queue_t* job_queue);
 
 vm_value_t allocate_promise();
-void free_promise(void*);
 
 // Resolves the state of a PENDING promise with `value` (to be executed on the
 // next call to `run_promise_jobs()`). If `rejected` is true, then `value` is

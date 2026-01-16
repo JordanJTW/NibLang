@@ -22,67 +22,59 @@ vm_value_t vm_strings_substring(vm_value_t* argv, size_t argc, void* vm) {
   assert(argc == 3 && is_string(argv[0]) && is_int32(argv[1]) &&
          is_int32(argv[2]) && "incorrect number of args or arg types");
 
-  char* str;
-  size_t len = vm_as_str(&argv[0], &str);
+  RC_AUTOFREE vm_value_t this = argv[0];
+
+  char* cstr;
+  size_t len = vm_as_str(&this, &cstr);
 
   int32_t start, end;
   if (!vm_as_int32(&argv[1], &start) || !vm_as_int32(&argv[2], &end)) {
-    vm_free_ref(argv[0]);  // Free ownership of self
-    return (vm_value_t){.type = VALUE_TYPE_NULL};
+    return vm_throw_exception(vm, allocate_str_from_c("TypeError"));
   }
 
   if (start < 0 || end < 0 || end > len || start > end) {
-    vm_free_ref(argv[0]);  // Free ownership of self
-    return (vm_value_t){.type = VALUE_TYPE_NULL};
+    return vm_throw_exception(vm, allocate_str_from_c("RangeError"));
   }
 
-  vm_value_t result = allocate_str_from_c_with_length(str + start, end - start);
-  vm_free_ref(argv[0]);  // Free ownership of self
-  return result;
+  return allocate_str_from_c_with_length(cstr + start, end - start);
 }
 
 vm_value_t vm_strings_get(vm_value_t* argv, size_t argc, void* vm) {
   assert(argc == 2 && is_string(argv[0]) && is_int32(argv[1]) &&
          "incorrect number of args or arg types");
 
-  char* str;
-  size_t len = vm_as_str(&argv[0], &str);
+  RC_AUTOFREE vm_value_t this = argv[0];
+
+  char* cstr;
+  size_t len = vm_as_str(&this, &cstr);
 
   int32_t idx;
   if (!vm_as_int32(&argv[1], &idx) || idx >= len || idx < 0) {
-    vm_free_ref(argv[0]);  // Free ownership of self
-    return (vm_value_t){.type = VALUE_TYPE_INT, .as.i32 = 0};
+    return vm_throw_exception(vm, allocate_str_from_c("RangeError"));
   }
 
-  int32_t ch = str[idx];
-  vm_free_ref(argv[0]);  // Free ownership of self
-  return (vm_value_t){.type = VALUE_TYPE_INT, .as.i32 = ch};
+  return (vm_value_t){.type = VALUE_TYPE_INT, .as.i32 = cstr[idx]};
 }
 
 vm_value_t vm_strings_starts_with(vm_value_t* argv, size_t argc, void* vm) {
   assert(argc == 3 && is_string(argv[0]) && is_string(argv[1]) &&
          "incorrect number of args or arg types");
 
-  char* str;
-  size_t len = vm_as_str(&argv[0], &str);
+  RC_AUTOFREE vm_value_t this = argv[0];
+  RC_AUTOFREE vm_value_t target = argv[1];
+
+  char* cstr;
+  size_t len = vm_as_str(&this, &cstr);
 
   char* search_str;
-  size_t search_len = vm_as_str(&argv[1], &search_str);
+  size_t search_len = vm_as_str(&target, &search_str);
 
   int32_t idx;
-
   if (!vm_as_int32(&argv[2], &idx) || idx < 0 || idx >= len ||
       len - idx < search_len) {
-    vm_free_ref(argv[0]);
-    vm_free_ref(argv[1]);
     return (vm_value_t){.type = VALUE_TYPE_BOOL, .as.boolean = false};
   }
 
-  printf("does '%.*s' start with '%.*s'?\n", (int)len - idx, str + idx,
-         (int)search_len, search_str);
-
-  int result = strncmp(str + idx, search_str, search_len);
-  vm_free_ref(argv[0]);
-  vm_free_ref(argv[1]);
+  int result = strncmp(cstr + idx, search_str, search_len);
   return (vm_value_t){.type = VALUE_TYPE_BOOL, .as.boolean = (result == 0)};
 }

@@ -31,14 +31,14 @@ static bool is_promise(vm_value_t value) {
   return value.type == VALUE_TYPE_PROMISE;
 }
 
-void free_promise(void* self) {
+static void free_promise(void* self) {
   Promise* promise = self;
-  vm_free_ref(promise->value);
+  vm_free_ref(&promise->value);
   vm_promise_then_t* entry = promise->then_list;
-  while (entry) {
-    vm_free_ref(entry->on_fulfilled_fn);
-    vm_free_ref(entry->on_rejected_fn);
-
+  while (entry != NULL) {
+    vm_free_ref(&entry->on_fulfilled_fn);
+    vm_free_ref(&entry->on_rejected_fn);
+    vm_free_ref(&entry->next_promise);
     vm_promise_then_t* next = entry->next;
     free(entry);
     entry = next;
@@ -73,8 +73,11 @@ static void enqueue_promise_job(vm_job_queue_t* job_queue,
                                 bool rejected) {
   vm_job_t* job = calloc(1, sizeof(vm_job_t));
   job->fn = fn;
+  vm_adopt_ref(job->fn);
   job->value = value;
+  vm_adopt_ref(job->value);
   job->next_promise = next_promise;
+  vm_adopt_ref(job->next_promise);
   job->rejected = rejected;
   job->next = NULL;
 
@@ -96,8 +99,11 @@ vm_value_t promise_then(vm_job_queue_t* job_queue,
 
   vm_promise_then_t* then = calloc(1, sizeof(vm_promise_then_t));
   then->on_fulfilled_fn = on_fulfilled_fn;
+  vm_adopt_ref(then->on_fulfilled_fn);
   then->on_rejected_fn = on_rejected_fn;
+  vm_adopt_ref(then->on_rejected_fn);
   then->next_promise = new_promise;
+  vm_adopt_ref(then->next_promise);
 
   Promise* const source = source_promise.as.promise;
   then->next = source->then_list;
@@ -153,6 +159,13 @@ static void promise_chain(vm_t* vm,
                        &target_promise, /*argc=*/1));
 }
 
+static void free_job(vm_job_t* job) {
+  vm_free_ref(&job->fn);
+  vm_free_ref(&job->value);
+  vm_free_ref(&job->next_promise);
+  free(job);
+}
+
 bool run_promise_jobs(vm_t* vm, vm_job_queue_t* job_queue) {
   bool had_jobs = job_queue->job_queue_head != NULL;
   while (job_queue->job_queue_head) {
@@ -162,20 +175,24 @@ bool run_promise_jobs(vm_t* vm, vm_job_queue_t* job_queue) {
       job_queue->job_queue_tail = NULL;
 
     vm_value_t result;
+    bool is_exception = false;
 
-    // TODO: Handle exceptions.
     if (job->fn.type == VALUE_TYPE_FUNCTION) {
       result = vm_call_function(vm, job->fn.as.fn, &job->value, /*argc=*/1);
+      if (vm_get_exception(vm, &result))
+        is_exception = true;
     } else {
-      result = job->value;  // Forward along if no handler is found
+      // If no handler is found, forward the result (and state) of the last
+      result = job->value;
+      is_exception = job->rejected;
     }
 
     if (is_promise(result)) {
       promise_chain(vm, job_queue, result, job->next_promise);
     } else {
-      promise_resolve(job_queue, job->next_promise, result, /*rejected=*/false);
+      promise_resolve(job_queue, job->next_promise, result, is_exception);
     }
-    free(job);
+    free_job(job);
   }
   return had_jobs;
 }
@@ -184,26 +201,28 @@ vm_value_t vm_promise_fulfill(vm_value_t* argv, size_t argc, void* userdata) {
   assert(argc == 2 && is_promise(argv[0]) &&
          "Promise.fulfill must be invoked with $this and a value");
 
-  promise_resolve(vm_get_job_queue(userdata), argv[0], argv[1],
+  RC_AUTOFREE vm_value_t this = argv[0];
+  promise_resolve(vm_get_job_queue(userdata), this, argv[1] /*takes ownership*/,
                   /*rejected=*/false);
-  vm_free_ref(argv[0]);  // We do not retain ownership of `self`
   return (vm_value_t){.type = VALUE_TYPE_NULL};
 }
 vm_value_t vm_promise_reject(vm_value_t* argv, size_t argc, void* userdata) {
   assert(argc == 2 && is_promise(argv[0]) &&
          "Promise.reject must be invoked with $this and a value");
 
-  promise_resolve(vm_get_job_queue(userdata), argv[0], argv[1],
+  RC_AUTOFREE vm_value_t this = argv[0];
+  promise_resolve(vm_get_job_queue(userdata), this, argv[1] /*takes ownership*/,
                   /*rejected=*/true);
-  vm_free_ref(argv[0]);  // We do not retain ownership of `self`
   return (vm_value_t){.type = VALUE_TYPE_NULL};
 }
 vm_value_t vm_promise_then(vm_value_t* argv, size_t argc, void* userdata) {
   assert(argc == 3 && is_promise(argv[0]) &&
          "Promise.then must be invoked with $this and two functions");
 
+  RC_AUTOFREE vm_value_t this = argv[0];
   vm_value_t new_promise =
-      promise_then(vm_get_job_queue(userdata), argv[0], argv[1], argv[2]);
-  vm_free_ref(argv[0]);  // We do not retain ownership of `source`
+      promise_then(vm_get_job_queue(userdata), this, argv[1], argv[2]);
+  vm_free_ref(&argv[1]);  // Adopts a new ref in `promise_then`
+  vm_free_ref(&argv[2]);  // Adopts a new ref in `promise_then`
   return new_promise;
 }

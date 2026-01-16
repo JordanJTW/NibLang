@@ -22,6 +22,14 @@ Map* init_map(size_t bucket_count) {
 }
 
 void free_map(Map* map) {
+  for (size_t i = 0; i < map->bucket_count; ++i) {
+    MapNode* node = map->buckets[i];
+    while (node) {
+      MapNode* next = node->next;
+      free(node);
+      node = next;
+    }
+  }
   free(map);
 }
 
@@ -121,8 +129,8 @@ void delete_map(void* self) {
     MapNode* node = map->buckets[i];
     while (node) {
       MapNode* next = node->next;
-      vm_free_ref(node->key);
-      vm_free_ref(node->value);
+      vm_free_ref(&node->key);
+      vm_free_ref(&node->value);
       free(node);
       node = next;
     }
@@ -145,8 +153,8 @@ vm_value_t vm_map_set(vm_value_t* argv, size_t argc, void* vm) {
   assert(argc == 3 && is_map(argv[0]) &&
          "incorrect number of args or arg types");
 
-  Map* map = argv[0].as.map;
-  map_insert(map, argv[1], argv[2]);
+  RC_AUTOFREE vm_value_t this = argv[0];
+  map_insert(this.as.map, argv[1], argv[2]);
   return (vm_value_t){.type = VALUE_TYPE_NULL};
 }
 
@@ -182,7 +190,7 @@ static void DumpValue(vm_value_t value) {
 }
 
 void DumpMap(Map* map) {
-        printf("Map {\n");
+  printf("Map {\n");
   for (size_t i = 0; i < map->bucket_count; ++i) {
     for (MapNode* node = map->buckets[i]; node; node = node->next) {
       printf("key: ");

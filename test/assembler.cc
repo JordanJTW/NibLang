@@ -6,11 +6,11 @@
 #include "src/vm.h"
 
 Assembler& Assembler::PushConstRef(uint32_t idx) {
-  PushOpAndArg32(OP_PUSH_CONST_REF, idx);
+  PushOpAndArgs(OP_PUSH_CONST_REF, {idx});
   return *this;
 }
 Assembler& Assembler::PushInt32(int32_t value) {
-  PushOpAndArg32(OP_PUSH_I32, static_cast<uint32_t>(value));
+  PushOpAndArgs(OP_PUSH_I32, {static_cast<uint32_t>(value)});
   return *this;
 }
 Assembler& Assembler::PushFloat(float value) {
@@ -21,20 +21,16 @@ Assembler& Assembler::PushFloat(float value) {
   return *this;
 }
 Assembler& Assembler::Call(uint32_t idx) {
-  PushOpAndArg32(OP_CALL, idx);
+  PushOpAndArgs(OP_CALL, {idx});
   return *this;
 }
 Assembler& Assembler::Bind(uint32_t idx, uint32_t argc) {
-  data_.insert(data_.end(),
-               {OP_BIND, uint8_t(idx & 0xFF), uint8_t((idx >> 8) & 0xFF),
-                uint8_t((idx >> 16) & 0xFF), uint8_t((idx >> 24) & 0xFF),
-                uint8_t(argc & 0xFF), uint8_t((argc >> 8) & 0xFF),
-                uint8_t((argc >> 16) & 0xFF), uint8_t((argc >> 24) & 0xFF)});
+  PushOpAndArgs(OP_BIND, {idx, argc});
   return *this;
 }
 Assembler& Assembler::PushLocal(uint32_t idx) {
   max_local_index = std::max(max_local_index, idx);
-  PushOpAndArg32(OP_PUSH_LOCAL, idx);
+  PushOpAndArgs(OP_PUSH_LOCAL, {idx});
   return *this;
 }
 Assembler& Assembler::Add() {
@@ -66,7 +62,7 @@ Assembler& Assembler::Not() {
   return *this;
 }
 Assembler& Assembler::Increment(uint32_t idx) {
-  PushOpAndArg32(OP_INC, idx);
+  PushOpAndArgs(OP_INC, {idx});
   return *this;
 }
 Assembler& Assembler::Return() {
@@ -74,12 +70,12 @@ Assembler& Assembler::Return() {
   return *this;
 }
 Assembler& Assembler::CallBuiltIn(uint32_t idx) {
-  PushOpAndArg32(OP_CALL, idx | 0x80000000u);
+  PushOpAndArgs(OP_CALL, {idx | 0x80000000u});
   return *this;
 }
 Assembler& Assembler::StoreLocal(uint32_t idx) {
   max_local_index = std::max(max_local_index, idx);
-  PushOpAndArg32(OP_STORE_LOCAL, idx);
+  PushOpAndArgs(OP_STORE_LOCAL, {idx});
   return *this;
 }
 Assembler& Assembler::Compare(op_t operation) {
@@ -87,11 +83,25 @@ Assembler& Assembler::Compare(op_t operation) {
   return *this;
 }
 Assembler& Assembler::JumpIfFalse(uint32_t pc) {
-  PushOpAndArg32(OP_JUMP_IF_FALSE, pc);
+  PushOpAndArgs(OP_JUMP_IF_FALSE, {pc});
   return *this;
 }
 Assembler& Assembler::Jump(uint32_t pc) {
-  PushOpAndArg32(OP_JUMP, pc);
+  PushOpAndArgs(OP_JUMP, {pc});
+  return *this;
+}
+
+Assembler& Assembler::PushTry(uint32_t catch_address,
+                              uint32_t finally_address) {
+  PushOpAndArgs(OP_TRY_PUSH, {catch_address, finally_address});
+  return *this;
+}
+Assembler& Assembler::PopTry() {
+  data_.push_back(OP_TRY_POP);
+  return *this;
+}
+Assembler& Assembler::Throw() {
+  data_.push_back(OP_THROW);
   return *this;
 }
 
@@ -106,24 +116,33 @@ Assembler& Assembler::Label(const std::string& label) {
   return *this;
 }
 Assembler& Assembler::Jump(const std::string& label) {
-  if (auto iter = label_to_location.find(label);
-      iter != label_to_location.cend()) {
-    PushOpAndArg32(OP_JUMP, iter->second);
-  } else {
-    patch_locations[data_.size() + 1] = label;
-    PushOpAndArg32(OP_JUMP, 0x00 /*dummy address*/);
-  }
+  uint32_t address = GetLocationForLabel(label, data_.size() + 1);
+  PushOpAndArgs(OP_JUMP, {address});
   return *this;
 }
 Assembler& Assembler::JumpIfFalse(const std::string& label) {
+  uint32_t address = GetLocationForLabel(label, data_.size() + 1);
+  PushOpAndArgs(OP_JUMP_IF_FALSE, {address});
+  return *this;
+}
+
+Assembler& Assembler::PushTry(const std::string& catch_label,
+                              const std::string& finally_label) {
+  uint32_t catch_addr = GetLocationForLabel(catch_label, data_.size() + 1);
+  uint32_t finally_addr = GetLocationForLabel(finally_label, data_.size() + 5);
+  PushOpAndArgs(OP_TRY_PUSH, {catch_addr, finally_addr});
+  return *this;
+}
+
+uint32_t Assembler::GetLocationForLabel(const std::string& label,
+                                        uint32_t value_idx) {
   if (auto iter = label_to_location.find(label);
       iter != label_to_location.cend()) {
-    PushOpAndArg32(OP_JUMP_IF_FALSE, iter->second);
-  } else {
-    patch_locations[data_.size() + 1] = label;
-    PushOpAndArg32(OP_JUMP_IF_FALSE, 0x00 /*dummy address*/);
+    return iter->second;
   }
-  return *this;
+
+  patch_locations[value_idx] = label;
+  return 0;
 }
 
 Assembler& Assembler::DebugString(const std::string& message) {
@@ -156,11 +175,17 @@ std::vector<uint8_t> Assembler::Build(Metadata* metadata) {
   return data_;
 }
 
-void Assembler::PushOpAndArg32(op_t op, uint32_t arg) {
-  // Push the op-code followed by the 4-byte little-endian argument.
-  data_.insert(data_.end(),
-               {op, uint8_t(arg & 0xFF), uint8_t((arg >> 8) & 0xFF),
-                uint8_t((arg >> 16) & 0xFF), uint8_t((arg >> 24) & 0xFF)});
+void Assembler::PushOpAndArgs(op_t op, std::initializer_list<uint32_t> args) {
+  // Push opcode
+  data_.push_back(op);
+
+  // Push each 32-bit argument (little-endian)
+  for (uint32_t arg : args) {
+    data_.push_back(uint8_t(arg & 0xFF));
+    data_.push_back(uint8_t((arg >> 8) & 0xFF));
+    data_.push_back(uint8_t((arg >> 16) & 0xFF));
+    data_.push_back(uint8_t((arg >> 24) & 0xFF));
+  }
 }
 
 std::string GetOpName(op_t op) {
@@ -192,6 +217,9 @@ std::string GetOpName(op_t op) {
     CASE_OP_NAME(OP_GREATER_THAN);
     CASE_OP_NAME(OP_JUMP_IF_FALSE);
     CASE_OP_NAME(OP_JUMP);
+    CASE_OP_NAME(OP_TRY_PUSH);
+    CASE_OP_NAME(OP_TRY_POP);
+    CASE_OP_NAME(OP_THROW);
     CASE_OP_NAME(OP_DEBUG);
 #undef CASE_OP_NAME
   }
@@ -255,6 +283,24 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
         pc += 9;
         break;
       }
+      case OP_TRY_PUSH: {
+        uint32_t catch_addr = bytecode[pc + 1] | (bytecode[pc + 2] << 8) |
+                              (bytecode[pc + 3] << 16) |
+                              (bytecode[pc + 4] << 24);
+        uint32_t finally_addr = bytecode[pc + 5] | (bytecode[pc + 6] << 8) |
+                                (bytecode[pc + 7] << 16) |
+                                (bytecode[pc + 8] << 24);
+        printf(
+            "0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x,"
+            " // %04zx: %s catch: 0x%x finally: 0x%x\n"
+            "      0x%02x 0x%02x 0x%02x 0x%02x,",
+            bytecode[pc], bytecode[pc + 1], bytecode[pc + 2], bytecode[pc + 3],
+            bytecode[pc + 4], pc, GetOpName(op).c_str(), catch_addr,
+            finally_addr, bytecode[pc + 5], bytecode[pc + 6], bytecode[pc + 7],
+            bytecode[pc + 8]);
+        pc += 9;
+        break;
+      }
       case OP_DEBUG: {
         uint8_t strlen = bytecode[pc + 1];
         printf("strlen: %d\n", strlen);
@@ -276,7 +322,9 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
       case OP_AND:
       case OP_OR:
       case OP_NOT:
-      case OP_INC: {
+      case OP_INC:
+      case OP_TRY_POP:
+      case OP_THROW: {
         printf("0x%02x, // %04zx: %s\n", bytecode[pc], pc,
                GetOpName(op).c_str());
         pc += 1;

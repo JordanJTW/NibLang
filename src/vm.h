@@ -88,6 +88,19 @@ void vm_free_ref(vm_value_t value);
 // "adopt" the `value` (increment the ref count) so that ownerhip is retained.
 void vm_adopt_ref(vm_value_t value);
 
+// Returns any currently unhandled exception (and clears it from needing to be
+// handled). `exception` will NOT be touched if function returns false.
+//
+// NOTE: Calling this function will clear the active exception as handled.
+bool vm_get_exception(vm_t* vm, vm_value_t* exception);
+
+// Throws `exception` to be handled on the next interpeter iteration. Returns
+// a VALUE_TYPE_NULL as a convenience. This is expected be called from native.
+vm_value_t vm_throw_exception(vm_t* vm, vm_value_t exception);
+
+// Returns the async job queue associated with `vm`.
+vm_job_queue_t* vm_get_job_queue(vm_t* vm);
+
 vm_value_t vm_call_function(vm_t* vm,
                             Closure* fn,
                             vm_value_t* argv,
@@ -97,8 +110,6 @@ vm_value_t bind_to_function(vm_t* vm,
                             size_t idx,
                             vm_value_t* argv,
                             size_t argc);
-
-vm_job_queue_t* vm_get_job_queue(vm_t* vm);
 
 #ifdef __cplusplus
 }  // extern "C"

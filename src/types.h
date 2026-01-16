@@ -33,6 +33,10 @@ typedef enum : uint8_t {
   // Control Flow
   OP_JUMP_IF_FALSE,
   OP_JUMP,
+  // Exception
+  OP_TRY_PUSH,
+  OP_TRY_POP,
+  OP_THROW,
 
   OP_DEBUG,
 } op_t;

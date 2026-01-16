@@ -78,13 +78,22 @@ typedef struct vm_t {
   vm_stack_t stack;
   vm_job_queue_t* job_queue;
   size_t functions_count;
+  vm_value_t exception;
+  bool unhandled_exception;
   vm_function_t functions[];
 } vm_t;
+
+typedef struct vm_try_catch_entry_t {
+  size_t catch_block_label;
+  size_t finally_block_label;
+  struct vm_try_catch_entry_t* next;
+} vm_try_catch_entry_t;
 
 typedef struct vm_frame {
   struct vm_bytecode_t* code;
   size_t pc;
   vm_frame_t* next;
+  vm_try_catch_entry_t* try_catch_handlers;
   vm_value_t locals[];
 } vm_frame_t;
 
@@ -128,6 +137,8 @@ vm_t* new_vm(vm_value_t* constants,
 void free_vm(vm_t* vm) {
   for (size_t i = 0; i < vm->constants_count; ++i)
     rc_decrement(&vm->constants[i]);
+
+  free(vm->constants);
 
   assert(vm->current_frame == NULL && "leaked frames exist");
   assert(vm->stack.sp == 0 && "stack not empty on free");
@@ -190,6 +201,43 @@ static vm_value_t pop_stack(vm_stack_t* stack) {
   return stack->values[--stack->sp];
 }
 
+static void exit_current_frame(vm_t* vm) {
+  vm_frame_t* current_frame = vm->current_frame;
+  vm->current_frame = current_frame->next;
+
+  for (size_t i = 0; i < current_frame->code->local_count; ++i)
+    rc_decrement(&current_frame->locals[i]);
+
+  free(current_frame);
+}
+
+static bool handle_exception(vm_t* vm) {
+  vm_frame_t* frame = vm->current_frame;
+  if (frame == NULL)
+    return false;
+
+  for (vm_try_catch_entry_t* entry = frame->try_catch_handlers; entry != NULL;
+       entry = entry->next) {
+    // Begin execution of the "catch" block with the exception on the stack.
+    frame->pc = entry->catch_block_label;
+    push_stack(&vm->stack, vm->exception);
+    vm->unhandled_exception = false;
+
+    // Pop the current "catch" handler before dispatching to the catch block
+    // or else a "throw" within the catch might retrigger it.
+    frame->try_catch_handlers = entry->next;
+    free(entry);
+
+    DEBUG_LOG("Dispatch to catch at: 0x%zx", frame->pc);
+    return true;
+  }
+
+  // If no "catch" block was found, this frame can be disposed of safely as
+  // there are no circumstances where it is safe to resume execution within it.
+  exit_current_frame(vm);
+  return handle_exception(vm);
+}
+
 static void run_frame(vm_t* vm, const char* name) {
 #define CHECK_BOUNDS($pc)                             \
   if ($pc >= frame->code->data_len) {                 \
@@ -199,6 +247,13 @@ static void run_frame(vm_t* vm, const char* name) {
 
   while (1) {
     vm_frame_t* frame = vm->current_frame;
+
+    if (vm->unhandled_exception) {
+      if (!handle_exception(vm)) {
+        fprintf(stderr, "Failed to exception!\n");
+        return;
+      }
+    }
 
     CHECK_BOUNDS(frame->pc);
 
@@ -381,13 +436,7 @@ static void run_frame(vm_t* vm, const char* name) {
       }
       case OP_RETURN: {
         DEBUG_LOG("OP_RETURN");
-        vm_frame_t* current_frame = vm->current_frame;
-        vm->current_frame = current_frame->next;
-
-        for (size_t i = 0; i < current_frame->code->local_count; ++i)
-          rc_decrement(&current_frame->locals[i]);
-
-        free(current_frame);
+        exit_current_frame(vm);
         if (vm->current_frame == NULL)  // Nothing to return to... exit.
           return;
         break;
@@ -449,6 +498,38 @@ static void run_frame(vm_t* vm, const char* name) {
         uint32_t address = read_u32_arg(frame, 0);
         DEBUG_LOG("OP_JUMP to 0x%08x", address);
         frame->pc = address;
+        break;
+      }
+
+      case OP_TRY_PUSH: {
+        uint32_t catch_address = read_u32_arg(frame, 0);
+        uint32_t finally_address = read_u32_arg(frame, 1);
+        DEBUG_LOG("OP_TRY_PUSH catch: 0x%x finally: 0x%x", catch_address,
+                  finally_address);
+        vm_try_catch_entry_t* entry = calloc(1, sizeof(vm_try_catch_entry_t));
+        entry->catch_block_label = catch_address;
+        entry->finally_block_label = finally_address;
+        entry->next = frame->try_catch_handlers;
+        frame->try_catch_handlers = entry;
+        frame->pc += 9;
+        break;
+      }
+
+      case OP_TRY_POP: {
+        DEBUG_LOG("OP_TRY_POP");
+        vm_try_catch_entry_t* current_handler = frame->try_catch_handlers;
+        if (current_handler != NULL) {
+          frame->try_catch_handlers = current_handler->next;
+          frame->pc = current_handler->finally_block_label;
+          free(current_handler);
+        }
+        break;
+      }
+
+      case OP_THROW: {
+        DEBUG_LOG("OP_THROW");
+        vm->exception = pop_stack(&vm->stack);
+        vm->unhandled_exception = true;
         break;
       }
 
@@ -697,4 +778,24 @@ vm_value_t bind_to_function(vm_t* vm,
 
 vm_job_queue_t* vm_get_job_queue(vm_t* vm) {
   return vm->job_queue;
+}
+
+bool vm_get_exception(vm_t* vm, vm_value_t* exception) {
+  if (!vm->unhandled_exception)
+    return false;
+
+  *exception = vm->exception;
+  vm->unhandled_exception = false;
+  return true;
+}
+
+vm_value_t vm_throw_exception(vm_t* vm, vm_value_t exception) {
+  if (vm->unhandled_exception) {
+    DEBUG_LOG("Throwing over top of existing exception!");
+  }
+
+  vm->exception = exception;
+  vm_adopt_ref(vm->exception);
+  vm->unhandled_exception = true;
+  return (vm_value_t){.type = VALUE_TYPE_NULL};
 }

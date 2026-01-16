@@ -167,13 +167,12 @@ TEST(VM, RefCountString) {
                            .Call(VM_BUILTIN(4))  // String.substring
                            .StoreLocal(1)
                            .PushLocal(0)
-                           .Call(2)  // print
+                           .Call(1)  // print
                            .PushLocal(1)
-                           .Call(2)  // print
+                           .Call(1)  // print
                            .Return()
                            .Build();
 
-  MockNativeFunc substring_func;
   MockNativeFunc print_func;
 
   vm_function_t funcs[] = {
@@ -186,10 +185,6 @@ TEST(VM, RefCountString) {
                .data_len = main_bytecode.size(),
                .local_count = 2,
            }},
-      {.name = "substring",
-       .type = vm_function_t::VM_NATIVE_FUNC,
-       .argument_count = 3,
-       .as.native = {.fn = native_trampoline, .userdata = &substring_func}},
       {.name = "print",
        .type = vm_function_t::VM_NATIVE_FUNC,
        .argument_count = 1,
@@ -292,3 +287,137 @@ TEST(VM, CallBuiltInPromise) {
   vm_free_ref(final_promise);  // Ownership was transferred in the function call
   free_vm(vm);
 }
+
+struct TryCatchParam {
+  Assembler main;
+  std::vector<uint32_t> states;
+};
+
+class TryCatchTest : public ::testing::TestWithParam<TryCatchParam> {
+ protected:
+  void SetUp() override {
+    TryCatchParam param = GetParam();
+
+    main_bytecode_ = param.main.Build();
+    vm_function_t funcs[] = {
+        {.name = "main",
+         .type = vm_function_t::VM_BYTECODE,
+         .argument_count = 0,
+         .as.bytecode =
+             {
+                 .data = main_bytecode_.data(),
+                 .data_len = main_bytecode_.size(),
+                 .local_count = 0,
+             }},
+        {.name = "state",
+         .type = vm_function_t::VM_NATIVE_FUNC,
+         .argument_count = 1,
+         .as.native = {.fn = native_trampoline, .userdata = &state_func_}}};
+
+    vm_ = new_vm(NULL, 0, funcs, sizeof(funcs) / sizeof(vm_function_t));
+  }
+
+  void TearDown() override { free_vm(vm_); }
+
+  MockNativeFunc state_func_;
+  std::vector<uint8_t> main_bytecode_;
+  vm_t* vm_;
+};
+
+TEST_P(TryCatchTest, ValidateFlowControl) {
+  ::testing::Sequence seq;
+  for (uint32_t expected : GetParam().states) {
+    EXPECT_CALL(state_func_, Call(ElementsAre(Int32Type(expected))))
+        .WillOnce(ReturnNullType());
+  }
+
+  vm_run(vm_, /*entry_point_idx=*/0, false);
+
+  vm_value_t exception;
+  if (vm_get_exception(vm_, &exception)) {
+    state_func_.Call({exception});
+  }
+}
+
+enum {
+  TC_BEFORE_THROW = 0,
+  TC_FIRST_EXCEPTION,
+  TC_AFTER_THROW,
+  TC_BEGIN_CATCH,
+  TC_SECOND_EXCEPTION,
+  TC_END_CATCH,
+  TC_FINISH,
+};
+
+INSTANTIATE_TEST_SUITE_P(
+    TryCatchTestCases,
+    TryCatchTest,
+    ::testing::Values(
+        // Second exception from "catch" block does not retrigger initial "try"
+        (TryCatchParam){.main = Assembler()
+                                    .PushTry("catch_block", "finish_block")
+                                    .PushInt32(TC_BEFORE_THROW)
+                                    .Call(1)
+                                    .PushInt32(TC_FIRST_EXCEPTION)
+                                    .Throw()
+                                    .PushInt32(TC_AFTER_THROW)
+                                    .Call(1)
+                                    .PopTry()
+                                    .Label("catch_block")
+                                    .PushInt32(TC_BEGIN_CATCH)
+                                    .Call(1)
+                                    .Call(1)  // pops exception
+                                    .PushInt32(TC_SECOND_EXCEPTION)
+                                    .Throw()
+                                    .PushInt32(TC_END_CATCH)
+                                    .Call(1)
+                                    .Label("finish_block")
+                                    .PushInt32(TC_FINISH)
+                                    .Call(1)
+                                    .Return(),
+                        .states = {TC_BEFORE_THROW, TC_BEGIN_CATCH,
+                                   TC_FIRST_EXCEPTION, TC_SECOND_EXCEPTION}},
+        // Exception in "try" invokes "catch" then continues past the block
+        (TryCatchParam){
+            .main = Assembler()
+                        .PushTry("catch_block", "finish_block")
+                        .PushInt32(TC_BEFORE_THROW)
+                        .Call(1)
+                        .PushInt32(TC_FIRST_EXCEPTION)
+                        .Throw()
+                        .PushInt32(TC_AFTER_THROW)
+                        .Call(1)
+                        .PopTry()
+                        .Label("catch_block")
+                        .PushInt32(TC_BEGIN_CATCH)
+                        .Call(1)
+                        .Call(1)  // pops exception
+                        .PushInt32(TC_END_CATCH)
+                        .Call(1)
+                        .Label("finish_block")
+                        .PushInt32(TC_FINISH)
+                        .Call(1)
+                        .Return(),
+            .states = {TC_BEFORE_THROW, TC_BEGIN_CATCH, TC_FIRST_EXCEPTION,
+                       TC_END_CATCH, TC_FINISH}},
+        // No "throw" in "try", calls directly to "finish_block"
+        (TryCatchParam){
+            .main = Assembler()
+                        .PushTry("catch_block", "finish_block")
+                        .PushInt32(TC_BEFORE_THROW)
+                        .Call(1)
+                        // "throw" removed from other test cases
+                        .PushInt32(TC_AFTER_THROW)
+                        .Call(1)
+                        .PopTry()
+                        .Label("catch_block")
+                        .PushInt32(TC_BEGIN_CATCH)
+                        .Call(1)
+                        .Call(1)  // pops exception
+                        .PushInt32(TC_END_CATCH)
+                        .Call(1)
+                        .Label("finish_block")
+                        .PushInt32(TC_FINISH)
+                        .Call(1)
+                        .Return(),
+            .states = {TC_BEFORE_THROW, TC_AFTER_THROW, TC_FINISH}}));

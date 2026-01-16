@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <map>
 #include <string>
 #include <vector>
@@ -34,10 +35,15 @@ class Assembler {
   Assembler& Compare(op_t operation);
   Assembler& JumpIfFalse(uint32_t pc);
   Assembler& Jump(uint32_t pc);
+  Assembler& PushTry(uint32_t catch_address, uint32_t finally_address);
+  Assembler& PopTry();
+  Assembler& Throw();
 
   Assembler& Label(const std::string& label);
   Assembler& Jump(const std::string& label);
   Assembler& JumpIfFalse(const std::string& label);
+  Assembler& PushTry(const std::string& catch_label,
+                     const std::string& finally_label);
 
   Assembler& DebugString(const std::string& message);
 
@@ -48,7 +54,11 @@ class Assembler {
   std::vector<uint8_t> Build(Metadata* metadata = nullptr);
 
  private:
-  void PushOpAndArg32(op_t op, uint32_t arg);
+  void PushOpAndArgs(op_t op, std::initializer_list<uint32_t> args);
+
+  // Returns the $pc for a given `label`. If `label` is not yet known then
+  // `value_idx` is stored into that label's patch tabel and 0 is returned.
+  uint32_t GetLocationForLabel(const std::string& label, uint32_t value_idx);
 
   std::vector<uint8_t> data_;
   // Labels => the location they map to

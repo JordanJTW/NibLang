@@ -220,3 +220,35 @@ TEST_F(PromiseTest, FulfillPromiseThrow) {
 
   EXPECT_THAT(then_promise, IsRejectedWith(Int32Type(666)));
 }
+
+TEST_F(PromiseTest, FulfillWithHeapType) {
+  RC_AUTOFREE vm_value_t promise_value = allocate_promise();
+  vm_adopt_ref(promise_value);
+
+  EXPECT_FALSE(run_promise_jobs(vm_, job_queue_));
+  vm_value_t hello_string = allocate_str_from_c("hello");
+  vm_adopt_ref(hello_string); // Pass ownership to value
+  promise_resolve(job_queue_, promise_value, hello_string,
+                  /*is_rejected=*/false);
+
+  EXPECT_THAT(promise_value, IsFulfilledWith(StringType("hello")));
+
+  EXPECT_FALSE(run_promise_jobs(vm_, job_queue_));
+
+  vm_value_t world_string = allocate_str_from_c("world");
+  vm_adopt_ref(world_string);  // Pass ownership to value
+  EXPECT_CALL(on_fulfilled_func, Call(ElementsAre(StringType("hello"))))
+      .WillOnce([&](std::vector<vm_value_t> args) { return world_string; });
+
+  RC_AUTOFREE vm_value_t then_promise =
+      promise_then(job_queue_, promise_value,
+                   bind_to_function(vm_, 0 /*on_fulfilled_fn*/,
+                                    /*argv=*/nullptr, /*argc=*/0),
+                   bind_to_function(vm_, 1 /*on_rejected_fn*/,
+                                    /*argv=*/nullptr, /*argc=*/0));
+  vm_adopt_ref(then_promise);
+
+  EXPECT_TRUE(run_promise_jobs(vm_, job_queue_));
+
+  EXPECT_THAT(then_promise, IsFulfilledWith(StringType("world")));
+}

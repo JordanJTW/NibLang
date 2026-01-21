@@ -152,7 +152,7 @@ void Compiler::Compile() {
       continue;
     }
 
-    if (token.kind == TokenKind::kLabel) {
+    if (token.kind == TokenKind::kKwLabel) {
       token = tokenizer_.next();
       if (token.kind != TokenKind::kIdent) {
         print_error(text_, token, "expected label name");
@@ -171,6 +171,28 @@ void Compiler::Compile() {
       }
 
       current_function_->Label(label.value);
+      continue;
+    }
+
+    if (token.kind == TokenKind::kKwGoto) {
+      token = tokenizer_.next();
+      if (token.kind != TokenKind::kIdent) {
+        print_error(text_, token, "expected label name");
+        token = tokenizer_.next();
+        continue;
+      }
+
+      Token label = token;
+      token = tokenizer_.next();
+
+      if (token.kind != TokenKind::kEndExpr) {
+        print_error(text_, token, "expected ;");
+        continue;
+      } else {
+        token = tokenizer_.next();  // consume ;
+      }
+
+      current_function_->Jump(label.value);
       continue;
     }
 

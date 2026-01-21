@@ -50,7 +50,14 @@ Token Tokenizer::next() {
   static constexpr std::string_view kLabelKeyword = "label";
   if (data_.substr(offset_, kLabelKeyword.size()) == kLabelKeyword) {
     offset_ += kLabelKeyword.size();
-    return make_token(TokenKind::kLabel);
+    return make_token(TokenKind::kKwLabel);
+  }
+
+  // goto keyword
+  static constexpr std::string_view kGotoKeyword = "goto";
+  if (data_.substr(offset_, kGotoKeyword.size()) == kGotoKeyword) {
+    offset_ += kGotoKeyword.size();
+    return make_token(TokenKind::kKwGoto);
   }
 
   char ch = data_[offset_];
@@ -122,7 +129,8 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kNumber);
     KIND_TO_NAME(kChar);
     KIND_TO_NAME(kString);
-    KIND_TO_NAME(kLabel);
+    KIND_TO_NAME(kKwLabel);
+    KIND_TO_NAME(kKwGoto);
     KIND_TO_NAME(kAssign);
     KIND_TO_NAME(kAdd);
     KIND_TO_NAME(kSubtract);

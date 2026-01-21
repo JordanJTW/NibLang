@@ -55,12 +55,23 @@ Token Tokenizer::next() {
     return make_token(TokenKind::kIdent);
   }
 
-  // Digits (must start with digit but can include '.')
+  // Number (must start with digit but can include '.')
   if (std::isdigit(ch)) {
     while (offset_ < data_.size() && (isnumber(data_[offset_])))
       ++offset_;
 
     return make_token(TokenKind::kNumber);
+  }
+
+  // ASCII character
+  if (ch == '\'') {
+    ++offset_;  // skip initial '
+    while (offset_ < data_.size() && data_[offset_] != '\'')
+      ++offset_;
+
+    Token token = make_token(TokenKind::kChar);
+    ++offset_;  // Skip final '
+    return token;
   }
 
   // String
@@ -100,6 +111,7 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kUnknown);
     KIND_TO_NAME(kIdent);
     KIND_TO_NAME(kNumber);
+    KIND_TO_NAME(kChar);
     KIND_TO_NAME(kString);
     KIND_TO_NAME(kAssign);
     KIND_TO_NAME(kAdd);

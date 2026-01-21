@@ -6,6 +6,7 @@ enum class TokenKind {
   kUnknown = 0,
   kIdent,      // $id, $id1
   kNumber,     // 5, 5.0
+  kChar,       // 'a', 'b', 'c'
   kString,     // "hello world"
   kAssign,     // =
   kAdd,        // +

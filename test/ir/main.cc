@@ -109,7 +109,7 @@ void Compiler::Compile() {
 
       token = tokenizer_.next();
       if (token.kind != TokenKind::kIdent && token.kind != TokenKind::kNumber &&
-          token.kind != TokenKind::kString) {
+          token.kind != TokenKind::kString && token.kind != TokenKind::kChar) {
         print_error(text_, token, "expected $var or Number");
         token = tokenizer_.next();
         continue;
@@ -199,6 +199,16 @@ bool Compiler::PushValue(const Token& value) {
         current_function_->PushConstRef(next_const_id_);
         const_ids_[value.value] = next_const_id_;
       }
+      return true;
+    }
+    case TokenKind::kChar: {
+      if (value.value.length() != 1) {
+        print_error(text_, value, "char should be a single byte");
+        return false;
+      }
+
+      int i32 = value.value[0];
+      current_function_->PushInt32(i32);
       return true;
     }
     default:

@@ -92,6 +92,11 @@ void Compiler::Compile() {
       continue;
     }
 
+    if (token.kind == TokenKind::kComment) {
+      token = tokenizer_.next();
+      continue;
+    }
+
     Token start = token;
     if (token.kind == TokenKind::kIdent) {
       token = tokenizer_.next();

@@ -10,6 +10,7 @@ enum class TokenKind {
   kAssign,     // =
   kAdd,        // +
   kSubtract,   // -
+  kComment,    // # comment
   kEndExpr,    // ;
   kEndOfFile,  // EOF
 };

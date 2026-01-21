@@ -74,6 +74,14 @@ Token Tokenizer::next() {
     return token;
   }
 
+  // Comment
+  if (ch == '#') {
+    while (offset_ < data_.size() && data_[offset_] != '\n')
+      ++offset_;
+
+    return make_token(TokenKind::kComment);
+  }
+
   // Handles single character token types (+-/*=,etc)
   if (auto kind = get_single_char_token(ch); kind.has_value()) {
     ++offset_;
@@ -96,6 +104,7 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kAssign);
     KIND_TO_NAME(kAdd);
     KIND_TO_NAME(kSubtract);
+    KIND_TO_NAME(kComment);
     KIND_TO_NAME(kEndExpr);
     KIND_TO_NAME(kEndOfFile);
   }

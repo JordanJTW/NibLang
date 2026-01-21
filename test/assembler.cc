@@ -245,8 +245,8 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
         break;
       }
       case OP_PUSH_F32: {
-        float arg = bytecode[pc + 1] | (bytecode[pc + 2] << 8) |
-                    (bytecode[pc + 3] << 16) | (bytecode[pc + 4] << 24);
+        float arg = 0;
+        memcpy(&arg, bytecode.data() + pc + 1, 4);
         printf(
             "0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x,"
             " // %04zx: %s %f \n",

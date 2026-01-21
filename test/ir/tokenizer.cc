@@ -17,6 +17,8 @@ std::optional<TokenKind> get_single_char_token(char ch) {
       return TokenKind::kSubtract;
     case '=':
       return TokenKind::kAssign;
+    case ';':
+      return TokenKind::kEndExpr;
     default:
       return std::nullopt;
   }
@@ -30,11 +32,19 @@ Token Tokenizer::next() {
   while (offset_ < data_.size() && std::isspace(data_[offset_]))
     ++offset_;
 
+  size_t start_idx = offset_;
+  auto make_token = [&](TokenKind kind) {
+    size_t length = offset_ - start_idx;
+    return Token{.kind = kind,
+                 .idx = start_idx,
+                 .length = length,
+                 .value = data_.substr(start_idx, length)};
+  };
+
   if (offset_ >= data_.size())
-    return Token{.kind = TokenKind::kEndOfFile, .idx = offset_, .length = 0};
+    return make_token(TokenKind::kEndOfFile);
 
   char ch = data_[offset_];
-  size_t start_idx = offset_;
 
   // Identifier
   if (ch == '$') {
@@ -42,9 +52,7 @@ Token Tokenizer::next() {
     while (offset_ < data_.size() && std::isalnum(data_[offset_]))
       ++offset_;
 
-    return Token{.kind = TokenKind::kIdent,
-                 .idx = start_idx,
-                 .length = (offset_ - start_idx)};
+    return make_token(TokenKind::kIdent);
   }
 
   // Digits (must start with digit but can include '.')
@@ -52,19 +60,28 @@ Token Tokenizer::next() {
     while (offset_ < data_.size() && (isnumber(data_[offset_])))
       ++offset_;
 
-    return Token{.kind = TokenKind::kNumber,
-                 .idx = start_idx,
-                 .length = (offset_ - start_idx)};
+    return make_token(TokenKind::kNumber);
+  }
+
+  // String
+  if (ch == '"') {
+    start_idx = ++offset_;  // Skip initial '"' (in input/output)
+    while (offset_ < data_.size() && data_[offset_] != '"')
+      ++offset_;
+
+    Token token = make_token(TokenKind::kString);
+    ++offset_;  // Skip final '"'
+    return token;
   }
 
   // Handles single character token types (+-/*=,etc)
   if (auto kind = get_single_char_token(ch); kind.has_value()) {
     ++offset_;
-    return Token{.kind = *kind, .idx = start_idx, .length = 1};
+    return make_token(*kind);
   }
 
-  // Skip over an unknown start of token and return it (compiler handles error).
-  return Token{.kind = TokenKind::kUnknown, .idx = offset_++, .length = 1};
+  ++offset_;  // Skip over unknown
+  return make_token(TokenKind::kUnknown);
 }
 
 std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
@@ -75,9 +92,11 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kUnknown);
     KIND_TO_NAME(kIdent);
     KIND_TO_NAME(kNumber);
+    KIND_TO_NAME(kString);
     KIND_TO_NAME(kAssign);
     KIND_TO_NAME(kAdd);
     KIND_TO_NAME(kSubtract);
+    KIND_TO_NAME(kEndExpr);
     KIND_TO_NAME(kEndOfFile);
   }
 }

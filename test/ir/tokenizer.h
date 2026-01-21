@@ -6,15 +6,18 @@ enum class TokenKind {
   kUnknown = 0,
   kIdent,      // $id, $id1
   kNumber,     // 5, 5.0
+  kString,     // "hello world"
   kAssign,     // =
   kAdd,        // +
   kSubtract,   // -
+  kEndExpr,    // ;
   kEndOfFile,  // EOF
 };
 
 struct Token {
   TokenKind kind;
   size_t idx, length;  // Where is the Token's text located
+  std::string value;
 };
 
 class Tokenizer {

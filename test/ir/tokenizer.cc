@@ -19,6 +19,8 @@ std::optional<TokenKind> get_single_char_token(char ch) {
       return TokenKind::kAssign;
     case ';':
       return TokenKind::kEndExpr;
+    case ':':
+      return TokenKind::kEndExpr;
     default:
       return std::nullopt;
   }
@@ -43,6 +45,13 @@ Token Tokenizer::next() {
 
   if (offset_ >= data_.size())
     return make_token(TokenKind::kEndOfFile);
+
+  // label keyword
+  static constexpr std::string_view kLabelKeyword = "label";
+  if (data_.substr(offset_, kLabelKeyword.size()) == kLabelKeyword) {
+    offset_ += kLabelKeyword.size();
+    return make_token(TokenKind::kLabel);
+  }
 
   char ch = data_[offset_];
 
@@ -113,6 +122,7 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kNumber);
     KIND_TO_NAME(kChar);
     KIND_TO_NAME(kString);
+    KIND_TO_NAME(kLabel);
     KIND_TO_NAME(kAssign);
     KIND_TO_NAME(kAdd);
     KIND_TO_NAME(kSubtract);

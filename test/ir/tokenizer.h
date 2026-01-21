@@ -8,6 +8,7 @@ enum class TokenKind {
   kNumber,     // 5, 5.0
   kChar,       // 'a', 'b', 'c'
   kString,     // "hello world"
+  kLabel,      // label
   kAssign,     // =
   kAdd,        // +
   kSubtract,   // -

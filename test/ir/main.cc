@@ -152,6 +152,28 @@ void Compiler::Compile() {
       continue;
     }
 
+    if (token.kind == TokenKind::kLabel) {
+      token = tokenizer_.next();
+      if (token.kind != TokenKind::kIdent) {
+        print_error(text_, token, "expected label name");
+        token = tokenizer_.next();
+        continue;
+      }
+
+      Token label = token;
+      token = tokenizer_.next();
+
+      if (token.kind != TokenKind::kEndExpr) {
+        print_error(text_, token, "expected :");
+        continue;
+      } else {
+        token = tokenizer_.next();  // consume :
+      }
+
+      current_function_->Label(label.value);
+      continue;
+    }
+
     print_error(text_, token, "unexpected token");
     token = tokenizer_.next();
   }

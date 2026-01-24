@@ -54,14 +54,17 @@ class Compiler {
   void Compile();
 
  private:
-  bool PushValue(const Token& value);
-  void WriteAssign(const Token& var, const Token& value);
-  void WriteBinaryAssign(const Token& var,
-                         const Token& v1,
-                         const Token& op,
-                         const Token& v2);
+  bool EmitValue(const Token& value);
+  void EmitOp(const Token& op);
   std::optional<Token> ParseFunction(Token& current_token,
                                      std::vector<Token>& args);
+
+  bool ParseExpression(Token& current_token);
+  bool ParseComparison(Token& current_token);
+  bool ParseMultiplicative(Token& current_token);
+  bool ParseAdditive(Token& current_token);
+  bool ParseValue(Token& current_token);
+  bool ParseCall(Token& current_token, Token fn_name);
 
   std::optional<int> GetIdFor(const std::string& name, bool create_if_missing);
 
@@ -121,16 +124,57 @@ void Compiler::Compile() {
     }
 
     Token start = token;
-    // Function definition (fn $name $args...)
+    // Function definition i.e. fn $name($args,...):
     if (token.kind == TokenKind::kKwFn) {
       token = tokenizer_.next();
-      std::vector<Token> args;
-      if (auto name = ParseFunction(token, args); name.has_value()) {
-        Function& function = functions_.emplace_back();
-        function.name = name->value;
-        for (const auto& arg : args)
-          function.var_to_id[arg.value] = function.next_id++;
-        func_ids_[name->value] = next_func_id_++;
+
+      const Token name = token;
+      if (name.kind != TokenKind::kIdent) {
+        print_error(text_, name, "requires a function name");
+        token = tokenizer_.next();
+        continue;
+      }
+
+      token = tokenizer_.next();
+      if (token.kind != TokenKind::kOpenParen) {
+        print_error(text_, name, "expected (");
+        token = tokenizer_.next();
+        continue;
+      }
+
+      func_ids_[name.value] = next_func_id_++;
+      Function& function = functions_.emplace_back();
+      function.name = name.value;
+
+      token = tokenizer_.next();  // after '('
+      if (token.kind != TokenKind::kCloseParen) {
+        while (true) {
+          if (token.kind != TokenKind::kIdent) {
+            print_error(text_, token, "expected parameter name");
+            break;
+          }
+
+          function.var_to_id[token.value] = function.next_id++;
+          token = tokenizer_.next();
+
+          if (token.kind == TokenKind::kCloseParen)
+            break;
+
+          if (token.kind != TokenKind::kComma) {
+            print_error(text_, token, "expected ',' or ')'");
+            break;
+          }
+
+          token = tokenizer_.next();
+        }
+      }
+      token = tokenizer_.next();  // consume ')'
+
+      if (token.kind != TokenKind::kEndExpr) {
+        print_error(text_, token, "expected :");
+        continue;
+      } else {
+        token = tokenizer_.next();  // consume :
       }
       continue;
     }
@@ -147,71 +191,9 @@ void Compiler::Compile() {
 
       token = tokenizer_.next();
       // Assign to result of function call ($var = call $name $args...)
-      if (token.kind == TokenKind::kKwCall) {
-        token = tokenizer_.next();
-        std::vector<Token> args;
-        if (auto name = ParseFunction(token, args); name.has_value()) {
-          auto it = func_ids_.find(name->value);
-          if (it == func_ids_.cend()) {
-            print_error(text_, *name, "unknown function");
-            continue;
-          }
-
-          for (Token arg : args) {
-            PushValue(arg);
-          }
-          functions_.back().code.Call(it->second);
-
-          std::optional<int> var_id =
-              GetIdFor(start.value, /*create_if_missing=*/true);
-          functions_.back().code.StoreLocal(*var_id);
-        }
+      if (!ParseExpression(token)) {
         continue;
       }
-      // Assign to literal value ($var = $other, $var = 10, $var = "hello")
-      else if (token.kind != TokenKind::kIdent &&
-               token.kind != TokenKind::kNumber &&
-               token.kind != TokenKind::kString &&
-               token.kind != TokenKind::kChar) {
-        print_error(text_, token, "expected $var or Number");
-        token = tokenizer_.next();
-        continue;
-      }
-
-      Token v1 = token;
-      token = tokenizer_.next();
-
-      // Assign to binary expression ($var = 10 + ...)
-      if (token.kind != TokenKind::kAdd && token.kind != TokenKind::kSubtract &&
-          token.kind != TokenKind::kCompareEq &&
-          token.kind != TokenKind::kCompareNe &&
-          token.kind != TokenKind::kCompareLt &&
-          token.kind != TokenKind::kCompareLe &&
-          token.kind != TokenKind::kCompareGt &&
-          token.kind != TokenKind::kCompareGe) {
-        std::cout << "is not op!" << std::endl;
-
-        if (token.kind != TokenKind::kEndExpr) {
-          print_error(text_, token, "expected ;");
-          continue;
-        } else {
-          token = tokenizer_.next();  // consume ;
-        }
-        WriteAssign(start, v1);
-        continue;
-      }
-
-      Token op = token;
-      token = tokenizer_.next();
-
-      if (token.kind != TokenKind::kIdent && token.kind != TokenKind::kNumber) {
-        print_error(text_, token, "expected $var or Number");
-        token = tokenizer_.next();
-        continue;
-      }
-
-      Token v2 = token;
-      token = tokenizer_.next();
 
       if (token.kind != TokenKind::kEndExpr) {
         print_error(text_, token, "expected ;");
@@ -220,7 +202,10 @@ void Compiler::Compile() {
         token = tokenizer_.next();  // consume ;
       }
 
-      WriteBinaryAssign(start, v1, op, v2);
+      // Store the value on the stack into the appropriate local.
+      std::optional<int> var_id =
+          GetIdFor(start.value, /*create_if_missing=*/true);
+      functions_.back().code.StoreLocal(*var_id);
       continue;
     }
 
@@ -269,23 +254,9 @@ void Compiler::Compile() {
       }
 
       token = tokenizer_.next();
-      if (token.kind != TokenKind::kIdent) {
-        print_error(text_, token, "expected $var name");
-        token = tokenizer_.next();
+      if (!ParseExpression(token))
         continue;
-      }
 
-      Token if_var = token;
-      std::optional<int> var_id =
-          GetIdFor(if_var.value, /*create_if_missing=*/false);
-
-      if (!var_id.has_value()) {
-        print_error(text_, if_var, "unknown $var");
-        token = tokenizer_.next();
-        continue;
-      }
-
-      token = tokenizer_.next();
       if (token.kind != TokenKind::kKwElse) {
         if (token.kind != TokenKind::kEndExpr) {
           print_error(text_, token, "expected ;");
@@ -293,7 +264,6 @@ void Compiler::Compile() {
         } else {
           token = tokenizer_.next();  // consume ;
         }
-        functions_.back().code.PushLocal(*var_id);
         functions_.back().code.JumpIfFalse(if_label.value);
         continue;
       }
@@ -314,7 +284,6 @@ void Compiler::Compile() {
       } else {
         token = tokenizer_.next();  // consume ;
       }
-      functions_.back().code.PushLocal(*var_id);
       functions_.back().code.JumpIfFalse(if_label.value);
       continue;
     }
@@ -337,7 +306,7 @@ std::optional<int> Compiler::GetIdFor(const std::string& name,
   return fn.next_id++;
 }
 
-bool Compiler::PushValue(const Token& value) {
+bool Compiler::EmitValue(const Token& value) {
   switch (value.kind) {
     case TokenKind::kNumber: {
       if ((value.value.find('.') != std::string::npos) ||
@@ -385,68 +354,172 @@ bool Compiler::PushValue(const Token& value) {
   }
 }
 
-void Compiler::WriteAssign(const Token& var, const Token& value) {
-  if (PushValue(value)) {
-    std::optional<int> var_id = GetIdFor(var.value, /*create_if_missing=*/true);
-    functions_.back().code.StoreLocal(*var_id);
+void Compiler::EmitOp(const Token& op) {
+  switch (op.kind) {
+    case TokenKind::kAdd:
+      functions_.back().code.Add();
+      break;
+    case TokenKind::kSubtract:
+      functions_.back().code.Subtract();
+      break;
+    case TokenKind::kMultiply:
+      functions_.back().code.Multiply();
+      break;
+    case TokenKind::kDivide:
+      functions_.back().code.Divide();
+      break;
+    case TokenKind::kCompareEq:
+      functions_.back().code.Compare(OP_EQUAL);
+      break;
+    case TokenKind::kCompareNe:
+      functions_.back().code.Compare(OP_EQUAL);
+      functions_.back().code.Not();
+      break;
+    case TokenKind::kCompareGt:
+      functions_.back().code.Compare(OP_GREATER_THAN);
+      break;
+    case TokenKind::kCompareGe:
+      functions_.back().code.Compare(OP_GREAT_OR_EQ);
+      break;
+    case TokenKind::kCompareLt:
+      functions_.back().code.Compare(OP_LESS_THAN);
+      break;
+    case TokenKind::kCompareLe:
+      functions_.back().code.Compare(OP_LESS_OR_EQ);
+      break;
+    default:
+      print_error(text_, op, "unknown op");
+      return;
   }
 }
 
-std::optional<Token> Compiler::ParseFunction(Token& current_token,
-                                             std::vector<Token>& args) {
-  const Token name = current_token;
-  if (name.kind != TokenKind::kIdent) {
-    print_error(text_, name, "requires a function name");
-    current_token = tokenizer_.next();
-    return std::nullopt;
-  }
-
-  current_token = tokenizer_.next();
-  while (current_token.kind != TokenKind::kEndExpr) {
-    args.push_back(current_token);
-    current_token = tokenizer_.next();
-  }
-  current_token = tokenizer_.next();  // skip ;
-  return name;
+bool Compiler::ParseExpression(Token& token) {
+  return ParseComparison(token);
 }
 
-void Compiler::WriteBinaryAssign(const Token& var,
-                                 const Token& v1,
-                                 const Token& op,
-                                 const Token& v2) {
-  if (PushValue(v1) && PushValue(v2)) {
-    switch (op.kind) {
-      case TokenKind::kAdd:
-        functions_.back().code.Add();
-        break;
-      case TokenKind::kSubtract:
-        functions_.back().code.Subtract();
-        break;
-      case TokenKind::kCompareEq:
-        functions_.back().code.Compare(OP_EQUAL);
-        break;
-      case TokenKind::kCompareNe:
-        functions_.back().code.Compare(OP_EQUAL);
-        functions_.back().code.Not();
-        break;
-      case TokenKind::kCompareGt:
-        functions_.back().code.Compare(OP_GREATER_THAN);
-        break;
-      case TokenKind::kCompareGe:
-        functions_.back().code.Compare(OP_GREAT_OR_EQ);
-        break;
-      case TokenKind::kCompareLt:
-        functions_.back().code.Compare(OP_LESS_THAN);
-        break;
-      case TokenKind::kCompareLe:
-        functions_.back().code.Compare(OP_LESS_OR_EQ);
-        break;
-      default:
-        print_error(text_, op, "unknown op");
-        return;
+bool Compiler::ParseComparison(Token& token) {
+  if (!ParseAdditive(token))
+    return false;
+
+  while (token.kind == TokenKind::kCompareEq ||
+         token.kind == TokenKind::kCompareNe ||
+         token.kind == TokenKind::kCompareLt ||
+         token.kind == TokenKind::kCompareLe ||
+         token.kind == TokenKind::kCompareGt ||
+         token.kind == TokenKind::kCompareGe) {
+    Token op = token;
+    token = tokenizer_.next();
+
+    if (!ParseAdditive(token))
+      return false;
+
+    EmitOp(op);
+  }
+  return true;
+}
+
+bool Compiler::ParseMultiplicative(Token& token) {
+  if (!ParseValue(token))
+    return false;
+
+  while (token.kind == TokenKind::kMultiply ||
+         token.kind == TokenKind::kDivide) {
+    Token op = token;
+    token = tokenizer_.next();
+
+    if (!ParseValue(token))
+      return false;
+
+    EmitOp(op);
+  }
+
+  return true;
+}
+
+bool Compiler::ParseAdditive(Token& token) {
+  if (!ParseMultiplicative(token))
+    return false;
+
+  while (token.kind == TokenKind::kAdd || token.kind == TokenKind::kSubtract) {
+    Token op = token;
+    token = tokenizer_.next();
+
+    if (!ParseMultiplicative(token))
+      return false;
+
+    EmitOp(op);
+  }
+
+  return true;
+}
+
+bool Compiler::ParseValue(Token& token) {
+  switch (token.kind) {
+    case TokenKind::kNumber:
+    case TokenKind::kString:
+    case TokenKind::kChar:
+    case TokenKind::kIdent: {
+      Token value = token;
+      token = tokenizer_.next();
+
+      // Function call?
+      if (value.kind == TokenKind::kIdent &&
+          token.kind == TokenKind::kOpenParen) {
+        return ParseCall(token, value);
+      }
+
+      return EmitValue(value);
     }
 
-    std::optional<int> var_id = GetIdFor(var.value, /*create_if_missing=*/true);
-    functions_.back().code.StoreLocal(*var_id);
+    case TokenKind::kOpenParen: {
+      token = tokenizer_.next();  // consume '('
+
+      if (!ParseExpression(token))
+        return false;
+
+      if (token.kind != TokenKind::kCloseParen) {
+        print_error(text_, token, "expected ')'");
+        return false;
+      }
+
+      token = tokenizer_.next();  // consume ')'
+      return true;
+    }
+
+    default:
+      print_error(text_, token, "expected expression");
+      return false;
   }
+}
+
+bool Compiler::ParseCall(Token& token, Token fn_name) {
+  token = tokenizer_.next();  // consume '('
+
+  if (token.kind != TokenKind::kCloseParen) {
+    while (true) {
+      if (!ParseExpression(token))
+        return false;
+
+      if (token.kind == TokenKind::kCloseParen)
+        break;
+
+      if (token.kind != TokenKind::kComma) {
+        print_error(text_, token, "expected ',' or ')'");
+        return false;
+      }
+
+      token = tokenizer_.next();
+    }
+  }
+
+  token = tokenizer_.next();  // consume ')'
+
+  auto it = func_ids_.find(fn_name.value);
+  if (it == func_ids_.end()) {
+    print_error(text_, fn_name, "unknown function");
+    return true;  // semantic error, parse is correct
+  }
+
+  functions_.back().code.Call(it->second);
+  return true;
 }

@@ -15,16 +15,26 @@ std::optional<TokenKind> get_single_char_token(char ch) {
       return TokenKind::kAdd;
     case '-':
       return TokenKind::kSubtract;
+    case '*':
+      return TokenKind::kMultiply;
+    case '/':
+      return TokenKind::kDivide;
     case '=':
       return TokenKind::kAssign;
     case ';':
       return TokenKind::kEndExpr;
     case ':':
       return TokenKind::kEndExpr;
+    case ',':
+      return TokenKind::kComma;
     case '>':
       return TokenKind::kCompareGt;
     case '<':
       return TokenKind::kCompareLt;
+    case '(':
+      return TokenKind::kOpenParen;
+    case ')':
+      return TokenKind::kCloseParen;
     default:
       return std::nullopt;
   }
@@ -95,13 +105,6 @@ Token Tokenizer::next() {
   if (data_.substr(offset_, kFnKeyword.size()) == kFnKeyword) {
     offset_ += kFnKeyword.size();
     return make_token(TokenKind::kKwFn);
-  }
-
-  // call keyword
-  static constexpr std::string_view kCallKeyword = "call";
-  if (data_.substr(offset_, kCallKeyword.size()) == kCallKeyword) {
-    offset_ += kCallKeyword.size();
-    return make_token(TokenKind::kKwCall);
   }
 
   char ch = data_[offset_];
@@ -186,10 +189,14 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kKwIf);
     KIND_TO_NAME(kKwElse);
     KIND_TO_NAME(kKwFn);
-    KIND_TO_NAME(kKwCall);
+    KIND_TO_NAME(kOpenParen);
+    KIND_TO_NAME(kCloseParen);
+    KIND_TO_NAME(kComma);
     KIND_TO_NAME(kAssign);
     KIND_TO_NAME(kAdd);
     KIND_TO_NAME(kSubtract);
+    KIND_TO_NAME(kMultiply);
+    KIND_TO_NAME(kDivide);
     KIND_TO_NAME(kCompareGt);
     KIND_TO_NAME(kCompareLt);
     KIND_TO_NAME(kCompareGe);

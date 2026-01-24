@@ -1,31 +1,36 @@
 #pragma once
 
+#include <deque>
 #include <iostream>
 
 enum class TokenKind {
   kUnknown = 0,
-  kIdent,      // $id, $id1
-  kNumber,     // 5, 5.0
-  kChar,       // 'a', 'b', 'c'
-  kString,     // "hello world"
-  kKwLabel,    // label
-  kKwGoto,     // goto
-  kKwIf,       // if
-  kKwElse,     // else
-  kKwFn,       // fn
-  kKwCall,     // call
-  kAssign,     // =
-  kAdd,        // +
-  kSubtract,   // -
-  kCompareGt,  // >
-  kCompareLt,  // <
-  kCompareGe,  // >=
-  kCompareLe,  // <=
-  kCompareEq,  // ==
-  kCompareNe,  // !=
-  kComment,    // # comment
-  kEndExpr,    // ;
-  kEndOfFile,  // EOF
+  kIdent,       // $id, $id1
+  kNumber,      // 5, 5.0
+  kChar,        // 'a', 'b', 'c'
+  kString,      // "hello world"
+  kKwLabel,     // label
+  kKwGoto,      // goto
+  kKwIf,        // if
+  kKwElse,      // else
+  kKwFn,        // fn
+  kOpenParen,   // (
+  kCloseParen,  // )
+  kComma,       // ,
+  kAssign,      // =
+  kAdd,         // +
+  kSubtract,    // -
+  kMultiply,    // *
+  kDivide,      // /
+  kCompareGt,   // >
+  kCompareLt,   // <
+  kCompareGe,   // >=
+  kCompareLe,   // <=
+  kCompareEq,   // ==
+  kCompareNe,   // !=
+  kComment,     // # comment
+  kEndExpr,     // ;
+  kEndOfFile,   // EOF
 };
 
 struct Token {

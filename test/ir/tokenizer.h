@@ -10,9 +10,19 @@ enum class TokenKind {
   kString,     // "hello world"
   kKwLabel,    // label
   kKwGoto,     // goto
+  kKwIf,       // if
+  kKwElse,     // else
+  kKwFn,       // fn
+  kKwCall,     // call
   kAssign,     // =
   kAdd,        // +
   kSubtract,   // -
+  kCompareGt,  // >
+  kCompareLt,  // <
+  kCompareGe,  // >=
+  kCompareLe,  // <=
+  kCompareEq,  // ==
+  kCompareNe,  // !=
   kComment,    // # comment
   kEndExpr,    // ;
   kEndOfFile,  // EOF

@@ -21,9 +21,25 @@ std::optional<TokenKind> get_single_char_token(char ch) {
       return TokenKind::kEndExpr;
     case ':':
       return TokenKind::kEndExpr;
+    case '>':
+      return TokenKind::kCompareGt;
+    case '<':
+      return TokenKind::kCompareLt;
     default:
       return std::nullopt;
   }
+}
+
+std::optional<TokenKind> get_double_char_token(std::string value) {
+  if (value == "==")
+    return TokenKind::kCompareEq;
+  if (value == "!=")
+    return TokenKind::kCompareNe;
+  if (value == ">=")
+    return TokenKind::kCompareGe;
+  if (value == "<=")
+    return TokenKind::kCompareLe;
+  return std::nullopt;
 }
 
 }  // namespace
@@ -60,12 +76,41 @@ Token Tokenizer::next() {
     return make_token(TokenKind::kKwGoto);
   }
 
+  // if keyword
+  static constexpr std::string_view kIfKeyword = "if";
+  if (data_.substr(offset_, kIfKeyword.size()) == kIfKeyword) {
+    offset_ += kIfKeyword.size();
+    return make_token(TokenKind::kKwIf);
+  }
+
+  // else keyword
+  static constexpr std::string_view kElseKeyword = "else";
+  if (data_.substr(offset_, kElseKeyword.size()) == kElseKeyword) {
+    offset_ += kElseKeyword.size();
+    return make_token(TokenKind::kKwElse);
+  }
+
+  // fn keyword
+  static constexpr std::string_view kFnKeyword = "fn";
+  if (data_.substr(offset_, kFnKeyword.size()) == kFnKeyword) {
+    offset_ += kFnKeyword.size();
+    return make_token(TokenKind::kKwFn);
+  }
+
+  // call keyword
+  static constexpr std::string_view kCallKeyword = "call";
+  if (data_.substr(offset_, kCallKeyword.size()) == kCallKeyword) {
+    offset_ += kCallKeyword.size();
+    return make_token(TokenKind::kKwCall);
+  }
+
   char ch = data_[offset_];
 
   // Identifier
-  if (ch == '$') {
-    ++offset_;  // Skip '$'
-    while (offset_ < data_.size() && std::isalnum(data_[offset_]))
+  if (ch == '$' || std::isalpha(ch)) {
+    ++offset_;  // Skip initial char
+    while (offset_ < data_.size() &&
+           (std::isalnum(data_[offset_]) || data_[offset_] == '_'))
       ++offset_;
 
     return make_token(TokenKind::kIdent);
@@ -109,6 +154,13 @@ Token Tokenizer::next() {
     return make_token(TokenKind::kComment);
   }
 
+  // Handles double character token types (&&||++,etc)
+  if (auto kind = get_double_char_token(data_.substr(offset_, 2));
+      kind.has_value()) {
+    offset_ += 2;
+    return make_token(*kind);
+  }
+
   // Handles single character token types (+-/*=,etc)
   if (auto kind = get_single_char_token(ch); kind.has_value()) {
     ++offset_;
@@ -131,9 +183,19 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kString);
     KIND_TO_NAME(kKwLabel);
     KIND_TO_NAME(kKwGoto);
+    KIND_TO_NAME(kKwIf);
+    KIND_TO_NAME(kKwElse);
+    KIND_TO_NAME(kKwFn);
+    KIND_TO_NAME(kKwCall);
     KIND_TO_NAME(kAssign);
     KIND_TO_NAME(kAdd);
     KIND_TO_NAME(kSubtract);
+    KIND_TO_NAME(kCompareGt);
+    KIND_TO_NAME(kCompareLt);
+    KIND_TO_NAME(kCompareGe);
+    KIND_TO_NAME(kCompareLe);
+    KIND_TO_NAME(kCompareEq);
+    KIND_TO_NAME(kCompareNe);
     KIND_TO_NAME(kComment);
     KIND_TO_NAME(kEndExpr);
     KIND_TO_NAME(kEndOfFile);
@@ -142,5 +204,5 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
 
 std::ostream& operator<<(std::ostream& os, const Token& token) {
   return os << token.kind << " [" << token.idx << ", "
-            << token.idx + token.length << ")";
+            << token.idx + token.length << "): \"" << token.value << "\"";
 }

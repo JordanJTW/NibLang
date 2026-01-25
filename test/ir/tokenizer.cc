@@ -56,17 +56,23 @@ std::optional<TokenKind> get_double_char_token(std::string value) {
 
 Tokenizer::Tokenizer(std::string data) : data_(data) {}
 
+Token Tokenizer::seekTo(const Token& token) {
+  offset_ = token.idx;
+  return next();
+}
+
 Token Tokenizer::next() {
   while (offset_ < data_.size() && std::isspace(data_[offset_]))
     ++offset_;
 
   size_t start_idx = offset_;
-  auto make_token = [&](TokenKind kind) {
+  auto make_token = [&](TokenKind kind, std::string value = "") {
     size_t length = offset_ - start_idx;
-    return Token{.kind = kind,
-                 .idx = start_idx,
-                 .length = length,
-                 .value = data_.substr(start_idx, length)};
+    return Token{
+        .kind = kind,
+        .idx = start_idx,
+        .length = length,
+        .value = value.empty() ? data_.substr(start_idx, length) : value};
   };
 
   if (offset_ >= data_.size())
@@ -127,25 +133,18 @@ Token Tokenizer::next() {
     return make_token(TokenKind::kNumber);
   }
 
-  // ASCII character
-  if (ch == '\'') {
-    ++offset_;  // skip initial '
-    while (offset_ < data_.size() && data_[offset_] != '\'')
-      ++offset_;
-
-    Token token = make_token(TokenKind::kChar);
-    ++offset_;  // Skip final '
-    return token;
-  }
-
   // String
   if (ch == '"') {
-    start_idx = ++offset_;  // Skip initial '"' (in input/output)
-    while (offset_ < data_.size() && data_[offset_] != '"')
+    ++offset_;  // Skip initial '"'
+    size_t string_length = 0;
+    while (offset_ < data_.size() && data_[offset_] != '"') {
+      ++string_length;
       ++offset_;
+    }
 
-    Token token = make_token(TokenKind::kString);
     ++offset_;  // Skip final '"'
+    Token token = make_token(TokenKind::kString,
+                             data_.substr(start_idx + 1, string_length));
     return token;
   }
 
@@ -182,7 +181,6 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kUnknown);
     KIND_TO_NAME(kIdent);
     KIND_TO_NAME(kNumber);
-    KIND_TO_NAME(kChar);
     KIND_TO_NAME(kString);
     KIND_TO_NAME(kKwLabel);
     KIND_TO_NAME(kKwGoto);

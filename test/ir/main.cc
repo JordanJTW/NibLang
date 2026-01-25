@@ -60,6 +60,7 @@ class Compiler {
                                      std::vector<Token>& args);
 
   bool ParseExpression(Token& current_token);
+  bool ParseAssignment(Token& current_token);
   bool ParseComparison(Token& current_token);
   bool ParseMultiplicative(Token& current_token);
   bool ParseAdditive(Token& current_token);
@@ -179,36 +180,6 @@ void Compiler::Compile() {
       continue;
     }
 
-    // Assignment ($var = ...)
-    if (token.kind == TokenKind::kIdent) {
-      token = tokenizer_.next();
-
-      if (token.kind != TokenKind::kAssign) {
-        print_error(text_, token, "expected assign (=)");
-        token = tokenizer_.next();
-        continue;
-      }
-
-      token = tokenizer_.next();
-      // Assign to result of function call ($var = call $name $args...)
-      if (!ParseExpression(token)) {
-        continue;
-      }
-
-      if (token.kind != TokenKind::kEndExpr) {
-        print_error(text_, token, "expected ;");
-        continue;
-      } else {
-        token = tokenizer_.next();  // consume ;
-      }
-
-      // Store the value on the stack into the appropriate local.
-      std::optional<int> var_id =
-          GetIdFor(start.value, /*create_if_missing=*/true);
-      functions_.back().code.StoreLocal(*var_id);
-      continue;
-    }
-
     if (token.kind == TokenKind::kKwLabel) {
       token = tokenizer_.next();
       if (token.kind != TokenKind::kIdent) {
@@ -288,6 +259,16 @@ void Compiler::Compile() {
       continue;
     }
 
+    if (ParseExpression(token)) {
+      if (token.kind != TokenKind::kEndExpr) {
+        print_error(text_, token, "expected ;");
+        continue;
+      } else {
+        token = tokenizer_.next();  // consume ;
+      }
+      continue;
+    }
+
     print_error(text_, token, "unexpected token");
     token = tokenizer_.next();
   }
@@ -338,16 +319,6 @@ bool Compiler::EmitValue(const Token& value) {
       }
       return true;
     }
-    case TokenKind::kChar: {
-      if (value.value.length() != 1) {
-        print_error(text_, value, "char should be a single byte");
-        return false;
-      }
-
-      int i32 = value.value[0];
-      functions_.back().code.PushInt32(i32);
-      return true;
-    }
     default:
       print_error(text_, value, "not able to assign this type");
       return false;
@@ -394,6 +365,28 @@ void Compiler::EmitOp(const Token& op) {
 }
 
 bool Compiler::ParseExpression(Token& token) {
+  return ParseAssignment(token);
+}
+
+bool Compiler::ParseAssignment(Token& token) {
+  Token entry_token = token;
+  if (token.kind == TokenKind::kIdent) {
+    token = tokenizer_.next();
+    if (token.kind == TokenKind::kAssign) {
+      token = tokenizer_.next();  // consume '='
+
+      if (!ParseExpression(token))
+        return false;
+
+      // Store the value on the stack into the appropriate local.
+      std::optional<int> var_id =
+          GetIdFor(entry_token.value, /*create_if_missing=*/true);
+      functions_.back().code.StoreLocal(*var_id);
+      return true;
+    }
+  }
+
+  token = tokenizer_.seekTo(entry_token);
   return ParseComparison(token);
 }
 
@@ -418,6 +411,23 @@ bool Compiler::ParseComparison(Token& token) {
   return true;
 }
 
+bool Compiler::ParseAdditive(Token& token) {
+  if (!ParseMultiplicative(token))
+    return false;
+
+  while (token.kind == TokenKind::kAdd || token.kind == TokenKind::kSubtract) {
+    Token op = token;
+    token = tokenizer_.next();
+
+    if (!ParseMultiplicative(token))
+      return false;
+
+    EmitOp(op);
+  }
+
+  return true;
+}
+
 bool Compiler::ParseMultiplicative(Token& token) {
   if (!ParseValue(token))
     return false;
@@ -436,28 +446,10 @@ bool Compiler::ParseMultiplicative(Token& token) {
   return true;
 }
 
-bool Compiler::ParseAdditive(Token& token) {
-  if (!ParseMultiplicative(token))
-    return false;
-
-  while (token.kind == TokenKind::kAdd || token.kind == TokenKind::kSubtract) {
-    Token op = token;
-    token = tokenizer_.next();
-
-    if (!ParseMultiplicative(token))
-      return false;
-
-    EmitOp(op);
-  }
-
-  return true;
-}
-
 bool Compiler::ParseValue(Token& token) {
   switch (token.kind) {
     case TokenKind::kNumber:
     case TokenKind::kString:
-    case TokenKind::kChar:
     case TokenKind::kIdent: {
       Token value = token;
       token = tokenizer_.next();

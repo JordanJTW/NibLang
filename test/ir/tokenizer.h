@@ -7,7 +7,6 @@ enum class TokenKind {
   kUnknown = 0,
   kIdent,       // $id, $id1
   kNumber,      // 5, 5.0
-  kChar,        // 'a', 'b', 'c'
   kString,      // "hello world"
   kKwLabel,     // label
   kKwGoto,      // goto
@@ -44,6 +43,7 @@ class Tokenizer {
   explicit Tokenizer(std::string data);
 
   Token next();
+  Token seekTo(const Token& token);
 
  private:
   const std::string data_;

@@ -113,6 +113,13 @@ Token Tokenizer::next() {
     return make_token(TokenKind::kKwFn);
   }
 
+  // end keyword
+  static constexpr std::string_view kEndKeyword = "end";
+  if (data_.substr(offset_, kEndKeyword.size()) == kEndKeyword) {
+    offset_ += kEndKeyword.size();
+    return make_token(TokenKind::kKwEnd);
+  }
+
   char ch = data_[offset_];
 
   // Identifier
@@ -187,6 +194,7 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kKwIf);
     KIND_TO_NAME(kKwElse);
     KIND_TO_NAME(kKwFn);
+    KIND_TO_NAME(kKwEnd);
     KIND_TO_NAME(kOpenParen);
     KIND_TO_NAME(kCloseParen);
     KIND_TO_NAME(kComma);

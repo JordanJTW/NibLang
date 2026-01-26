@@ -34,6 +34,7 @@ class Compiler {
   explicit Compiler(const std::string& text) : text_(text), tokenizer_(text_) {
     Function& main = functions_.emplace_back();
     main.name = "(main)";
+    function_decl_stack_.push(0);
 
     func_ids_["StringGet"] = VM_BUILTIN_STRINGS_GET;
     func_ids_["StringSubstr"] = VM_BUILTIN_STRINGS_SUBSTRING;
@@ -68,6 +69,7 @@ class Compiler {
   bool ParseCall(Token& current_token, Token fn_name);
 
   std::optional<int> GetIdFor(const std::string& name, bool create_if_missing);
+  Assembler& GetCurrentCode();
 
   const std::string& text_;
   Tokenizer tokenizer_;
@@ -83,7 +85,8 @@ class Compiler {
   std::map<std::string, int> const_ids_;
   int next_const_id_{0};
   std::map<std::string, int> func_ids_;
-  int next_func_id_{0};
+  int next_func_id_{1};  // main() is always idx 0
+  std::stack<int> function_decl_stack_;
 };
 
 int main(int argc, char* argv[]) {
@@ -143,9 +146,11 @@ void Compiler::Compile() {
         continue;
       }
 
-      func_ids_[name.value] = next_func_id_++;
+      size_t fn_id = next_func_id_++;
+      func_ids_[name.value] = fn_id;
       Function& function = functions_.emplace_back();
       function.name = name.value;
+      function_decl_stack_.push(fn_id);
 
       token = tokenizer_.next();  // after '('
       if (token.kind != TokenKind::kCloseParen) {
@@ -198,7 +203,7 @@ void Compiler::Compile() {
         token = tokenizer_.next();  // consume :
       }
 
-      functions_.back().code.Label(label.value);
+      GetCurrentCode().Label(label.value);
       continue;
     }
 
@@ -220,7 +225,7 @@ void Compiler::Compile() {
         } else {
           token = tokenizer_.next();  // consume ;
         }
-        functions_.back().code.Jump(if_label.value);
+        GetCurrentCode().Jump(if_label.value);
         continue;
       }
 
@@ -235,7 +240,7 @@ void Compiler::Compile() {
         } else {
           token = tokenizer_.next();  // consume ;
         }
-        functions_.back().code.JumpIfFalse(if_label.value);
+        GetCurrentCode().JumpIfFalse(if_label.value);
         continue;
       }
 
@@ -255,7 +260,13 @@ void Compiler::Compile() {
       } else {
         token = tokenizer_.next();  // consume ;
       }
-      functions_.back().code.JumpIfFalse(if_label.value);
+      GetCurrentCode().JumpIfFalse(if_label.value);
+      continue;
+    }
+
+    if (token.kind == TokenKind::kKwEnd) {
+      function_decl_stack_.pop();
+      token = tokenizer_.next();
       continue;
     }
 
@@ -293,10 +304,10 @@ bool Compiler::EmitValue(const Token& value) {
       if ((value.value.find('.') != std::string::npos) ||
           value.value.back() == 'f') {
         float f32 = std::stof(value.value);
-        functions_.back().code.PushFloat(f32);
+        GetCurrentCode().PushFloat(f32);
       } else {
         int i32 = std::stoi(value.value);
-        functions_.back().code.PushInt32(i32);
+        GetCurrentCode().PushInt32(i32);
       }
     }
       return true;
@@ -307,14 +318,14 @@ bool Compiler::EmitValue(const Token& value) {
         print_error(text_, value, "this id is not defined");
         return false;
       }
-      functions_.back().code.PushLocal(*ident_id);
+      GetCurrentCode().PushLocal(*ident_id);
       return true;
     }
     case TokenKind::kString: {
       if (auto it = const_ids_.find(value.value); it != const_ids_.cend()) {
-        functions_.back().code.PushConstRef(it->second);
+        GetCurrentCode().PushConstRef(it->second);
       } else {
-        functions_.back().code.PushConstRef(next_const_id_);
+        GetCurrentCode().PushConstRef(next_const_id_);
         const_ids_[value.value] = next_const_id_;
       }
       return true;
@@ -328,35 +339,35 @@ bool Compiler::EmitValue(const Token& value) {
 void Compiler::EmitOp(const Token& op) {
   switch (op.kind) {
     case TokenKind::kAdd:
-      functions_.back().code.Add();
+      GetCurrentCode().Add();
       break;
     case TokenKind::kSubtract:
-      functions_.back().code.Subtract();
+      GetCurrentCode().Subtract();
       break;
     case TokenKind::kMultiply:
-      functions_.back().code.Multiply();
+      GetCurrentCode().Multiply();
       break;
     case TokenKind::kDivide:
-      functions_.back().code.Divide();
+      GetCurrentCode().Divide();
       break;
     case TokenKind::kCompareEq:
-      functions_.back().code.Compare(OP_EQUAL);
+      GetCurrentCode().Compare(OP_EQUAL);
       break;
     case TokenKind::kCompareNe:
-      functions_.back().code.Compare(OP_EQUAL);
-      functions_.back().code.Not();
+      GetCurrentCode().Compare(OP_EQUAL);
+      GetCurrentCode().Not();
       break;
     case TokenKind::kCompareGt:
-      functions_.back().code.Compare(OP_GREATER_THAN);
+      GetCurrentCode().Compare(OP_GREATER_THAN);
       break;
     case TokenKind::kCompareGe:
-      functions_.back().code.Compare(OP_GREAT_OR_EQ);
+      GetCurrentCode().Compare(OP_GREAT_OR_EQ);
       break;
     case TokenKind::kCompareLt:
-      functions_.back().code.Compare(OP_LESS_THAN);
+      GetCurrentCode().Compare(OP_LESS_THAN);
       break;
     case TokenKind::kCompareLe:
-      functions_.back().code.Compare(OP_LESS_OR_EQ);
+      GetCurrentCode().Compare(OP_LESS_OR_EQ);
       break;
     default:
       print_error(text_, op, "unknown op");
@@ -381,7 +392,7 @@ bool Compiler::ParseAssignment(Token& token) {
       // Store the value on the stack into the appropriate local.
       std::optional<int> var_id =
           GetIdFor(entry_token.value, /*create_if_missing=*/true);
-      functions_.back().code.StoreLocal(*var_id);
+      GetCurrentCode().StoreLocal(*var_id);
       return true;
     }
   }
@@ -512,6 +523,11 @@ bool Compiler::ParseCall(Token& token, Token fn_name) {
     return true;  // semantic error, parse is correct
   }
 
-  functions_.back().code.Call(it->second);
+  GetCurrentCode().Call(it->second);
   return true;
+}
+
+Assembler& Compiler::GetCurrentCode() {
+  int fn_id = function_decl_stack_.top();
+  return functions_.at(fn_id).code;
 }

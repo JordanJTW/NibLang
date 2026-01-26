@@ -13,6 +13,7 @@ enum class TokenKind {
   kKwIf,        // if
   kKwElse,      // else
   kKwFn,        // fn
+  kKwEnd,       // end
   kOpenParen,   // (
   kCloseParen,  // )
   kComma,       // ,

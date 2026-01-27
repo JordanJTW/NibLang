@@ -121,16 +121,31 @@ Token Tokenizer::next() {
   // String
   if (ch == '"') {
     ++offset_;  // Skip initial '"'
-    size_t string_length = 0;
+    std::string value;
     while (offset_ < data_.size() && data_[offset_] != '"') {
-      ++string_length;
-      ++offset_;
+      if (data_[offset_] == '\\') {
+        ++offset_;  // skip backslash
+        char escaped = data_[offset_++];
+
+        switch (escaped) {
+          case 'n':
+            value.push_back('\n');
+            break;
+          case 't':
+            value.push_back('\t');
+            break;
+          case 'r':
+            value.push_back('\r');
+          default:
+            value.push_back(escaped);
+        }
+      } else {
+        value.push_back(data_[offset_++]);
+      }
     }
 
     ++offset_;  // Skip final '"'
-    Token token = make_token(TokenKind::kString,
-                             data_.substr(start_idx + 1, string_length));
-    return token;
+    return make_token(TokenKind::kString, value);
   }
 
   // Comment

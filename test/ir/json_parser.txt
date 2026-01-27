@@ -1,0 +1,49 @@
+fn is_whitespace($ch):
+    goto $pass if $ch == 32 else $check_newline;  # space
+  label $check_newline:
+    goto $pass if $ch == 10 else $check_carriage; # newline (\n)
+  label $check_carriage:
+    goto $pass if $ch == 13 else $check_tab; # carriage return (\r)
+  label $check_tab:
+    goto $pass if $ch == 9; # tab (\t)
+    return false;
+  label $pass:
+    return true;
+end
+
+fn skip_whitespace($input, $idx, $input_length):
+  label $loop:
+    goto $end if $idx >= $input_length;
+    goto $advance if is_whitespace(StringGet($input, $idx));
+  label $end:
+    return $idx;
+
+  label $advance:
+    $idx = $idx + 1;
+    goto $loop;
+end
+
+fn parse_string($input, $idx, $input_length):
+  $idx = $idx + 1; # skip initial "
+  $start_idx = $idx;
+  label $loop:
+    goto $end if $idx >= $input_length;
+    $ch = StringGet($input, $idx);
+    goto $end if $ch == 34;
+    $idx = $idx + 1;
+    goto $loop;
+  label $end:
+    $tmp = StringSubstr($input, $start_idx, $idx + 1);  # [start, end)
+    $idx = $idx + 1; # skip closing "
+    return $tmp;
+end
+
+fn parse_value($input, $idx,  $input_length):
+  $idx = skip_whitespace($input, $idx, $input_length);
+  $ch = StringGet($input, $idx);
+
+  return parse_string($input, $idx, $input_length);
+end
+
+$input = "\"hello world\"";
+return parse_value($input, 0, 11);

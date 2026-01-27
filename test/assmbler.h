@@ -17,6 +17,7 @@ class Assembler {
   Assembler& PushConstRef(uint32_t idx);
   Assembler& PushInt32(int32_t value);
   Assembler& PushFloat(float value);
+  Assembler& PushBool(bool value);
   Assembler& Call(uint32_t idx);
   Assembler& Bind(uint32_t idx, uint32_t argc);
   Assembler& PushLocal(uint32_t idx);

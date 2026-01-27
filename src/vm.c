@@ -286,6 +286,22 @@ static void run_frame(vm_t* vm, const char* name) {
         frame->pc += 5;
         break;
       }
+      case OP_PUSH_TRUE: {
+        CHECK_BOUNDS(frame->pc);
+        DEBUG_LOG("OP_PUSH_TRUE");
+        push_stack(&vm->stack,
+                   (vm_value_t){.type = VALUE_TYPE_BOOL, .as.boolean = true});
+        ++frame->pc;
+        break;
+      }
+      case OP_PUSH_FALSE: {
+        CHECK_BOUNDS(frame->pc);
+        DEBUG_LOG("OP_PUSH_FALSE");
+        push_stack(&vm->stack,
+                   (vm_value_t){.type = VALUE_TYPE_BOOL, .as.boolean = false});
+        ++frame->pc;
+        break;
+      }
       case OP_CALL: {
         CHECK_BOUNDS(frame->pc + 4);
         uint32_t func_idx = read_u32_arg(frame, 0);

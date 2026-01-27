@@ -1,6 +1,7 @@
 #include "test/ir/tokenizer.h"
 
 #include <ctype.h>
+#include <array>
 #include <optional>
 
 namespace {
@@ -78,46 +79,23 @@ Token Tokenizer::next() {
   if (offset_ >= data_.size())
     return make_token(TokenKind::kEndOfFile);
 
-  // label keyword
-  static constexpr std::string_view kLabelKeyword = "label";
-  if (data_.substr(offset_, kLabelKeyword.size()) == kLabelKeyword) {
-    offset_ += kLabelKeyword.size();
-    return make_token(TokenKind::kKwLabel);
-  }
+  // Handle keywords
+  static constexpr std::array<std::pair<std::string_view, TokenKind>, 9>
+      kKeywordToToken{{{"label", TokenKind::kKwLabel},
+                       {"goto", TokenKind::kKwGoto},
+                       {"if", TokenKind::kKwIf},
+                       {"else", TokenKind::kKwElse},
+                       {"fn", TokenKind::kKwFn},
+                       {"end", TokenKind::kKwEnd},
+                       {"true", TokenKind::kKwTrue},
+                       {"false", TokenKind::kKwFalse},
+                       {"return", TokenKind::kKwReturn}}};
 
-  // goto keyword
-  static constexpr std::string_view kGotoKeyword = "goto";
-  if (data_.substr(offset_, kGotoKeyword.size()) == kGotoKeyword) {
-    offset_ += kGotoKeyword.size();
-    return make_token(TokenKind::kKwGoto);
-  }
-
-  // if keyword
-  static constexpr std::string_view kIfKeyword = "if";
-  if (data_.substr(offset_, kIfKeyword.size()) == kIfKeyword) {
-    offset_ += kIfKeyword.size();
-    return make_token(TokenKind::kKwIf);
-  }
-
-  // else keyword
-  static constexpr std::string_view kElseKeyword = "else";
-  if (data_.substr(offset_, kElseKeyword.size()) == kElseKeyword) {
-    offset_ += kElseKeyword.size();
-    return make_token(TokenKind::kKwElse);
-  }
-
-  // fn keyword
-  static constexpr std::string_view kFnKeyword = "fn";
-  if (data_.substr(offset_, kFnKeyword.size()) == kFnKeyword) {
-    offset_ += kFnKeyword.size();
-    return make_token(TokenKind::kKwFn);
-  }
-
-  // end keyword
-  static constexpr std::string_view kEndKeyword = "end";
-  if (data_.substr(offset_, kEndKeyword.size()) == kEndKeyword) {
-    offset_ += kEndKeyword.size();
-    return make_token(TokenKind::kKwEnd);
+  for (const auto& [keyword, kind] : kKeywordToToken) {
+    if (data_.substr(offset_, keyword.size()) == keyword) {
+      offset_ += keyword.size();
+      return make_token(kind);
+    }
   }
 
   char ch = data_[offset_];
@@ -195,6 +173,9 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kKwElse);
     KIND_TO_NAME(kKwFn);
     KIND_TO_NAME(kKwEnd);
+    KIND_TO_NAME(kKwTrue);
+    KIND_TO_NAME(kKwFalse);
+    KIND_TO_NAME(kKwReturn);
     KIND_TO_NAME(kOpenParen);
     KIND_TO_NAME(kCloseParen);
     KIND_TO_NAME(kComma);

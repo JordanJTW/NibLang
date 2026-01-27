@@ -270,6 +270,20 @@ void Compiler::Compile() {
       continue;
     }
 
+    if (token.kind == TokenKind::kKwReturn) {
+      token = tokenizer_.next();
+      if (ParseExpression(token)) {
+        if (token.kind != TokenKind::kEndExpr) {
+          print_error(text_, token, "expected ;");
+          continue;
+        } else {
+          token = tokenizer_.next();  // consume ;
+        }
+        GetCurrentCode().Return();
+      }
+      continue;
+    }
+
     if (ParseExpression(token)) {
       if (token.kind != TokenKind::kEndExpr) {
         print_error(text_, token, "expected ;");
@@ -328,6 +342,14 @@ bool Compiler::EmitValue(const Token& value) {
         GetCurrentCode().PushConstRef(next_const_id_);
         const_ids_[value.value] = next_const_id_;
       }
+      return true;
+    }
+    case TokenKind::kKwTrue: {
+      GetCurrentCode().PushBool(true);
+      return true;
+    }
+    case TokenKind::kKwFalse: {
+      GetCurrentCode().PushBool(false);
       return true;
     }
     default:
@@ -461,7 +483,9 @@ bool Compiler::ParseValue(Token& token) {
   switch (token.kind) {
     case TokenKind::kNumber:
     case TokenKind::kString:
-    case TokenKind::kIdent: {
+    case TokenKind::kIdent:
+    case TokenKind::kKwTrue:
+    case TokenKind::kKwFalse: {
       Token value = token;
       token = tokenizer_.next();
 

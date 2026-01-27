@@ -20,6 +20,10 @@ Assembler& Assembler::PushFloat(float value) {
   memcpy(data_.data() + current_size, &value, sizeof(float));
   return *this;
 }
+Assembler& Assembler::PushBool(bool value) {
+  data_.push_back(value ? OP_PUSH_TRUE : OP_PUSH_FALSE);
+  return *this;
+}
 Assembler& Assembler::Call(uint32_t idx) {
   PushOpAndArgs(OP_CALL, {idx});
   return *this;
@@ -198,6 +202,8 @@ std::string GetOpName(op_t op) {
     CASE_OP_NAME(OP_PUSH_I32);
     CASE_OP_NAME(OP_PUSH_F32);
     CASE_OP_NAME(OP_PUSH_LOCAL);
+    CASE_OP_NAME(OP_PUSH_TRUE);
+    CASE_OP_NAME(OP_PUSH_FALSE);
     CASE_OP_NAME(OP_STORE_LOCAL);
     CASE_OP_NAME(OP_CALL);
     CASE_OP_NAME(OP_RETURN);
@@ -323,6 +329,8 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
       case OP_OR:
       case OP_NOT:
       case OP_INC:
+      case OP_PUSH_TRUE:
+      case OP_PUSH_FALSE:
       case OP_TRY_POP:
       case OP_THROW: {
         printf("0x%02x, // %04zx: %s\n", bytecode[pc], pc,

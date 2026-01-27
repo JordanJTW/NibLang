@@ -240,7 +240,7 @@ void Compiler::Compile() {
         } else {
           token = tokenizer_.next();  // consume ;
         }
-        GetCurrentCode().JumpIfFalse(if_label.value);
+        GetCurrentCode().JumpIfTrue(if_label.value);
         continue;
       }
 
@@ -260,7 +260,7 @@ void Compiler::Compile() {
       } else {
         token = tokenizer_.next();  // consume ;
       }
-      GetCurrentCode().JumpIfFalse(if_label.value);
+      GetCurrentCode().JumpIfTrue(if_label.value);
       continue;
     }
 

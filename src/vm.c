@@ -257,7 +257,8 @@ static void run_frame(vm_t* vm, const char* name) {
 
     CHECK_BOUNDS(frame->pc);
 
-    switch (frame->code->data[frame->pc]) {
+    op_t op = frame->code->data[frame->pc];
+    switch (op) {
       case OP_PUSH_CONST_REF: {
         CHECK_BOUNDS(frame->pc + 4);
         uint32_t const_idx = read_u32_arg(frame, 0);
@@ -495,13 +496,15 @@ static void run_frame(vm_t* vm, const char* name) {
 
 #undef EQUALITY_CASE
 
+      case OP_JUMP_IF_TRUE:
       case OP_JUMP_IF_FALSE: {
         CHECK_BOUNDS(frame->pc + 4);
         uint32_t address = read_u32_arg(frame, 0);
-        DEBUG_LOG("OP_JUMP_IF_FALSE to 0x%08x", address);
+        DEBUG_LOG("OP_JUMP_IF_%s to 0x%04x",
+                  (op == OP_JUMP_IF_TRUE ? "TRUE" : "FALSE"), address);
         vm_value_t condition = pop_stack(&vm->stack);
         assert(condition.type == VALUE_TYPE_BOOL && "condition must be bool");
-        if (condition.as.boolean == false) {
+        if (condition.as.boolean == (op == OP_JUMP_IF_TRUE)) {
           frame->pc = address;
         } else {
           frame->pc += 5;

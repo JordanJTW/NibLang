@@ -34,6 +34,7 @@ class Assembler {
   Assembler& CallBuiltIn(uint32_t idx);
   Assembler& StoreLocal(uint32_t idx);
   Assembler& Compare(op_t operation);
+  Assembler& JumpIfTrue(uint32_t pc);
   Assembler& JumpIfFalse(uint32_t pc);
   Assembler& Jump(uint32_t pc);
   Assembler& PushTry(uint32_t catch_address, uint32_t finally_address);
@@ -42,6 +43,7 @@ class Assembler {
 
   Assembler& Label(const std::string& label);
   Assembler& Jump(const std::string& label);
+  Assembler& JumpIfTrue(const std::string& label);
   Assembler& JumpIfFalse(const std::string& label);
   Assembler& PushTry(const std::string& catch_label,
                      const std::string& finally_label);

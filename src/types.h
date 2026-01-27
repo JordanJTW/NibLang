@@ -33,6 +33,7 @@ typedef enum : uint8_t {
   OP_GREAT_OR_EQ,
   OP_GREATER_THAN,
   // Control Flow
+  OP_JUMP_IF_TRUE,
   OP_JUMP_IF_FALSE,
   OP_JUMP,
   // Exception

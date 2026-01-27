@@ -86,6 +86,10 @@ Assembler& Assembler::Compare(op_t operation) {
   data_.push_back(operation);
   return *this;
 }
+Assembler& Assembler::JumpIfTrue(uint32_t pc) {
+  PushOpAndArgs(OP_JUMP_IF_TRUE, {pc});
+  return *this;
+}
 Assembler& Assembler::JumpIfFalse(uint32_t pc) {
   PushOpAndArgs(OP_JUMP_IF_FALSE, {pc});
   return *this;
@@ -122,6 +126,11 @@ Assembler& Assembler::Label(const std::string& label) {
 Assembler& Assembler::Jump(const std::string& label) {
   uint32_t address = GetLocationForLabel(label, data_.size() + 1);
   PushOpAndArgs(OP_JUMP, {address});
+  return *this;
+}
+Assembler& Assembler::JumpIfTrue(const std::string& label) {
+  uint32_t address = GetLocationForLabel(label, data_.size() + 1);
+  PushOpAndArgs(OP_JUMP_IF_TRUE, {address});
   return *this;
 }
 Assembler& Assembler::JumpIfFalse(const std::string& label) {
@@ -221,6 +230,7 @@ std::string GetOpName(op_t op) {
     CASE_OP_NAME(OP_EQUAL);
     CASE_OP_NAME(OP_GREAT_OR_EQ);
     CASE_OP_NAME(OP_GREATER_THAN);
+    CASE_OP_NAME(OP_JUMP_IF_TRUE);
     CASE_OP_NAME(OP_JUMP_IF_FALSE);
     CASE_OP_NAME(OP_JUMP);
     CASE_OP_NAME(OP_TRY_PUSH);
@@ -261,6 +271,7 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
         pc += 5;
         break;
       }
+      case OP_JUMP_IF_TRUE:
       case OP_JUMP_IF_FALSE:
       case OP_JUMP: {
         uint32_t arg = bytecode[pc + 1] | (bytecode[pc + 2] << 8) |

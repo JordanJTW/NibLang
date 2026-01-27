@@ -59,6 +59,7 @@ typedef struct vm_closure_t {
 } Closure;
 
 // Allocates a new VM.
+vm_t* init_vm(uint8_t* program, size_t program_size);
 vm_t* new_vm(vm_value_t* constants,
              size_t constants_count,
              vm_function_t* functions,

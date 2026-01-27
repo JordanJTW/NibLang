@@ -53,6 +53,7 @@ class Compiler {
   }
 
   void Compile();
+  std::vector<uint8_t> GenerateImage() const;
 
  private:
   bool EmitValue(const Token& value);
@@ -77,7 +78,8 @@ class Compiler {
   struct Function {
     std::string name;
     std::map<std::string, int> var_to_id;
-    int next_id{0};
+    uint16_t next_id{0};
+    uint16_t argc{0};
     Assembler code;
   };
   std::vector<Function> functions_;
@@ -106,6 +108,15 @@ int main(int argc, char* argv[]) {
 
   Compiler compiler(contents);
   compiler.Compile();
+
+  std::vector<uint8_t> program_image = compiler.GenerateImage();
+  std::ofstream out("/tmp/prog.ink", std::ios::binary);
+
+  if (out.is_open()) {
+    out.write(reinterpret_cast<const char*>(program_image.data()),
+              program_image.size());
+    out.close();
+  }
   return 0;
 }
 
@@ -161,6 +172,7 @@ void Compiler::Compile() {
           }
 
           function.var_to_id[token.value] = function.next_id++;
+          ++function.argc;
           token = tokenizer_.next();
 
           if (token.kind == TokenKind::kCloseParen)
@@ -301,7 +313,7 @@ void Compiler::Compile() {
 
 std::optional<int> Compiler::GetIdFor(const std::string& name,
                                       bool create_if_missing) {
-  Function& fn = functions_.back();
+  Function& fn = functions_[function_decl_stack_.top()];
   if (auto it = fn.var_to_id.find(name); it != fn.var_to_id.cend())
     return it->second;
 
@@ -554,4 +566,73 @@ bool Compiler::ParseCall(Token& token, Token fn_name) {
 Assembler& Compiler::GetCurrentCode() {
   int fn_id = function_decl_stack_.top();
   return functions_.at(fn_id).code;
+}
+
+#pragma pack(push, 1)
+typedef struct vm_prog_header_t {
+  uint32_t version;
+  char magic[4];
+  uint16_t function_count;
+  uint16_t constant_count;
+  uint32_t bytecode_size;
+} vm_prog_header_t;
+
+typedef struct vm_prog_function_t {
+  uint16_t argument_count;
+  uint16_t local_count;
+  uint8_t bytecode[];
+} vm_prog_function_t;
+
+typedef struct vm_section_t {
+  enum : uint8_t { CONST_STR, FUNCTION } type;
+  uint32_t size;
+  union {
+    vm_prog_function_t fn;
+    char str[];
+  } as;
+} vm_section_t;
+#pragma pack(pop)
+
+std::vector<uint8_t> Compiler::GenerateImage() const {
+  vm_prog_header_t header = {
+      .version = 0,
+      .function_count = static_cast<uint16_t>(functions_.size()),
+      .constant_count = static_cast<uint16_t>(const_ids_.size())};
+  memcpy(&header.magic, "INK!", 4);
+
+  size_t offset = sizeof(vm_prog_header_t);
+  std::vector<uint8_t> program_image(offset);
+
+  size_t bytecode_size = 0;
+  for (Function fn : functions_) {
+    std::vector<uint8_t> fn_bytecode = fn.code.Build();
+    program_image.resize(offset + sizeof(vm_section_t) + fn_bytecode.size());
+
+    vm_section_t section = {
+        .type = vm_section_t::FUNCTION,
+        .size = static_cast<uint32_t>(fn_bytecode.size()),
+        .as.fn = {.argument_count = fn.argc, .local_count = fn.next_id}};
+
+    memcpy(program_image.data() + offset, &section, sizeof(vm_section_t));
+    memcpy(program_image.data() + offset + sizeof(vm_section_t),
+           fn_bytecode.data(), fn_bytecode.size());
+    bytecode_size += fn_bytecode.size();
+    offset = program_image.size();
+  }
+
+  header.bytecode_size = bytecode_size;
+  memcpy(program_image.data(), &header, sizeof(vm_prog_header_t));
+
+  for (const auto& [value, id] : const_ids_) {
+    program_image.resize(offset + sizeof(vm_section_t) + value.size());
+
+    vm_section_t section = {.type = vm_section_t::CONST_STR,
+                            .size = static_cast<uint16_t>(value.size())};
+    memcpy(program_image.data() + offset, &section, sizeof(vm_section_t));
+    memcpy(program_image.data() + offset + sizeof(vm_section_t), value.data(),
+           value.size());
+    offset = program_image.size();
+  }
+
+  return program_image;
 }

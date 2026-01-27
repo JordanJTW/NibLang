@@ -80,6 +80,7 @@ typedef struct vm_t {
   size_t functions_count;
   vm_value_t exception;
   bool unhandled_exception;
+  uint8_t* bytecode_data;
   vm_function_t functions[];
 } vm_t;
 
@@ -821,4 +822,122 @@ vm_value_t vm_throw_exception(vm_t* vm, vm_value_t exception) {
   vm_adopt_ref(vm->exception);
   vm->unhandled_exception = true;
   return (vm_value_t){.type = VALUE_TYPE_NULL};
+}
+
+#pragma pack(push, 1)
+typedef struct vm_prog_header_t {
+  uint32_t version;
+  char magic[4];
+  uint16_t function_count;
+  uint16_t constant_count;
+  uint32_t bytecode_size;
+} vm_prog_header_t;
+
+static const size_t o = sizeof(vm_prog_header_t);
+
+typedef struct vm_prog_function_t {
+  uint16_t argument_count;
+  uint16_t local_count;
+  uint8_t bytecode[];
+} vm_prog_function_t;
+
+typedef struct vm_section_t {
+  enum : uint8_t { CONST_STR, FUNCTION } type;
+  uint32_t size;
+  union {
+    vm_prog_function_t fn;
+    char str[];
+  } as;
+} vm_section_t;
+#pragma pack(pop)
+
+vm_t* init_vm(uint8_t* program, size_t program_size) {
+  if (sizeof(vm_prog_header_t) > program_size) {
+    fprintf(stderr, "too small\n");
+    return NULL;
+  }
+
+  vm_prog_header_t header;
+  memcpy(&header, program, sizeof(vm_prog_header_t));
+
+  if (header.magic[0] != 'I' || header.magic[1] != 'N' ||
+      header.magic[2] != 'K' || header.magic[3] != '!') {
+    fprintf(stderr, "wrong magic\n");
+    return NULL;
+  }
+
+  size_t total_function_count =
+      VM_BUILTIN_FUNCTION_COUNT + header.function_count;
+  vm_t* const vm =
+      calloc(1, sizeof(vm_t) + sizeof(vm_function_t) * total_function_count);
+
+  install_builtins(vm);
+  vm->functions_count = total_function_count;
+
+  vm->constants = calloc(header.constant_count, sizeof(vm_value_t));
+  vm->constants_count = header.constant_count;
+
+  vm->bytecode_data = calloc(1, header.bytecode_size);
+
+  size_t offset = sizeof(vm_prog_header_t);
+
+  size_t parsed_constants = 0;
+  size_t parsed_functions = 0;
+  size_t bytecode_offset = 0;
+  while (offset + sizeof(vm_section_t) < program_size) {
+    vm_section_t section;
+    memcpy(&section, program + offset, sizeof(vm_section_t));
+
+    printf("section size: %u section: %zu\n", section.size, offset);
+
+    offset += sizeof(vm_section_t);
+    if (offset + section.size > program_size) {
+      fprintf(stderr, "section too big %zu + %u > %zu\n", offset, section.size,
+              program_size);
+      return NULL;
+    }
+
+    switch (section.type) {
+      case CONST_STR:
+        vm->constants[parsed_constants++] = allocate_str_from_c_with_length(
+            (char*)(program + offset), section.size);
+        fprintf(stdout, "read const %.*s\n", section.size, program + offset);
+        break;
+      case FUNCTION: {
+        vm_function_t* const fn =
+            &vm->functions[VM_BUILTIN_FUNCTION_COUNT + (parsed_functions++)];
+        fn->type = VM_BYTECODE;
+
+        fn->argument_count = section.as.fn.argument_count;
+        fn->as.bytecode.local_count = section.as.fn.local_count;
+        fn->as.bytecode.data = vm->bytecode_data + bytecode_offset;
+        fn->as.bytecode.data_len = section.size;
+        fprintf(stdout,
+                "%zu. read fn argc: %d locals %zu size: %d bytecode: %p\n",
+                parsed_functions, section.as.fn.argument_count,
+                fn->as.bytecode.local_count, section.size,
+                vm->bytecode_data + bytecode_offset);
+        memcpy(vm->bytecode_data + bytecode_offset, program + offset,
+               section.size);
+        bytecode_offset += section.size;
+        break;
+      }
+    }
+    offset += section.size;
+  }
+
+  if (parsed_constants != header.constant_count ||
+      parsed_functions != header.function_count) {
+    fprintf(stderr, "missing expected fn/const\n");
+    return NULL;
+  }
+
+  // Ensure all constants are owned by the VM itself.
+  for (size_t i = 0; i < vm->constants_count; ++i)
+    rc_increment(&vm->constants[i]);
+
+  vm->stack.capacity = 256;
+  vm->stack.values = calloc(vm->stack.capacity, sizeof(vm_value_t));
+  vm->job_queue = init_job_queue();
+  return vm;
 }

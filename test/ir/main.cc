@@ -43,6 +43,7 @@ class Compiler {
     func_ids_["Array_new"] = VM_BUILTIN_ARRAY_NEW;
     func_ids_["Array_get"] = VM_BUILTIN_ARRAY_GET;
     func_ids_["Array_set"] = VM_BUILTIN_ARRAY_SET;
+    func_ids_["log"] = VM_BUILTIN_LOG;
   }
   ~Compiler() {
     for (Function fn : functions_) {

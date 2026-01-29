@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <math.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -754,6 +755,92 @@ static vm_value_t math_pow(vm_value_t* argv, size_t argc, void* vm) {
   return (vm_value_t){.type = VALUE_TYPE_FLOAT, .as.f32 = powf(base, exponent)};
 }
 
+struct buffer_t {
+  char* buffer;
+  size_t length;
+  size_t size;
+};
+
+static void append(struct buffer_t* buffer, const char* fmt, ...) {
+  va_list args;
+
+  while (1) {
+    va_start(args, fmt);
+
+    size_t available = buffer->size - buffer->length;
+    int written =
+        vsnprintf(buffer->buffer + buffer->length, available, fmt, args);
+
+    va_end(args);
+
+    if (written < 0) {
+      // formatting error
+      return;
+    }
+
+    if ((size_t)written < available) {
+      // success
+      buffer->length += (size_t)written;
+      return;
+    }
+
+    // Need more space: grow and retry
+    size_t new_size = buffer->size * 2;
+    if (new_size < buffer->size + (size_t)written + 1) {
+      new_size = buffer->size + (size_t)written + 1;
+    }
+
+    char* new_buf = realloc(buffer->buffer, new_size);
+    assert(new_buf && "out of memory");
+
+    buffer->buffer = new_buf;
+    buffer->size = new_size;
+  }
+}
+
+static void print_value(vm_value_t* value, struct buffer_t* buffer) {
+  switch (value->type) {
+    case VALUE_TYPE_ARRAY:
+      append(buffer, "[");
+      for (size_t i = 0; i < value->as.array->len; ++i) {
+        print_value(&value->as.array->data[i], buffer);
+        if (i + 1 < value->as.array->len) {
+          append(buffer, ", ");
+        }
+      }
+      append(buffer, "]");
+      break;
+    case VALUE_TYPE_BOOL:
+      append(buffer, value->as.boolean ? "true" : "false");
+      break;
+    case VALUE_TYPE_FLOAT:
+      append(buffer, "%.02f", value->as.f32);
+      break;
+    case VALUE_TYPE_INT:
+      append(buffer, "%d", value->as.i32);
+      break;
+    case VALUE_TYPE_STR:
+      append(buffer, "%.*s", (int)value->as.str->len, value->as.str->c_str);
+      break;
+    default:
+      assert(false && "not handled!");
+      break;
+  }
+}
+
+static vm_value_t vm_log(vm_value_t* argv, size_t argc, void* vm) {
+  struct buffer_t buffer = {.buffer = malloc(64), .length = 0, .size = 64};
+  for (size_t i = 0; i < argc; ++i) {
+    print_value(&argv[i], &buffer);
+    rc_decrement(&argv[i]);
+    append(&buffer, " ");
+  }
+
+  printf("> %.*s\n", (int)buffer.length, buffer.buffer);
+
+  return (vm_value_t){.type = VALUE_TYPE_NULL};
+}
+
 static void install_builtins(vm_t* vm) {
 #define INSTALL($idx, $fn, $argc)                                           \
   static_assert($idx < VM_BUILTIN_FUNCTION_COUNT, "unable to install idx"); \
@@ -778,6 +865,7 @@ static void install_builtins(vm_t* vm) {
   INSTALL(10, vm_array_new, 1);
   INSTALL(11, vm_array_get, 2);
   INSTALL(12, vm_array_set, 3);
+  INSTALL(13, vm_log, 1);
   INSTALL(14, vm_string_length, 1);
 }
 

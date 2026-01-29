@@ -86,6 +86,7 @@ class Compiler {
     uint16_t next_id{0};
     uint16_t argc{0};
     Assembler code;
+    std::map<size_t, std::string> unresolved_calls;
   };
   std::vector<Function> functions_;
 
@@ -578,8 +579,10 @@ bool Compiler::ParseCall(Token& token, Token fn_name) {
 
   auto it = func_ids_.find(fn_name.value);
   if (it == func_ids_.end()) {
-    print_error(text_, fn_name, "unknown function");
-    return true;  // semantic error, parse is correct
+    functions_.at(function_decl_stack_.top())
+        .unresolved_calls[GetCurrentCode().offset()] = fn_name.value;
+    GetCurrentCode().Call(UINT32_MAX, argc);
+    return true;
   }
 
   GetCurrentCode().Call(it->second, argc);
@@ -629,6 +632,18 @@ std::vector<uint8_t> Compiler::GenerateImage() const {
   size_t bytecode_size = 0;
   for (Function fn : functions_) {
     std::vector<uint8_t> fn_bytecode = fn.code.Build();
+
+    for (const auto& [offset, fn] : fn.unresolved_calls) {
+      assert(fn_bytecode[offset] == OP_CALL && "expceted OP_CALL");
+
+      auto it = func_ids_.find(fn);
+      assert(it != func_ids_.end() && "unknown function");
+      fn_bytecode[offset + 1] = uint8_t(it->second & 0xFF);
+      fn_bytecode[offset + 2] = uint8_t((it->second >> 8) & 0xFF);
+      fn_bytecode[offset + 3] = uint8_t((it->second >> 16) & 0xFF);
+      fn_bytecode[offset + 4] = uint8_t((it->second >> 24) & 0xFF);
+    }
+
     program_image.resize(offset + sizeof(vm_section_t) + fn_bytecode.size());
 
     vm_section_t section = {

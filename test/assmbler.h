@@ -48,6 +48,8 @@ class Assembler {
 
   Assembler& DebugString(const std::string& message);
 
+  size_t offset() const { return data_.size(); }
+
   struct Metadata {
     uint32_t max_local_index;
   };

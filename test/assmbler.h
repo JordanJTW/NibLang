@@ -18,7 +18,7 @@ class Assembler {
   Assembler& PushInt32(int32_t value);
   Assembler& PushFloat(float value);
   Assembler& PushBool(bool value);
-  Assembler& Call(uint32_t idx);
+  Assembler& Call(uint32_t idx, uint32_t argc);
   Assembler& Bind(uint32_t idx, uint32_t argc);
   Assembler& PushLocal(uint32_t idx);
   Assembler& Add();
@@ -30,8 +30,6 @@ class Assembler {
   Assembler& Not();
   Assembler& Increment(uint32_t idx);
   Assembler& Return();
-  Assembler& CallNative(uint32_t idx);
-  Assembler& CallBuiltIn(uint32_t idx);
   Assembler& StoreLocal(uint32_t idx);
   Assembler& Compare(op_t operation);
   Assembler& JumpIfTrue(uint32_t pc);

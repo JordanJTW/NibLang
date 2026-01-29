@@ -80,11 +80,11 @@ int main() {
                             .PushLocal(0)  // $input
                             .PushLocal(1)  // $index
                             .DebugString("str[] from skip_ws")
-                            .Call(VM_BUILTIN_STRINGS_GET)
+                            .Call(VM_BUILTIN_STRINGS_GET, 2)
                             .StoreLocal(2)  // temp char
 
                             .PushLocal(2)
-                            .Call(FN_IS_WHITESPACE)
+                            .Call(FN_IS_WHITESPACE, 1)
                             .JumpIfFalse("end")
 
                             .Increment(1)
@@ -105,7 +105,7 @@ int main() {
           .Label("string_loop")
               .PushLocal(0)
               .PushLocal(1)
-              .Call(VM_BUILTIN_STRINGS_GET)
+              .Call(VM_BUILTIN_STRINGS_GET, 2)
               .PushInt32('"')
               .Compare(OP_EQUAL)
               .JumpIfFalse("advance_char")
@@ -115,7 +115,7 @@ int main() {
                   .PushLocal(0)
                   .PushLocal(2)      // start_index
                   .PushLocal(1)      // current index
-                  .Call(VM_BUILTIN_STRINGS_SUBSTRING)
+                  .Call(VM_BUILTIN_STRINGS_SUBSTRING, 3)
                   .Increment(1)  // skip closing '"'
                   .PushLocal(1)
                   .Return()
@@ -194,16 +194,16 @@ int main() {
           
           .PushLocal(0)
           .PushLocal(1)
-          .Call(FN_SKIP_WS)
+          .Call(FN_SKIP_WS, 2)
           .StoreLocal(1)
 
-          .Call(VM_BUILTIN_MAP_NEW)
+          .Call(VM_BUILTIN_MAP_NEW, 0)
           .StoreLocal(2)             // local2 = map
 
           // check empty object
           .PushLocal(0)
           .PushLocal(1)
-          .Call(VM_BUILTIN_STRINGS_GET)
+          .Call(VM_BUILTIN_STRINGS_GET, 2)
           .PushInt32('}')
           .DebugString("check for empty object")
           .Compare(OP_EQUAL)
@@ -216,19 +216,19 @@ int main() {
           .Label("object_loop")
               .PushLocal(0)
               .PushLocal(1)
-              .Call(FN_SKIP_WS)
+              .Call(FN_SKIP_WS, 2)
               .StoreLocal(1)
 
               .DebugString("begin reading key")
               .PushLocal(0)
               .PushLocal(1)
-              .Call(FN_PARSE_STRING)
+              .Call(FN_PARSE_STRING, 2)
               .StoreLocal(1)
               .StoreLocal(3)         // key
 
               .PushLocal(0)
               .PushLocal(1)
-              .Call(FN_SKIP_WS)
+              .Call(FN_SKIP_WS, 2)
               .StoreLocal(1)
 
               .Increment(1)      // skip ':'
@@ -236,26 +236,26 @@ int main() {
               .DebugString("begin reading value")
               .PushLocal(0)
               .PushLocal(1)
-              .Call(FN_PARSE_VALUE)
+              .Call(FN_PARSE_VALUE, 2)
               .StoreLocal(1)
               .StoreLocal(4)         // value
 
               .PushLocal(2)
               .PushLocal(3)
               .PushLocal(4)
-              .Call(VM_BUILTIN_MAP_SET)
+              .Call(VM_BUILTIN_MAP_SET, 3)
               .DebugString("end reading value")
 
               .PushLocal(0)
               .PushLocal(1)
-              .Call(FN_SKIP_WS)
+              .Call(FN_SKIP_WS, 2)
               .StoreLocal(1)
 
               // if next char == ',' → continue
               .DebugString("going to check for ,")
               .PushLocal(0)
               .PushLocal(1)
-              .Call(VM_BUILTIN_STRINGS_GET)
+              .Call(VM_BUILTIN_STRINGS_GET, 2)
               .PushInt32(',')
               .Compare(OP_EQUAL)
               .DebugString("Checking for ,")
@@ -267,7 +267,7 @@ int main() {
               .DebugString("check_end_object")
               .PushLocal(0)
               .PushLocal(1)
-              .Call(VM_BUILTIN_STRINGS_GET)
+              .Call(VM_BUILTIN_STRINGS_GET, 2)
               .PushInt32('}')
               .Compare(OP_EQUAL)
               .JumpIfFalse("object_loop")
@@ -283,7 +283,7 @@ int main() {
         .PushLocal(0)
         .PushConstRef(1)
         .PushLocal(1)
-        .Call(VM_BUILTIN_STRINGS_STARTWITH)
+        .Call(VM_BUILTIN_STRINGS_STARTWITH, 3)
         .JumpIfFalse("check_false")
             .PushInt32(4)     // $idx += 4;
             .PushLocal(1)
@@ -297,7 +297,7 @@ int main() {
         .PushLocal(0)
         .PushConstRef(2)
         .PushLocal(1)
-        .Call(VM_BUILTIN_STRINGS_STARTWITH)
+        .Call(VM_BUILTIN_STRINGS_STARTWITH, 3)
         .JumpIfFalse("check_null")
             .PushInt32(5)     // $idx += 5;
             .PushLocal(1)
@@ -311,7 +311,7 @@ int main() {
         .PushLocal(0)
         .PushConstRef(3)
         .PushLocal(1)
-        .Call(VM_BUILTIN_STRINGS_STARTWITH)
+        .Call(VM_BUILTIN_STRINGS_STARTWITH, 3)
         .JumpIfFalse("not_handled")
             .PushInt32(4)     // $idx += 5;
             .PushLocal(1)
@@ -329,12 +329,12 @@ int main() {
       Assembler()
           .PushLocal(0)
           .PushLocal(1)
-          .Call(FN_SKIP_WS)
+          .Call(FN_SKIP_WS, 2)
           .StoreLocal(1)
 
           .PushLocal(0)
           .PushLocal(1)
-          .Call(VM_BUILTIN_STRINGS_GET)
+          .Call(VM_BUILTIN_STRINGS_GET, 2)
           .StoreLocal(2)             // ch
 
           .PushLocal(2)
@@ -343,7 +343,7 @@ int main() {
           .JumpIfFalse("check_array")
               .PushLocal(0)
               .PushLocal(1)
-              .Call(FN_PARSE_OBJECT)
+              .Call(FN_PARSE_OBJECT, 2)
               .Return()
 
           .Label("check_array")
@@ -359,14 +359,14 @@ int main() {
           .Label("parse_literal")
           .PushLocal(0)
           .PushLocal(1)
-          .Call(FN_PARSE_LITERAL)
+          .Call(FN_PARSE_LITERAL, 2)
           .JumpIfFalse("parse_number")
               .Return()
 
           .Label("parse_number")
           .PushLocal(0)
           .PushLocal(1)
-          .Call(FN_PARSE_NUMBER)
+          .Call(FN_PARSE_NUMBER, 2)
           .JumpIfFalse("parse_string")
               .Return()
 
@@ -374,7 +374,7 @@ int main() {
           .Label("parse_string")
               .PushLocal(0)
               .PushLocal(1)
-              .Call(FN_PARSE_STRING)
+              .Call(FN_PARSE_STRING, 2)
               .Return());
 
   BYTECODE_FUNCTION(parse_number, 2,
@@ -386,7 +386,7 @@ int main() {
       // if s[i] == '-'
       .PushLocal(0)
       .PushLocal(1)
-      .Call(VM_BUILTIN_STRINGS_GET)
+      .Call(VM_BUILTIN_STRINGS_GET, 2)
       .PushInt32('-')
       .Compare(OP_EQUAL)
       .JumpIfFalse("parse_int")
@@ -402,7 +402,7 @@ int main() {
           // first digit
           .PushLocal(0)
           .PushLocal(1)
-          .Call(VM_BUILTIN_STRINGS_GET)
+          .Call(VM_BUILTIN_STRINGS_GET, 2)
           .PushInt32('0')
           .Compare(OP_EQUAL)
           .JumpIfFalse("non_zero_int")
@@ -414,8 +414,8 @@ int main() {
           // must be 1–9
           .PushLocal(0)
           .PushLocal(1)
-          .Call(VM_BUILTIN_STRINGS_GET)   
-          .Call(FN_IS_DIGIT)  // THIS IS WRONG AND SHOULD NOT INCLUDE 0
+          .Call(VM_BUILTIN_STRINGS_GET, 2)   
+          .Call(FN_IS_DIGIT, 1)  // THIS IS WRONG AND SHOULD NOT INCLUDE 0
           .JumpIfFalse("error")
 
       .Label("int_loop")
@@ -425,7 +425,7 @@ int main() {
 
           .PushLocal(0)
           .PushLocal(1)
-          .Call(VM_BUILTIN_STRINGS_GET)
+          .Call(VM_BUILTIN_STRINGS_GET, 2)
           .PushInt32('0')
           .Subtract()
 
@@ -437,8 +437,8 @@ int main() {
           // while digit
           .PushLocal(0)
           .PushLocal(1)
-          .Call(VM_BUILTIN_STRINGS_GET)
-          .Call(FN_IS_DIGIT)
+          .Call(VM_BUILTIN_STRINGS_GET, 2)
+          .Call(FN_IS_DIGIT, 1)
           .Not()
           .JumpIfFalse("int_loop")
 
@@ -446,7 +446,7 @@ int main() {
           // fraction?
           .PushLocal(0)
           .PushLocal(1)
-          .Call(VM_BUILTIN_STRINGS_GET)
+          .Call(VM_BUILTIN_STRINGS_GET, 2)
           .PushInt32('.')
           .Compare(OP_EQUAL)
           .JumpIfFalse("finish")
@@ -460,14 +460,14 @@ int main() {
           .Label("frac_loop")
               .PushLocal(0)
               .PushLocal(1)
-              .Call(VM_BUILTIN_STRINGS_GET)
-              .Call(FN_IS_DIGIT)
+              .Call(VM_BUILTIN_STRINGS_GET,2)
+              .Call(FN_IS_DIGIT, 1)
               .JumpIfFalse("error")   // must have at least one digit
 
               .PushLocal(4)
               .PushLocal(0)
               .PushLocal(1)
-              .Call(VM_BUILTIN_STRINGS_GET)
+              .Call(VM_BUILTIN_STRINGS_GET, 2)
               .PushInt32('0')
               .Subtract()
               .PushLocal(5)
@@ -484,8 +484,8 @@ int main() {
 
               .PushLocal(0)
               .PushLocal(1)
-              .Call(VM_BUILTIN_STRINGS_GET)
-              .Call(FN_IS_DIGIT)
+              .Call(VM_BUILTIN_STRINGS_GET, 2)
+              .Call(FN_IS_DIGIT, 1)
               .Not()
               .JumpIfFalse("frac_loop")
 
@@ -579,7 +579,7 @@ int main() {
                         // Call parse_value(input, index)
                         .PushLocal(0)          // input string
                         .PushLocal(1)          // index
-                        .Call(FN_PARSE_VALUE)  // returns parsed object/array
+                        .Call(FN_PARSE_VALUE, 2)  // returns parsed object/array
                         .StoreLocal(1)
                         .Return()  // return parsed value
   );

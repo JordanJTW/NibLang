@@ -534,10 +534,13 @@ bool Compiler::ParseValue(Token& token) {
 bool Compiler::ParseCall(Token& token, Token fn_name) {
   token = tokenizer_.next();  // consume '('
 
+  uint32_t argc = 0;
   if (token.kind != TokenKind::kCloseParen) {
     while (true) {
       if (!ParseExpression(token))
         return false;
+
+      ++argc;
 
       if (token.kind == TokenKind::kCloseParen)
         break;
@@ -559,7 +562,7 @@ bool Compiler::ParseCall(Token& token, Token fn_name) {
     return true;  // semantic error, parse is correct
   }
 
-  GetCurrentCode().Call(it->second);
+  GetCurrentCode().Call(it->second, argc);
   return true;
 }
 

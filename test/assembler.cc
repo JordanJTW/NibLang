@@ -24,8 +24,8 @@ Assembler& Assembler::PushBool(bool value) {
   data_.push_back(value ? OP_PUSH_TRUE : OP_PUSH_FALSE);
   return *this;
 }
-Assembler& Assembler::Call(uint32_t idx) {
-  PushOpAndArgs(OP_CALL, {idx});
+Assembler& Assembler::Call(uint32_t idx, uint32_t argc) {
+  PushOpAndArgs(OP_CALL, {idx, argc});
   return *this;
 }
 Assembler& Assembler::Bind(uint32_t idx, uint32_t argc) {
@@ -71,10 +71,6 @@ Assembler& Assembler::Increment(uint32_t idx) {
 }
 Assembler& Assembler::Return() {
   data_.push_back(OP_RETURN);
-  return *this;
-}
-Assembler& Assembler::CallBuiltIn(uint32_t idx) {
-  PushOpAndArgs(OP_CALL, {idx | 0x80000000u});
   return *this;
 }
 Assembler& Assembler::StoreLocal(uint32_t idx) {

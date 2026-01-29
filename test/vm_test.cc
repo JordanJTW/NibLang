@@ -24,10 +24,10 @@ TEST(VM, CallFunc) {
   auto main_bytecode = Assembler()
                            .PushInt32(2)
                            .PushInt32(8)
-                           .Call(1)
+                           .Call(1, 2)
                            .StoreLocal(0)
                            .PushLocal(0)
-                           .Call(2)
+                           .Call(2, 1)
                            .Return()
                            .Build();
 
@@ -69,7 +69,7 @@ TEST(VM, CallFunc) {
 }
 
 TEST(VM, ConstantString) {
-  auto main_bytecode = Assembler().PushConstRef(0).Call(1).Return().Build();
+  auto main_bytecode = Assembler().PushConstRef(0).Call(1, 1).Return().Build();
 
   vm_value_t constants[] = {
       allocate_str_from_c("hello world"),
@@ -113,7 +113,7 @@ TEST(VM, ForLoop) {
                            .Compare(OP_LESS_THAN)
                            .JumpIfFalse("exit")
                            .PushLocal(0)
-                           .Call(1)
+                           .Call(1, 1)
                            .PushLocal(0)
                            .PushInt32(1)
                            .Add()
@@ -157,19 +157,19 @@ TEST(VM, RefCountString) {
                            .PushConstRef(0)
                            .PushInt32(2)
                            .PushInt32(4)
-                           .Call(VM_BUILTIN(4))  // String.substring
+                           .Call(VM_BUILTIN(4), 3)  // String.substring
                            .StoreLocal(0)
                            .PushLocal(0)
                            .StoreLocal(0)
                            .PushConstRef(0)
                            .PushInt32(8)
                            .PushInt32(11)
-                           .Call(VM_BUILTIN(4))  // String.substring
+                           .Call(VM_BUILTIN(4), 3)  // String.substring
                            .StoreLocal(1)
                            .PushLocal(0)
-                           .Call(1)  // print
+                           .Call(1, 1)  // print
                            .PushLocal(1)
-                           .Call(1)  // print
+                           .Call(1, 1)  // print
                            .Return()
                            .Build();
 
@@ -218,16 +218,16 @@ TEST(VM, CallBuiltInPromise) {
       Assembler().PushInt32(42).PushLocal(0).Add().Return().Build();
 
   auto main_bytecode = Assembler()
-                           .Call(2 /*getPromiseNative()*/)
+                           .Call(2 /*getPromiseNative()*/, 0)
                            .StoreLocal(0)
                            .PushLocal(0)
                            .Bind(1 /*returnValueByteCode()*/, /*argc=*/0)
                            .PushLocal(2 /*undefined*/)
-                           .Call(VM_BUILTIN(3) /*Promise.then*/)
+                           .Call(VM_BUILTIN(3) /*Promise.then*/, 3)
                            .PushLocal(0)
                            .PushInt32(109)
-                           .Call(VM_BUILTIN(1) /*Promise.fulfill*/)
-                           .Call(3 /*verifyResult*/)
+                           .Call(VM_BUILTIN(1) /*Promise.fulfill*/, 2)
+                           .Call(3 /*verifyResult*/, 1)
                            .Return()
                            .Build();
 
@@ -284,7 +284,8 @@ TEST(VM, CallBuiltInPromise) {
   EXPECT_THAT(final_promise, IsFulfilledWith(Int32Type(151)));
 
   vm_free_ref(&root_promise);
-  vm_free_ref(&final_promise);  // Ownership was transferred in the function call
+  // Ownership was transferred in the function call
+  vm_free_ref(&final_promise);
   free_vm(vm);
 }
 
@@ -357,23 +358,23 @@ INSTANTIATE_TEST_SUITE_P(
         (TryCatchParam){.main = Assembler()
                                     .PushTry("catch_block", "finish_block")
                                     .PushInt32(TC_BEFORE_THROW)
-                                    .Call(1)
+                                    .Call(1, 1)
                                     .PushInt32(TC_FIRST_EXCEPTION)
                                     .Throw()
                                     .PushInt32(TC_AFTER_THROW)
-                                    .Call(1)
+                                    .Call(1, 1)
                                     .PopTry()
                                     .Label("catch_block")
                                     .PushInt32(TC_BEGIN_CATCH)
-                                    .Call(1)
-                                    .Call(1)  // pops exception
+                                    .Call(1, 1)
+                                    .Call(1, 1)  // pops exception
                                     .PushInt32(TC_SECOND_EXCEPTION)
                                     .Throw()
                                     .PushInt32(TC_END_CATCH)
-                                    .Call(1)
+                                    .Call(1, 1)
                                     .Label("finish_block")
                                     .PushInt32(TC_FINISH)
-                                    .Call(1)
+                                    .Call(1, 1)
                                     .Return(),
                         .states = {TC_BEFORE_THROW, TC_BEGIN_CATCH,
                                    TC_FIRST_EXCEPTION, TC_SECOND_EXCEPTION}},
@@ -382,21 +383,21 @@ INSTANTIATE_TEST_SUITE_P(
             .main = Assembler()
                         .PushTry("catch_block", "finish_block")
                         .PushInt32(TC_BEFORE_THROW)
-                        .Call(1)
+                        .Call(1, 1)
                         .PushInt32(TC_FIRST_EXCEPTION)
                         .Throw()
                         .PushInt32(TC_AFTER_THROW)
-                        .Call(1)
+                        .Call(1, 1)
                         .PopTry()
                         .Label("catch_block")
                         .PushInt32(TC_BEGIN_CATCH)
-                        .Call(1)
-                        .Call(1)  // pops exception
+                        .Call(1, 1)
+                        .Call(1, 1)  // pops exception
                         .PushInt32(TC_END_CATCH)
-                        .Call(1)
+                        .Call(1, 1)
                         .Label("finish_block")
                         .PushInt32(TC_FINISH)
-                        .Call(1)
+                        .Call(1, 1)
                         .Return(),
             .states = {TC_BEFORE_THROW, TC_BEGIN_CATCH, TC_FIRST_EXCEPTION,
                        TC_END_CATCH, TC_FINISH}},
@@ -405,19 +406,19 @@ INSTANTIATE_TEST_SUITE_P(
             .main = Assembler()
                         .PushTry("catch_block", "finish_block")
                         .PushInt32(TC_BEFORE_THROW)
-                        .Call(1)
+                        .Call(1, 1)
                         // "throw" removed from other test cases
                         .PushInt32(TC_AFTER_THROW)
-                        .Call(1)
+                        .Call(1, 1)
                         .PopTry()
                         .Label("catch_block")
                         .PushInt32(TC_BEGIN_CATCH)
-                        .Call(1)
-                        .Call(1)  // pops exception
+                        .Call(1, 1)
+                        .Call(1, 1)  // pops exception
                         .PushInt32(TC_END_CATCH)
-                        .Call(1)
+                        .Call(1, 1)
                         .Label("finish_block")
                         .PushInt32(TC_FINISH)
-                        .Call(1)
+                        .Call(1, 1)
                         .Return(),
             .states = {TC_BEFORE_THROW, TC_AFTER_THROW, TC_FINISH}}));

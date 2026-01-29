@@ -305,15 +305,17 @@ static void run_frame(vm_t* vm, const char* name) {
         break;
       }
       case OP_CALL: {
-        CHECK_BOUNDS(frame->pc + 4);
+        CHECK_BOUNDS(frame->pc + 8);
         uint32_t func_idx = read_u32_arg(frame, 0);
         func_idx = patch_function_idx(func_idx);
+        uint32_t argc = read_u32_arg(frame, 1);
 
         assert(vm->functions_count > func_idx && "invalid func idx");
         vm_function_t* fn = &vm->functions[func_idx];
         DEBUG_LOG("OP_CALL idx: %d:%d (%s)", func_idx, fn->type, fn->name);
 
-        assert(vm->stack.sp >= fn->argument_count && "stack overflow");
+        assert(argc >= fn->argument_count && "not enough args");
+        assert(vm->stack.sp >= argc && "stack overflow");
         switch (fn->type) {
           case VM_BYTECODE: {
             vm_frame_t* new_frame =
@@ -321,27 +323,26 @@ static void run_frame(vm_t* vm, const char* name) {
                               sizeof(vm_value_t) * fn->as.bytecode.local_count);
 
             new_frame->code = &fn->as.bytecode;
-            memcpy(&new_frame->locals,
-                   vm->stack.values + vm->stack.sp - fn->argument_count,
-                   fn->argument_count * sizeof(vm_value_t));
-            vm->stack.sp -= fn->argument_count;
+            memcpy(&new_frame->locals, vm->stack.values + vm->stack.sp - argc,
+                   argc * sizeof(vm_value_t));
+            vm->stack.sp -= argc;
 
             new_frame->next = vm->current_frame;
             vm->current_frame = new_frame;
             break;
           }
           case VM_NATIVE_FUNC: {
-            vm_value_t result = fn->as.native.fn(
-                vm->stack.values + vm->stack.sp - fn->argument_count,
-                fn->argument_count, fn->as.native.userdata);
+            vm_value_t result =
+                fn->as.native.fn(vm->stack.values + vm->stack.sp - argc, argc,
+                                 fn->as.native.userdata);
 
-            vm->stack.sp -= fn->argument_count;
+            vm->stack.sp -= argc;
             if (result.type != VALUE_TYPE_NULL)
               push_stack(&vm->stack, result);
             break;
           }
         }
-        frame->pc += 5;
+        frame->pc += 9;
         break;
       }
       case OP_PUSH_LOCAL: {

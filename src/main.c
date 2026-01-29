@@ -3,6 +3,7 @@
 
 #include "src/types.h"
 #include "src/vm.h"
+#include "src/map.h"
 
 int main(int argc, char* argv[]) {
   if (argc < 2) {
@@ -53,8 +54,11 @@ int main(int argc, char* argv[]) {
       case VALUE_TYPE_STR:
         printf("Result: %.*s\n", (int)result.as.str->len, result.as.str->c_str);
         break;
+      case VALUE_TYPE_ARRAY:
+        printf("Result: (array)\n");
+        break;
       case VALUE_TYPE_MAP:
-        printf("Result: (map)\n");
+        DumpMap(result.as.map);
         break;
       case VALUE_TYPE_PROMISE:
         printf("Result: (promise)\n");

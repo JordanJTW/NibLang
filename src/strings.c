@@ -72,7 +72,7 @@ vm_value_t vm_strings_starts_with(vm_value_t* argv, size_t argc, void* vm) {
   int32_t idx;
   if (!vm_as_int32(&argv[2], &idx) || idx < 0 || idx >= len ||
       len - idx < search_len) {
-    return (vm_value_t){.type = VALUE_TYPE_BOOL, .as.boolean = false};
+    return vm_throw_exception(vm, allocate_str_from_c("RangeError"));
   }
 
   int result = strncmp(cstr + idx, search_str, search_len);

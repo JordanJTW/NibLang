@@ -78,3 +78,10 @@ vm_value_t vm_strings_starts_with(vm_value_t* argv, size_t argc, void* vm) {
   int result = strncmp(cstr + idx, search_str, search_len);
   return (vm_value_t){.type = VALUE_TYPE_BOOL, .as.boolean = (result == 0)};
 }
+
+vm_value_t vm_string_length(vm_value_t* argv, size_t argc, void* vm) {
+  assert(argc == 1 && (argv[0].type == VALUE_TYPE_STR) &&
+         "incorrect number of args or arg types");
+
+  return (vm_value_t){.type = VALUE_TYPE_INT, .as.i32 = argv[0].as.str->len};
+}

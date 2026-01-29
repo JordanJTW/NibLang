@@ -778,6 +778,7 @@ static void install_builtins(vm_t* vm) {
   INSTALL(10, vm_array_new, 1);
   INSTALL(11, vm_array_get, 2);
   INSTALL(12, vm_array_set, 3);
+  INSTALL(14, vm_string_length, 1);
 }
 
 static void free_closure(void* self) {

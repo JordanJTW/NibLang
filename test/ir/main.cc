@@ -39,6 +39,7 @@ class Compiler {
     func_ids_["StringGet"] = VM_BUILTIN_STRINGS_GET;
     func_ids_["StringSubstr"] = VM_BUILTIN_STRINGS_SUBSTRING;
     func_ids_["StringStartsWith"] = VM_BUILTIN_STRINGS_STARTWITH;
+    func_ids_["String_length"] = VM_BUILTIN_STRING_LENGTH;
     func_ids_["Array_new"] = VM_BUILTIN_ARRAY_NEW;
     func_ids_["Array_get"] = VM_BUILTIN_ARRAY_GET;
     func_ids_["Array_set"] = VM_BUILTIN_ARRAY_SET;

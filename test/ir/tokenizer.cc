@@ -80,7 +80,7 @@ Token Tokenizer::next() {
     return make_token(TokenKind::kEndOfFile);
 
   // Handle keywords
-  static constexpr std::array<std::pair<std::string_view, TokenKind>, 9>
+  static constexpr std::array<std::pair<std::string_view, TokenKind>, 12>
       kKeywordToToken{{{"label", TokenKind::kKwLabel},
                        {"goto", TokenKind::kKwGoto},
                        {"if", TokenKind::kKwIf},
@@ -89,7 +89,10 @@ Token Tokenizer::next() {
                        {"end", TokenKind::kKwEnd},
                        {"true", TokenKind::kKwTrue},
                        {"false", TokenKind::kKwFalse},
-                       {"return", TokenKind::kKwReturn}}};
+                       {"return", TokenKind::kKwReturn},
+                       {"try", TokenKind::kKwTry},
+                       {"catch", TokenKind::kKwCatch},
+                       {"throw", TokenKind::kKwThrow}}};
 
   for (const auto& [keyword, kind] : kKeywordToToken) {
     if (data_.substr(offset_, keyword.size()) == keyword) {
@@ -191,6 +194,9 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kKwTrue);
     KIND_TO_NAME(kKwFalse);
     KIND_TO_NAME(kKwReturn);
+    KIND_TO_NAME(kKwTry);
+    KIND_TO_NAME(kKwCatch);
+    KIND_TO_NAME(kKwThrow);
     KIND_TO_NAME(kOpenParen);
     KIND_TO_NAME(kCloseParen);
     KIND_TO_NAME(kComma);

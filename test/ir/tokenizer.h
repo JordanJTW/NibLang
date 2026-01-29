@@ -17,6 +17,9 @@ enum class TokenKind {
   kKwTrue,      // true
   kKwFalse,     // false
   kKwReturn,    // return
+  kKwTry,       // try
+  kKwCatch,     // catch
+  kKwThrow,     // throw
   kOpenParen,   // (
   kCloseParen,  // )
   kComma,       // ,

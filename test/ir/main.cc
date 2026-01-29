@@ -296,6 +296,20 @@ void Compiler::Compile() {
       continue;
     }
 
+    if (token.kind == TokenKind::kKwThrow) {
+      token = tokenizer_.next();
+      if (ParseExpression(token)) {
+        if (token.kind != TokenKind::kEndExpr) {
+          print_error(text_, token, "expected ;");
+          continue;
+        } else {
+          token = tokenizer_.next();  // consume ;
+        }
+        GetCurrentCode().Throw();
+      }
+      continue;
+    }
+
     if (ParseExpression(token)) {
       if (token.kind != TokenKind::kEndExpr) {
         print_error(text_, token, "expected ;");

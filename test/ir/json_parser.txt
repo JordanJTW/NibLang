@@ -11,10 +11,10 @@ fn is_whitespace($ch):
     return true;
 end
 
-fn skip_whitespace($input, $idx, $input_length):
+fn skip_whitespace($input, $idx):
   label $loop:
-    goto $end if $idx >= $input_length;
-    goto $advance if is_whitespace(StringGet($input, $idx));
+    goto $end if $idx >= String_length($input);
+    goto $advance if is_whitespace(String_charAt($input, $idx));
   label $end:
     return $idx;
 
@@ -23,27 +23,98 @@ fn skip_whitespace($input, $idx, $input_length):
     goto $loop;
 end
 
-fn parse_string($input, $idx, $input_length):
+fn parse_string($input, $parser):
+  $idx = Array_get($parser, 0);
   $idx = $idx + 1; # skip initial "
   $start_idx = $idx;
   label $loop:
-    goto $end if $idx >= $input_length;
-    $ch = StringGet($input, $idx);
+    goto $throw if $idx >= String_length($input);
+    $ch = String_charAt($input, $idx);
     goto $end if $ch == 34;
     $idx = $idx + 1;
     goto $loop;
   label $end:
-    $tmp = StringSubstr($input, $start_idx, $idx + 1);  # [start, end)
+    $tmp = String_substr($input, $start_idx, $idx);  # [start, end)
     $idx = $idx + 1; # skip closing "
+    Array_set($parser, 0, $idx);
     return $tmp;
+  label $throw:
+    throw "unterminated string";
 end
 
-fn parse_value($input, $idx,  $input_length):
-  $idx = skip_whitespace($input, $idx, $input_length);
-  $ch = StringGet($input, $idx);
+fn parse_object($input, $parser):
+  $idx = Array_get($parser, 0);
+  $idx = $idx + 1;
+  $idx = skip_whitespace($input, $idx);
+  $obj = Map_new();
 
-  return parse_string($input, $idx, $input_length);
+  goto $throw if $idx >= String_length($input);
+  goto $check_end_obj;
+
+label $loop:
+  $idx = skip_whitespace($input, $idx);
+  Array_set($parser, 0, $idx);
+  $key = parse_string($input, $parser);
+  $idx = Array_get($parser, 0);
+  $idx = skip_whitespace($input, $idx);
+
+  $idx = $idx + 1;  # Skip ':'
+
+  Array_set($parser, 0, $idx);
+  $value = parse_value($input, $parser);
+  $idx = Array_get($parser, 0);
+  $idx = skip_whitespace($input, $idx);
+
+  Map_set($obj, $key, $value);
+
+  $ch = String_charAt($input, $idx);
+  goto $end if $ch != 44;
+  $idx = $idx + 1;
+  goto $loop;
+
+label $check_end_obj:
+  $ch = String_charAt($input, $idx);
+  goto $end if $ch == 125;
+  goto $loop;
+
+label $end:
+  $idx = $idx + 1;
+  Array_set($parser, 0, $idx);
+  return $obj;
+label $throw:
+  throw "unterminated obj";
 end
 
-$input = "\"hello world\"";
-return parse_value($input, 0, 11);
+fn parse_value($input, $parser):
+  $idx = Array_get($parser, 0);
+  log("parse_value idx:", $idx);
+  $idx = skip_whitespace($input, $idx);
+  $ch = String_charAt($input, $idx);
+
+  goto $parse_object if $ch == 123;
+  goto $parse_literal_true if String_startsWith($input, "true", $idx);
+  goto $parse_literal_false if String_startsWith($input, "false", $idx);
+  goto $parse_string;
+
+  label $parse_object:
+    Array_set($parser, 0, $idx);
+    return parse_object($input, $parser);
+  label $parse_literal_true:
+    $idx = $idx + 4;
+    Array_set($parser, 0, $idx);
+    return true;
+  label $parse_literal_false:
+    $idx = $idx + 5;
+    Array_set($parser, 0, $idx);
+    return false;
+  label $parse_string:
+    Array_set($parser, 0, $idx);
+    return parse_string($input, $parser);
+end
+
+$parser = Array_new(1);
+Array_set($parser, 0, 0);
+
+$input = "{\"key\": {\"inner\": \"jordan\"}}";
+log("input", $input);
+return parse_value($input, $parser);

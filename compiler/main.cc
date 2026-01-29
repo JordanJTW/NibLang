@@ -47,17 +47,6 @@ class Compiler {
     func_ids_["Array_set"] = VM_BUILTIN_ARRAY_SET;
     func_ids_["log"] = VM_BUILTIN_LOG;
   }
-  ~Compiler() {
-    for (Function fn : functions_) {
-      std::cout << "fn " << fn.name << " (" << fn.next_id << ") vars: ";
-      for (const auto& [name, id] : fn.var_to_id) {
-        std::cout << name << ", ";
-      }
-      std::cout << "\n";
-      DumpByteCode(fn.code.Build());
-      std::cout << std::endl;
-    }
-  }
 
   void Compile();
   std::vector<uint8_t> GenerateImage() const;

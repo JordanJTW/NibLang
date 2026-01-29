@@ -1,8 +1,8 @@
 #include <assert.h>
 
+#include "compiler/assmbler.h"
 #include "src/map.h"
 #include "src/vm.h"
-#include "test/assmbler.h"
 
 #define BYTECODE_FUNCTION($name, $argc, $assembler)                     \
   Assembler::Metadata $name##_metadata;                                 \
@@ -577,8 +577,8 @@ int main() {
                         .StoreLocal(1)  // local1 = index
 
                         // Call parse_value(input, index)
-                        .PushLocal(0)          // input string
-                        .PushLocal(1)          // index
+                        .PushLocal(0)             // input string
+                        .PushLocal(1)             // index
                         .Call(FN_PARSE_VALUE, 2)  // returns parsed object/array
                         .StoreLocal(1)
                         .Return()  // return parsed value

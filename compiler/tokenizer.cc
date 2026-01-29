@@ -1,4 +1,4 @@
-#include "test/ir/tokenizer.h"
+#include "compiler/tokenizer.h"
 
 #include <ctype.h>
 #include <array>

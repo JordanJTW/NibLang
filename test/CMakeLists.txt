@@ -1,6 +1,3 @@
-add_library(assembler assembler.cc)
-target_include_directories(assembler PRIVATE ${CMAKE_SOURCE_DIR})
-
 add_executable(json_parser json_parser.cc)
 target_link_libraries(json_parser PRIVATE assembler vm)
 target_include_directories(json_parser PRIVATE ${CMAKE_SOURCE_DIR})

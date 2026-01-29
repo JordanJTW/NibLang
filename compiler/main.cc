@@ -1,12 +1,11 @@
-#include "test/ir/tokenizer.h"
-
 #include <cassert>
 #include <cstdio>
 #include <fstream>
 #include <iomanip>
 
+#include "compiler/assmbler.h"
+#include "compiler/tokenizer.h"
 #include "src/vm.h"
-#include "test/assmbler.h"
 
 void print_error(const std::string& file,
                  Token token,

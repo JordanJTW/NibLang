@@ -17,6 +17,6 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(googletest)
 enable_testing()
 
+add_subdirectory(compiler)
 add_subdirectory(src)
 add_subdirectory(test)
-add_subdirectory(test/ir)

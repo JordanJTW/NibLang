@@ -6,8 +6,8 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
+#include "compiler/assmbler.h"
 #include "src/promise.h"
-#include "test/assmbler.h"
 #include "test/gtest_helpers.h"
 
 using ::testing::_;

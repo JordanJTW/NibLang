@@ -1,3 +1,6 @@
+add_library(assembler assembler.cc)
+target_include_directories(assembler PRIVATE ${CMAKE_SOURCE_DIR})
+
 add_library(tokenizer tokenizer.cc)
 target_include_directories(tokenizer PRIVATE ${CMAKE_SOURCE_DIR})
 

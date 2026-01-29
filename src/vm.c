@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "src/array.h"
 #include "src/map.h"
 #include "src/promise.h"
 #include "src/strings.h"
@@ -28,7 +29,7 @@ static bool is_number_type(vm_value_t value) {
 #define DEBUG_LOG($fmt, ...) LOG($fmt, ##__VA_ARGS__)
 #endif  // NDEBUG
 
-#define VM_BUILTIN_FUNCTION_COUNT 10
+#define VM_BUILTIN_FUNCTION_COUNT 15
 
 typedef struct vm_frame vm_frame_t;
 
@@ -157,6 +158,7 @@ static void rc_increment(vm_value_t* value) {
     case VALUE_TYPE_FLOAT:
       return;
 
+    case VALUE_TYPE_ARRAY:
     case VALUE_TYPE_MAP:
     case VALUE_TYPE_STR:
     case VALUE_TYPE_FUNCTION:
@@ -175,6 +177,7 @@ static void rc_decrement(vm_value_t* value) {
     case VALUE_TYPE_FLOAT:
       return;
 
+    case VALUE_TYPE_ARRAY:
     case VALUE_TYPE_MAP:
     case VALUE_TYPE_STR:
     case VALUE_TYPE_FUNCTION:
@@ -772,6 +775,9 @@ static void install_builtins(vm_t* vm) {
   INSTALL(7, vm_map_set, 3);
   INSTALL(8, vm_strings_starts_with, 3);
   INSTALL(9, math_pow, 2);
+  INSTALL(10, vm_array_new, 1);
+  INSTALL(11, vm_array_get, 2);
+  INSTALL(12, vm_array_set, 3);
 }
 
 static void free_closure(void* self) {

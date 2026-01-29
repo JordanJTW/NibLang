@@ -4,6 +4,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum : uint8_t {
   // Variables
   OP_PUSH_CONST_REF,
@@ -48,6 +52,7 @@ typedef struct vm_t vm_t;
 typedef struct vm_job_queue_t vm_job_queue_t;
 typedef struct MapNode MapNode;
 typedef struct vm_promise_t Promise;
+typedef struct vm_array_t Array;
 typedef struct vm_closure_t Closure;
 
 typedef struct ref_count_t {
@@ -79,6 +84,7 @@ typedef struct vm_value {
     VALUE_TYPE_MAP,
     VALUE_TYPE_FUNCTION,
     VALUE_TYPE_PROMISE,
+    VALUE_TYPE_ARRAY,
   } type;
   union {
     bool boolean;
@@ -88,6 +94,7 @@ typedef struct vm_value {
     Map* map;
     Closure* fn;
     Promise* promise;
+    Array* array;
     // All reference (heap-allocated) values start with a `ref_count_t`
     ref_count_t* ref;
   } as;
@@ -105,3 +112,13 @@ typedef struct vm_promise_t {
   vm_value_t value;
   vm_promise_then_t* then_list;
 } Promise;
+
+typedef struct vm_array_t {
+  ref_count_t rc;
+  size_t len;
+  vm_value_t data[];
+} Array;
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif

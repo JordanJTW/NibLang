@@ -67,6 +67,7 @@ static int compare(vm_value_t v1, vm_value_t v2) {
     case VALUE_TYPE_FLOAT:
     case VALUE_TYPE_FUNCTION:
     case VALUE_TYPE_PROMISE:
+    case VALUE_TYPE_ARRAY:
       return 0;
     case VALUE_TYPE_MAP:
       return v1.as.map->id - v2.as.map->id;

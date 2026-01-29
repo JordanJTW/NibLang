@@ -367,6 +367,7 @@ bool Compiler::EmitValue(const Token& value) {
       } else {
         GetCurrentCode().PushConstRef(next_const_id_);
         const_ids_[value.value] = next_const_id_;
+        const_ids_[value.value] = next_const_id_++;
       }
       return true;
     }
@@ -640,7 +641,13 @@ std::vector<uint8_t> Compiler::GenerateImage() const {
   header.bytecode_size = bytecode_size;
   memcpy(program_image.data(), &header, sizeof(vm_prog_header_t));
 
+  std::vector<std::string_view> constants_by_id(const_ids_.size());
   for (const auto& [value, id] : const_ids_) {
+    constants_by_id[id] = value;
+  }
+
+  for (size_t id = 0; id < constants_by_id.size(); ++id) {
+    const auto& value = constants_by_id[id];
     program_image.resize(offset + sizeof(vm_section_t) + value.size());
 
     vm_section_t section = {.type = vm_section_t::CONST_STR,

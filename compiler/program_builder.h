@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-#include "compiler/assmbler.h"
+#include "compiler/assembler.h"
 
 class ProgramBuilder {
  public:

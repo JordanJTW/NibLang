@@ -1,6 +1,6 @@
 #include <assert.h>
 
-#include "compiler/assmbler.h"
+#include "compiler/assembler.h"
 #include "src/map.h"
 #include "src/vm.h"
 

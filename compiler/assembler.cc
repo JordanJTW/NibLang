@@ -1,4 +1,4 @@
-#include "compiler/assmbler.h"
+#include "compiler/assembler.h"
 
 #include <algorithm>
 #include <cassert>

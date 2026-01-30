@@ -6,7 +6,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
-#include "compiler/assmbler.h"
+#include "compiler/assembler.h"
 #include "src/promise.h"
 #include "test/gtest_helpers.h"
 

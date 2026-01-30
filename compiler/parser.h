@@ -18,8 +18,6 @@ class Parser {
  private:
   bool EmitValue(const Token& value);
   void EmitOp(const Token& op);
-  std::optional<Token> ParseFunction(Token& current_token,
-                                     std::vector<Token>& args);
 
   bool ParseExpression(Token& current_token);
   bool ParseAssignment(Token& current_token);
@@ -28,6 +26,8 @@ class Parser {
   bool ParseAdditive(Token& current_token);
   bool ParseValue(Token& current_token);
   bool ParseCall(Token& current_token, Token fn_name);
+
+  void HandleError(Token& error_token, const std::string& message);
 
   const std::string& text_;
   Tokenizer tokenizer_;

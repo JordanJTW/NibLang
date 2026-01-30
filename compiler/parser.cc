@@ -38,7 +38,7 @@ void Parser::Parse() {
       break;
 
     if (token.kind == TokenKind::kUnknown) {
-      print_error(text_, token, "unknown token");
+      HandleError(token, "unknown token");
       token = tokenizer_.next();
       continue;
     }
@@ -55,14 +55,14 @@ void Parser::Parse() {
 
       const Token name = token;
       if (name.kind != TokenKind::kIdent) {
-        print_error(text_, name, "requires a function name");
+        HandleError(token, "requires a function name");
         token = tokenizer_.next();
         continue;
       }
 
       token = tokenizer_.next();
       if (token.kind != TokenKind::kOpenParen) {
-        print_error(text_, name, "expected (");
+        HandleError(token, "expected (");
         token = tokenizer_.next();
         continue;
       }
@@ -72,7 +72,7 @@ void Parser::Parse() {
       if (token.kind != TokenKind::kCloseParen) {
         while (true) {
           if (token.kind != TokenKind::kIdent) {
-            print_error(text_, token, "expected parameter name");
+            HandleError(token, "expected parameter name");
             break;
           }
 
@@ -83,7 +83,7 @@ void Parser::Parse() {
             break;
 
           if (token.kind != TokenKind::kComma) {
-            print_error(text_, token, "expected ',' or ')'");
+            HandleError(token, "expected ',' or ')'");
             break;
           }
 
@@ -94,7 +94,7 @@ void Parser::Parse() {
       token = tokenizer_.next();  // consume ')'
 
       if (token.kind != TokenKind::kEndExpr) {
-        print_error(text_, token, "expected :");
+        HandleError(token, "expected :");
         continue;
       } else {
         token = tokenizer_.next();  // consume :
@@ -105,7 +105,7 @@ void Parser::Parse() {
     if (token.kind == TokenKind::kKwLabel) {
       token = tokenizer_.next();
       if (token.kind != TokenKind::kIdent) {
-        print_error(text_, token, "expected label name");
+        HandleError(token, "expected label name");
         token = tokenizer_.next();
         continue;
       }
@@ -114,7 +114,7 @@ void Parser::Parse() {
       token = tokenizer_.next();
 
       if (token.kind != TokenKind::kEndExpr) {
-        print_error(text_, token, "expected :");
+        HandleError(token, "expected :");
         continue;
       } else {
         token = tokenizer_.next();  // consume :
@@ -127,7 +127,7 @@ void Parser::Parse() {
     if (token.kind == TokenKind::kKwGoto) {
       token = tokenizer_.next();
       if (token.kind != TokenKind::kIdent) {
-        print_error(text_, token, "expected label name");
+        HandleError(token, "expected label name");
         token = tokenizer_.next();
         continue;
       }
@@ -137,7 +137,7 @@ void Parser::Parse() {
 
       if (token.kind != TokenKind::kKwIf) {
         if (token.kind != TokenKind::kEndExpr) {
-          print_error(text_, token, "expected ;");
+          HandleError(token, "expected ;");
           continue;
         } else {
           token = tokenizer_.next();  // consume ;
@@ -152,7 +152,7 @@ void Parser::Parse() {
 
       if (token.kind != TokenKind::kKwElse) {
         if (token.kind != TokenKind::kEndExpr) {
-          print_error(text_, token, "expected ;");
+          HandleError(token, "expected ;");
           continue;
         } else {
           token = tokenizer_.next();  // consume ;
@@ -163,7 +163,7 @@ void Parser::Parse() {
 
       token = tokenizer_.next();
       if (token.kind != TokenKind::kIdent) {
-        print_error(text_, token, "expected $var name");
+        HandleError(token, "expected $var name");
         token = tokenizer_.next();
         continue;
       }
@@ -172,7 +172,7 @@ void Parser::Parse() {
       token = tokenizer_.next();
 
       if (token.kind != TokenKind::kEndExpr) {
-        print_error(text_, token, "expected ;");
+        HandleError(token, "expected ;");
         continue;
       } else {
         token = tokenizer_.next();  // consume ;
@@ -191,7 +191,7 @@ void Parser::Parse() {
       token = tokenizer_.next();
       if (ParseExpression(token)) {
         if (token.kind != TokenKind::kEndExpr) {
-          print_error(text_, token, "expected ;");
+          HandleError(token, "expected ;");
           continue;
         } else {
           token = tokenizer_.next();  // consume ;
@@ -205,7 +205,7 @@ void Parser::Parse() {
       token = tokenizer_.next();
       if (ParseExpression(token)) {
         if (token.kind != TokenKind::kEndExpr) {
-          print_error(text_, token, "expected ;");
+          HandleError(token, "expected ;");
           continue;
         } else {
           token = tokenizer_.next();  // consume ;
@@ -217,7 +217,7 @@ void Parser::Parse() {
 
     if (ParseExpression(token)) {
       if (token.kind != TokenKind::kEndExpr) {
-        print_error(text_, token, "expected ;");
+        HandleError(token, "expected ;");
         continue;
       } else {
         token = tokenizer_.next();  // consume ;
@@ -225,7 +225,7 @@ void Parser::Parse() {
       continue;
     }
 
-    print_error(text_, token, "unexpected token");
+    HandleError(token, "unexpected token");
     token = tokenizer_.next();
   }
 }
@@ -247,7 +247,7 @@ bool Parser::EmitValue(const Token& value) {
       std::optional<int> ident_id =
           builder_.GetIdFor(value.value, ProgramBuilder::CreateIfMissing::No);
       if (!ident_id.has_value()) {
-        print_error(text_, value, "this id is not defined");
+        print_error(text_, value, "this id is not defined");  // Not parse error
         return false;
       }
       builder_.GetCurrentCode().PushLocal(*ident_id);
@@ -267,7 +267,7 @@ bool Parser::EmitValue(const Token& value) {
       return true;
     }
     default:
-      print_error(text_, value, "not able to assign this type");
+      print_error(text_, value, "unassignable type");  // Not parse error
       return false;
   }
 }
@@ -419,7 +419,7 @@ bool Parser::ParseValue(Token& token) {
         return false;
 
       if (token.kind != TokenKind::kCloseParen) {
-        print_error(text_, token, "expected ')'");
+        HandleError(token, "expected ')'");
         return false;
       }
 
@@ -428,7 +428,7 @@ bool Parser::ParseValue(Token& token) {
     }
 
     default:
-      print_error(text_, token, "expected expression");
+      HandleError(token, "expected expression");
       return false;
   }
 }
@@ -448,7 +448,7 @@ bool Parser::ParseCall(Token& token, Token fn_name) {
         break;
 
       if (token.kind != TokenKind::kComma) {
-        print_error(text_, token, "expected ',' or ')'");
+        HandleError(token, "expected ',' or ')'");
         return false;
       }
 
@@ -460,4 +460,10 @@ bool Parser::ParseCall(Token& token, Token fn_name) {
 
   builder_.CallFunction(fn_name.value, argc);
   return true;
+}
+
+void Parser::HandleError(Token& token, const std::string& message) {
+  print_error(text_, token, message);
+  while (token.kind != TokenKind::kEndExpr)
+    token = tokenizer_.next();
 }

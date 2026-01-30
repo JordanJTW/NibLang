@@ -984,8 +984,6 @@ vm_t* init_vm(uint8_t* program, size_t program_size) {
     vm_section_t section;
     memcpy(&section, program + offset, sizeof(vm_section_t));
 
-    printf("section size: %u section: %zu\n", section.size, offset);
-
     offset += sizeof(vm_section_t);
     if (offset + section.size > program_size) {
       fprintf(stderr, "section too big %zu + %u > %zu\n", offset, section.size,
@@ -997,7 +995,6 @@ vm_t* init_vm(uint8_t* program, size_t program_size) {
       case CONST_STR:
         vm->constants[parsed_constants++] = allocate_str_from_c_with_length(
             (char*)(program + offset), section.size);
-        fprintf(stdout, "read const %.*s\n", section.size, program + offset);
         break;
       case FUNCTION: {
         vm_function_t* const fn =
@@ -1008,11 +1005,6 @@ vm_t* init_vm(uint8_t* program, size_t program_size) {
         fn->as.bytecode.local_count = section.as.fn.local_count;
         fn->as.bytecode.data = vm->bytecode_data + bytecode_offset;
         fn->as.bytecode.data_len = section.size;
-        fprintf(stdout,
-                "%zu. read fn argc: %d locals %zu size: %d bytecode: %p\n",
-                parsed_functions, section.as.fn.argument_count,
-                fn->as.bytecode.local_count, section.size,
-                vm->bytecode_data + bytecode_offset);
         memcpy(vm->bytecode_data + bytecode_offset, program + offset,
                section.size);
         bytecode_offset += section.size;

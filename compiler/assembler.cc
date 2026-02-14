@@ -238,12 +238,11 @@ std::string GetOpName(op_t op) {
 }
 
 void DumpByteCode(const std::vector<uint8_t>& bytecode) {
-  for (size_t pc = 0; pc < bytecode.size();) {
+  for (size_t pc = 0; pc < bytecode.size(); ++pc) {
     op_t op = static_cast<op_t>(bytecode[pc]);
     switch (op) {
       case OP_PUSH_CONST_REF:
       case OP_PUSH_I32:
-      case OP_CALL:
       case OP_PUSH_LOCAL:
       case OP_STORE_LOCAL: {
         uint32_t arg = bytecode[pc + 1] | (bytecode[pc + 2] << 8) |
@@ -253,7 +252,7 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
             " // %04zx: %s %d \n",
             bytecode[pc], bytecode[pc + 1], bytecode[pc + 2], bytecode[pc + 3],
             bytecode[pc + 4], pc, GetOpName(op).c_str(), arg);
-        pc += 5;
+        pc += 4;
         break;
       }
       case OP_PUSH_F32: {
@@ -264,7 +263,7 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
             " // %04zx: %s %f \n",
             bytecode[pc], bytecode[pc + 1], bytecode[pc + 2], bytecode[pc + 3],
             bytecode[pc + 4], pc, GetOpName(op).c_str(), arg);
-        pc += 5;
+        pc += 4;
         break;
       }
       case OP_JUMP_IF_TRUE:
@@ -277,7 +276,23 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
             " // %04zx: %s 0x%x \n",
             bytecode[pc], bytecode[pc + 1], bytecode[pc + 2], bytecode[pc + 3],
             bytecode[pc + 4], pc, GetOpName(op).c_str(), arg);
-        pc += 5;
+        pc += 4;
+        break;
+      }
+      case OP_CALL: {
+        uint32_t idx = bytecode[pc + 1] | (bytecode[pc + 2] << 8) |
+                       (bytecode[pc + 3] << 16) | (bytecode[pc + 4] << 24);
+        uint32_t argc = bytecode[pc + 5] | (bytecode[pc + 6] << 8) |
+                        (bytecode[pc + 7] << 16) | (bytecode[pc + 8] << 24);
+        printf(
+            "0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x,"
+            " // %04zx: %s idx: %d argc: %d\n"
+            "      0x%02x, 0x%02x, 0x%02x, 0x%02x\n",
+            bytecode[pc], bytecode[pc + 1], bytecode[pc + 2], bytecode[pc + 3],
+            bytecode[pc + 4], pc, GetOpName(op).c_str(), idx, argc,
+            bytecode[pc + 5], bytecode[pc + 6], bytecode[pc + 7],
+            bytecode[pc + 8]);
+        pc += 8;
         break;
       }
       case OP_BIND: {
@@ -288,12 +303,12 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
         printf(
             "0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x,"
             " // %04zx: %s idx: %d argc: %d\n"
-            "      0x%02x 0x%02x 0x%02x 0x%02x,",
+            "      0x%02x, 0x%02x, 0x%02x, 0x%02x\n",
             bytecode[pc], bytecode[pc + 1], bytecode[pc + 2], bytecode[pc + 3],
             bytecode[pc + 4], pc, GetOpName(op).c_str(), idx, argc,
             bytecode[pc + 5], bytecode[pc + 6], bytecode[pc + 7],
             bytecode[pc + 8]);
-        pc += 9;
+        pc += 8;
         break;
       }
       case OP_TRY_PUSH: {
@@ -311,7 +326,7 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
             bytecode[pc + 4], pc, GetOpName(op).c_str(), catch_addr,
             finally_addr, bytecode[pc + 5], bytecode[pc + 6], bytecode[pc + 7],
             bytecode[pc + 8]);
-        pc += 9;
+        pc += 8;
         break;
       }
       case OP_DEBUG: {
@@ -319,7 +334,7 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
         printf("strlen: %d\n", strlen);
         fprintf(stderr, "  %04zx => %.*s\n", pc, (int)strlen,
                 (char*)(bytecode.data() + pc + 2));
-        pc += 2 + strlen;
+        pc += 1 + strlen;
         break;
       }
       case OP_ADD:
@@ -342,7 +357,6 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
       case OP_THROW: {
         printf("0x%02x, // %04zx: %s\n", bytecode[pc], pc,
                GetOpName(op).c_str());
-        pc += 1;
         break;
       }
     }

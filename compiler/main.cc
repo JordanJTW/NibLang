@@ -8,6 +8,146 @@
 #include "compiler/tokenizer.h"
 #include "src/vm.h"
 
+template <class... Ts>
+struct Overloaded : Ts... {
+  using Ts::operator()...;
+};
+template <class... Ts>
+Overloaded(Ts...) -> Overloaded<Ts...>;
+
+void emit_op(const Token& op, ProgramBuilder& builder) {
+  switch (op.kind) {
+    case TokenKind::kAdd:
+      builder.GetCurrentCode().Add();
+      break;
+    case TokenKind::kSubtract:
+      builder.GetCurrentCode().Subtract();
+      break;
+    case TokenKind::kMultiply:
+      builder.GetCurrentCode().Multiply();
+      break;
+    case TokenKind::kDivide:
+      builder.GetCurrentCode().Divide();
+      break;
+    case TokenKind::kCompareEq:
+      builder.GetCurrentCode().Compare(OP_EQUAL);
+      break;
+    case TokenKind::kCompareNe:
+      builder.GetCurrentCode().Compare(OP_EQUAL);
+      builder.GetCurrentCode().Not();
+      break;
+    case TokenKind::kCompareGt:
+      builder.GetCurrentCode().Compare(OP_GREATER_THAN);
+      break;
+    case TokenKind::kCompareGe:
+      builder.GetCurrentCode().Compare(OP_GREAT_OR_EQ);
+      break;
+    case TokenKind::kCompareLt:
+      builder.GetCurrentCode().Compare(OP_LESS_THAN);
+      break;
+    case TokenKind::kCompareLe:
+      builder.GetCurrentCode().Compare(OP_LESS_OR_EQ);
+      break;
+    default:
+      std::cerr << "unsupported binary operator: " << op.kind << std::endl;
+      return;
+  }
+}
+
+void compile_expr(const Expression& expr, ProgramBuilder& builder) {
+  std::visit(
+      Overloaded{
+          [&](const PrimaryExpression& primary) {
+            std::visit(
+                Overloaded{
+                    [&](const StringLiteral& str) {
+                      builder.GetCurrentCode().PushConstRef(
+                          builder.GetIdForConstant(str.value));
+                    },
+                    [&](const Identifier& ident) {
+                      std::optional<uint32_t> id = builder.GetIdFor(
+                          ident.name, ProgramBuilder::CreateIfMissing::No);
+                      if (id.has_value()) {
+                        builder.GetCurrentCode().PushLocal(*id);
+                      } else {
+                        std::cerr << "undefined identifier: " << ident.name
+                                  << std::endl;
+                      }
+                    },
+                    [&](int32_t i32) {
+                      builder.GetCurrentCode().PushInt32(i32);
+                    },
+                    [&](float f32) { builder.GetCurrentCode().PushFloat(f32); },
+                    [&](bool b) { builder.GetCurrentCode().PushBool(b); },
+                },
+                primary);
+          },
+          [&](const BinaryExpression& binary) {
+            compile_expr(*binary.lhs, builder);
+            compile_expr(*binary.rhs, builder);
+            emit_op(Token{.kind = binary.op}, builder);
+          },
+          [&](const CallExpression& call) {
+            for (const auto& arg : call.arguments)
+              compile_expr(*arg, builder);
+            builder.CallFunction(call.fn_name, call.arguments.size());
+          },
+          [&](const AssignmentExpression& assign) {
+            compile_expr(*assign.rhs, builder);
+            std::optional<uint32_t> id = builder.GetIdFor(
+                assign.variable_name, ProgramBuilder::CreateIfMissing::Yes);
+            builder.GetCurrentCode().StoreLocal(*id);
+          }},
+      expr.as);
+}
+
+void compile(const Block& root, ProgramBuilder& builder) {
+  for (const auto& stmt : root.statements) {
+    std::visit(Overloaded{[&](const std::unique_ptr<Expression>& expr) {
+                            compile_expr(*expr, builder);
+                          },
+                          [&](const FunctionDeclaration& fn) {
+                            builder.EnterFunctionScope(fn.name, fn.arguments);
+                            compile(fn.body, builder);
+                            builder.ExitFunctionScope();
+                          },
+                          [&](const ReturnStatement& ret) {
+                            compile_expr(*ret.value, builder);
+                            builder.GetCurrentCode().Return();
+                          },
+                          [&](const ThrowStatement& thr) {
+                            compile_expr(*thr.value, builder);
+                            builder.GetCurrentCode().Throw();
+                          },
+                          [&](const IfStatement& if_stmt) {
+                            compile_expr(*if_stmt.condition, builder);
+                            builder.GetCurrentCode().JumpIfFalse(
+                                "else" + std::to_string(if_stmt.id));
+                            compile(if_stmt.then_body, builder);
+                            builder.GetCurrentCode().Jump(
+                                "end_if" + std::to_string(if_stmt.id));
+                            builder.GetCurrentCode().Label(
+                                "else" + std::to_string(if_stmt.id));
+                            compile(if_stmt.else_body, builder);
+                            builder.GetCurrentCode().Label(
+                                "end_if" + std::to_string(if_stmt.id));
+                          },
+                          [&](const WhileStatement& while_stmt) {
+                            builder.GetCurrentCode().Label(
+                                "while_cond" + std::to_string(while_stmt.id));
+                            compile_expr(*while_stmt.condition, builder);
+                            builder.GetCurrentCode().JumpIfFalse(
+                                "while_end" + std::to_string(while_stmt.id));
+                            compile(while_stmt.body, builder);
+                            builder.GetCurrentCode().Jump(
+                                "while_cond" + std::to_string(while_stmt.id));
+                            builder.GetCurrentCode().Label(
+                                "while_end" + std::to_string(while_stmt.id));
+                          }},
+               stmt->as);
+  }
+}
+
 int main(int argc, char* argv[]) {
   if (argc < 2) {
     fprintf(stderr, "%s <path>\n", argv[0]);
@@ -26,9 +166,15 @@ int main(int argc, char* argv[]) {
   ProgramBuilder builder;
   Parser parser(contents, builder);
 
-  parser.Parse();
+  Block root = parser.Parse();
+  std::cout << "Finished parsing. Printing AST:\n";
+  for (const auto& stmt : root.statements) {
+    print_statement(*stmt);
+  }
 
+  compile(root, builder);
   std::vector<uint8_t> program_image = builder.GenerateImage();
+
   std::ofstream out("/tmp/prog.ink", std::ios::binary);
 
   if (out.is_open()) {

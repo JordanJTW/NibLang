@@ -13,8 +13,9 @@ class ProgramBuilder {
  public:
   explicit ProgramBuilder();
 
-  void EnterFunctionScope(const std::string& name,
-                          std::vector<std::string> arguments);
+  void EnterFunctionScope(
+      const std::string& name,
+      std::vector<std::pair<std::string, std::string>> arguments);
   void ExitFunctionScope();
 
   enum class CreateIfMissing { No, Yes };

@@ -25,7 +25,7 @@ std::optional<TokenKind> get_single_char_token(char ch) {
     case ';':
       return TokenKind::kEndExpr;
     case ':':
-      return TokenKind::kEndExpr;
+      return TokenKind::kColon;
     case ',':
       return TokenKind::kComma;
     case '>':
@@ -36,6 +36,12 @@ std::optional<TokenKind> get_single_char_token(char ch) {
       return TokenKind::kOpenParen;
     case ')':
       return TokenKind::kCloseParen;
+    case '{':
+      return TokenKind::kOpenBrace;
+    case '}':
+      return TokenKind::kCloseBrace;
+    case '|':
+      return TokenKind::kPipe;
     default:
       return std::nullopt;
   }
@@ -50,6 +56,8 @@ std::optional<TokenKind> get_double_char_token(std::string value) {
     return TokenKind::kCompareGe;
   if (value == "<=")
     return TokenKind::kCompareLe;
+  if (value == "->")
+    return TokenKind::kSkinnyArrow;
   return std::nullopt;
 }
 
@@ -63,8 +71,12 @@ Token Tokenizer::seekTo(const Token& token) {
 }
 
 Token Tokenizer::next() {
-  while (offset_ < data_.size() && std::isspace(data_[offset_]))
+  while (offset_ < data_.size() && std::isspace(data_[offset_])) {
+    if (data_[offset_] == '\n') {
+      ++line_;
+    }
     ++offset_;
+  }
 
   size_t start_idx = offset_;
   auto make_token = [&](TokenKind kind, std::string value = "") {
@@ -73,6 +85,7 @@ Token Tokenizer::next() {
         .kind = kind,
         .idx = start_idx,
         .length = length,
+        .meta = {.line = line_},
         .value = value.empty() ? data_.substr(start_idx, length) : value};
   };
 
@@ -86,13 +99,13 @@ Token Tokenizer::next() {
                        {"if", TokenKind::kKwIf},
                        {"else", TokenKind::kKwElse},
                        {"fn", TokenKind::kKwFn},
-                       {"end", TokenKind::kKwEnd},
                        {"true", TokenKind::kKwTrue},
                        {"false", TokenKind::kKwFalse},
                        {"return", TokenKind::kKwReturn},
                        {"try", TokenKind::kKwTry},
                        {"catch", TokenKind::kKwCatch},
-                       {"throw", TokenKind::kKwThrow}}};
+                       {"throw", TokenKind::kKwThrow},
+                       {"while", TokenKind::kKwWhile}}};
 
   for (const auto& [keyword, kind] : kKeywordToToken) {
     if (data_.substr(offset_, keyword.size()) == keyword) {
@@ -152,7 +165,8 @@ Token Tokenizer::next() {
   }
 
   // Comment
-  if (ch == '#') {
+  if (data_.substr(offset_, 2) == "//") {
+    offset_ += 2;  // Skip initial '//'
     while (offset_ < data_.size() && data_[offset_] != '\n')
       ++offset_;
 
@@ -190,16 +204,20 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kKwIf);
     KIND_TO_NAME(kKwElse);
     KIND_TO_NAME(kKwFn);
-    KIND_TO_NAME(kKwEnd);
     KIND_TO_NAME(kKwTrue);
     KIND_TO_NAME(kKwFalse);
     KIND_TO_NAME(kKwReturn);
     KIND_TO_NAME(kKwTry);
     KIND_TO_NAME(kKwCatch);
     KIND_TO_NAME(kKwThrow);
+    KIND_TO_NAME(kKwWhile);
     KIND_TO_NAME(kOpenParen);
     KIND_TO_NAME(kCloseParen);
+    KIND_TO_NAME(kOpenBrace);
+    KIND_TO_NAME(kCloseBrace);
+    KIND_TO_NAME(kPipe);
     KIND_TO_NAME(kComma);
+    KIND_TO_NAME(kColon);
     KIND_TO_NAME(kAssign);
     KIND_TO_NAME(kAdd);
     KIND_TO_NAME(kSubtract);
@@ -211,6 +229,7 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kCompareLe);
     KIND_TO_NAME(kCompareEq);
     KIND_TO_NAME(kCompareNe);
+    KIND_TO_NAME(kSkinnyArrow);
     KIND_TO_NAME(kComment);
     KIND_TO_NAME(kEndExpr);
     KIND_TO_NAME(kEndOfFile);

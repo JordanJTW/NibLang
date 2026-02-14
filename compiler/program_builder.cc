@@ -23,18 +23,21 @@ ProgramBuilder::ProgramBuilder() {
   func_ids_["Array_get"] = VM_BUILTIN_ARRAY_GET;
   func_ids_["Array_set"] = VM_BUILTIN_ARRAY_SET;
   func_ids_["log"] = VM_BUILTIN_LOG;
+
+  EnterFunctionScope("main", {});
 }
 
-void ProgramBuilder::EnterFunctionScope(const std::string& name,
-                                        std::vector<std::string> arguments) {
+void ProgramBuilder::EnterFunctionScope(
+    const std::string& name,
+    std::vector<std::pair<std::string, std::string>> arguments) {
   size_t fn_id = next_func_id_++;
   function_decl_stack_.push(fn_id);
   func_ids_[name] = fn_id;
 
   Function& function = functions_.emplace_back();
   function.name = name;
-  for (const std::string& arg : arguments) {
-    function.var_to_id[arg] = function.next_id++;
+  for (const auto& arg : arguments) {
+    function.var_to_id[arg.first] = function.next_id++;
     ++function.argc;
   }
 }
@@ -117,6 +120,8 @@ std::vector<uint8_t> ProgramBuilder::GenerateImage() const {
   size_t bytecode_size = 0;
   for (Function fn : functions_) {
     std::vector<uint8_t> fn_bytecode = fn.code.Build();
+    // std::cout << "Bytecode for function '" << fn.name << "':\n";
+    // DumpByteCode(fn_bytecode);
 
     for (const auto& [offset, fn] : fn.unresolved_calls) {
       assert(fn_bytecode[offset] == OP_CALL && "expceted OP_CALL");

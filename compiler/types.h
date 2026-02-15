@@ -78,13 +78,18 @@ struct WhileStatement {
   Block body;
 };
 
+struct BreakStatement {};
+struct ContinueStatement {};
+
 struct Statement {
   std::variant<std::unique_ptr<Expression>,  // ExpressionStatement
                FunctionDeclaration,          // fn foo(x, y) {...}
                ReturnStatement,              // return <expr>;
                ThrowStatement,               // throw <expr>;
                IfStatement,                  // if (<expr>) {...} else { ... }
-               WhileStatement                // while (<expr>) {...}
+               WhileStatement,               // while (<expr>) {...}
+               BreakStatement,               // break;
+               ContinueStatement             // continue;
                >
       as;
 };

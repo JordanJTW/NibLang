@@ -288,6 +288,32 @@ void Parser::ParseBlock(Token& token, Block& block) {
       continue;
     }
 
+    if (token.kind == TokenKind::kKwBreak) {
+      token = tokenizer_.next();
+      if (token.kind != TokenKind::kEndExpr) {
+        HandleError(token, "expected ;");
+        continue;
+      } else {
+        token = tokenizer_.next();  // consume ;
+      }
+      block.statements.push_back(
+          std::make_unique<Statement>(Statement{BreakStatement{}}));
+      continue;
+    }
+
+    if (token.kind == TokenKind::kKwContinue) {
+      token = tokenizer_.next();
+      if (token.kind != TokenKind::kEndExpr) {
+        HandleError(token, "expected ;");
+        continue;
+      } else {
+        token = tokenizer_.next();  // consume ;
+      }
+      block.statements.push_back(
+          std::make_unique<Statement>(Statement{ContinueStatement{}}));
+      continue;
+    }
+
     if (auto expr = ParseExpression(token)) {
       if (token.kind != TokenKind::kEndExpr) {
         HandleError(token, "expected ;");

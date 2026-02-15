@@ -101,50 +101,76 @@ void compile_expr(const Expression& expr, ProgramBuilder& builder) {
       expr.as);
 }
 
-void compile(const Block& root, ProgramBuilder& builder) {
+struct LoopContext {
+  std::string break_label;
+  std::string continue_label;
+};
+
+void compile(const Block& root,
+             ProgramBuilder& builder,
+             std::optional<LoopContext> loop_ctx = std::nullopt) {
   for (const auto& stmt : root.statements) {
-    std::visit(Overloaded{[&](const std::unique_ptr<Expression>& expr) {
-                            compile_expr(*expr, builder);
-                          },
-                          [&](const FunctionDeclaration& fn) {
-                            builder.EnterFunctionScope(fn.name, fn.arguments);
-                            compile(fn.body, builder);
-                            builder.ExitFunctionScope();
-                          },
-                          [&](const ReturnStatement& ret) {
-                            compile_expr(*ret.value, builder);
-                            builder.GetCurrentCode().Return();
-                          },
-                          [&](const ThrowStatement& thr) {
-                            compile_expr(*thr.value, builder);
-                            builder.GetCurrentCode().Throw();
-                          },
-                          [&](const IfStatement& if_stmt) {
-                            compile_expr(*if_stmt.condition, builder);
-                            builder.GetCurrentCode().JumpIfFalse(
-                                "else" + std::to_string(if_stmt.id));
-                            compile(if_stmt.then_body, builder);
-                            builder.GetCurrentCode().Jump(
-                                "end_if" + std::to_string(if_stmt.id));
-                            builder.GetCurrentCode().Label(
-                                "else" + std::to_string(if_stmt.id));
-                            compile(if_stmt.else_body, builder);
-                            builder.GetCurrentCode().Label(
-                                "end_if" + std::to_string(if_stmt.id));
-                          },
-                          [&](const WhileStatement& while_stmt) {
-                            builder.GetCurrentCode().Label(
-                                "while_cond" + std::to_string(while_stmt.id));
-                            compile_expr(*while_stmt.condition, builder);
-                            builder.GetCurrentCode().JumpIfFalse(
-                                "while_end" + std::to_string(while_stmt.id));
-                            compile(while_stmt.body, builder);
-                            builder.GetCurrentCode().Jump(
-                                "while_cond" + std::to_string(while_stmt.id));
-                            builder.GetCurrentCode().Label(
-                                "while_end" + std::to_string(while_stmt.id));
-                          }},
-               stmt->as);
+    std::visit(
+        Overloaded{[&](const std::unique_ptr<Expression>& expr) {
+                     compile_expr(*expr, builder);
+                   },
+                   [&](const FunctionDeclaration& fn) {
+                     builder.EnterFunctionScope(fn.name, fn.arguments);
+                     compile(fn.body, builder);
+                     builder.ExitFunctionScope();
+                   },
+                   [&](const ReturnStatement& ret) {
+                     compile_expr(*ret.value, builder);
+                     builder.GetCurrentCode().Return();
+                   },
+                   [&](const ThrowStatement& thr) {
+                     compile_expr(*thr.value, builder);
+                     builder.GetCurrentCode().Throw();
+                   },
+                   [&](const IfStatement& if_stmt) {
+                     compile_expr(*if_stmt.condition, builder);
+                     builder.GetCurrentCode().JumpIfFalse(
+                         "else" + std::to_string(if_stmt.id));
+                     compile(if_stmt.then_body, builder, loop_ctx);
+                     builder.GetCurrentCode().Jump("end_if" +
+                                                   std::to_string(if_stmt.id));
+                     builder.GetCurrentCode().Label("else" +
+                                                    std::to_string(if_stmt.id));
+                     compile(if_stmt.else_body, builder, loop_ctx);
+                     builder.GetCurrentCode().Label("end_if" +
+                                                    std::to_string(if_stmt.id));
+                   },
+                   [&](const WhileStatement& while_stmt) {
+                     std::string condition_label =
+                         "while_cond" + std::to_string(while_stmt.id);
+                     std::string end_label =
+                         "while_end" + std::to_string(while_stmt.id);
+
+                     builder.GetCurrentCode().Label(condition_label);
+                     compile_expr(*while_stmt.condition, builder);
+                     builder.GetCurrentCode().JumpIfFalse(end_label);
+                     compile(while_stmt.body, builder,
+                             LoopContext{end_label, condition_label});
+                     builder.GetCurrentCode().Jump(condition_label);
+                     builder.GetCurrentCode().Label(end_label);
+                   },
+                   [&](const BreakStatement&) {
+                     if (!loop_ctx) {
+                       std::cerr << "break statement not within a loop"
+                                 << std::endl;
+                       return;
+                     }
+                     builder.GetCurrentCode().Jump(loop_ctx->break_label);
+                   },
+                   [&](const ContinueStatement&) {
+                     if (!loop_ctx) {
+                       std::cerr << "continue statement not within a loop"
+                                 << std::endl;
+                       return;
+                     }
+                     builder.GetCurrentCode().Jump(loop_ctx->continue_label);
+                   }},
+        stmt->as);
   }
 }
 

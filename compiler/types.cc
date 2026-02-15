@@ -136,6 +136,14 @@ void print_statement(const Statement& stmt, size_t indent) {
                                     << "Body:" << std::endl;
                           for (const auto& stmt : while_stmt.body.statements)
                             print_statement(*stmt, indent + 1);
+                        },
+                        [&](const BreakStatement&) {
+                          std::cout << std::setw(indent * 2) << " "
+                                    << "BreakStatement" << std::endl;
+                        },
+                        [&](const ContinueStatement&) {
+                          std::cout << std::setw(indent * 2) << " "
+                                    << "ContinueStatement" << std::endl;
                         }},
              stmt.as);
 }

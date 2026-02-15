@@ -20,6 +20,8 @@ enum class TokenKind {
   kKwCatch,      // catch
   kKwThrow,      // throw
   kKwWhile,      // while
+  kKwBreak,      // break
+  kKwContinue,   // continue
   kOpenParen,    // (
   kCloseParen,   // )
   kOpenBrace,    // {

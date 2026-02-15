@@ -40,6 +40,12 @@ std::optional<TokenKind> get_single_char_token(char ch) {
       return TokenKind::kOpenBrace;
     case '}':
       return TokenKind::kCloseBrace;
+    case '[':
+      return TokenKind::kSquareOpen;
+    case ']':
+      return TokenKind::kSquareClose;
+    case '.':
+      return TokenKind::kDot;
     case '|':
       return TokenKind::kPipe;
     default:
@@ -219,6 +225,9 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kCloseParen);
     KIND_TO_NAME(kOpenBrace);
     KIND_TO_NAME(kCloseBrace);
+    KIND_TO_NAME(kSquareOpen);
+    KIND_TO_NAME(kSquareClose);
+    KIND_TO_NAME(kDot);
     KIND_TO_NAME(kPipe);
     KIND_TO_NAME(kComma);
     KIND_TO_NAME(kColon);

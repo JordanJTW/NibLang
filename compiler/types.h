@@ -23,16 +23,27 @@ struct Identifier {
   std::string name;
 };
 
-using PrimaryExpression =
-    std::variant<StringLiteral, Identifier, int32_t, float, bool>;
+struct PrimaryExpression {
+  std::variant<StringLiteral, Identifier, int32_t, float, bool> value;
+};
 
 struct CallExpression {
-  std::string fn_name;
+  std::unique_ptr<Expression> callee;
   std::vector<std::unique_ptr<Expression>> arguments;
 };
 
+struct MemberAccessExpression {
+  std::unique_ptr<Expression> object;
+  std::string member_name;
+};
+
+struct ArrayAccessExpression {
+  std::unique_ptr<Expression> array;
+  std::unique_ptr<Expression> index;
+};
+
 struct AssignmentExpression {
-  std::string variable_name;
+  std::unique_ptr<Expression> lhs;
   std::unique_ptr<Expression> rhs;
 };
 
@@ -40,7 +51,9 @@ struct Expression {
   std::variant<PrimaryExpression,
                BinaryExpression,
                CallExpression,
-               AssignmentExpression>
+               AssignmentExpression,
+               MemberAccessExpression,
+               ArrayAccessExpression>
       as;
 };
 

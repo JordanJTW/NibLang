@@ -54,7 +54,13 @@ void emit_op(const Token& op, ProgramBuilder& builder) {
   }
 }
 
-void compile_expr(const Expression& expr, ProgramBuilder& builder) {
+void compile_expr(const std::unique_ptr<Expression>& expr,
+                  ProgramBuilder& builder) {
+  if (expr == nullptr) {
+    std::cerr << "Failed to compile null expression" << std::endl;
+    return;
+  }
+
   std::visit(
       Overloaded{
           [&](const PrimaryExpression& primary) {
@@ -80,25 +86,66 @@ void compile_expr(const Expression& expr, ProgramBuilder& builder) {
                     [&](float f32) { builder.GetCurrentCode().PushFloat(f32); },
                     [&](bool b) { builder.GetCurrentCode().PushBool(b); },
                 },
-                primary);
+                primary.value);
           },
           [&](const BinaryExpression& binary) {
-            compile_expr(*binary.lhs, builder);
-            compile_expr(*binary.rhs, builder);
+            compile_expr(binary.lhs, builder);
+            compile_expr(binary.rhs, builder);
             emit_op(Token{.kind = binary.op}, builder);
           },
           [&](const CallExpression& call) {
             for (const auto& arg : call.arguments)
-              compile_expr(*arg, builder);
-            builder.CallFunction(call.fn_name, call.arguments.size());
+              compile_expr(arg, builder);
+
+            if (std::holds_alternative<PrimaryExpression>(call.callee->as) &&
+                std::holds_alternative<Identifier>(
+                    std::get<PrimaryExpression>(call.callee->as).value)) {
+              std::string fn_name =
+                  std::get<Identifier>(
+                      std::get<PrimaryExpression>(call.callee->as).value)
+                      .name;
+              builder.CallFunction(fn_name, call.arguments.size());
+            } else {
+              std::cerr << "unsupported callee type in call expression"
+                        << std::endl;
+            }
           },
           [&](const AssignmentExpression& assign) {
-            compile_expr(*assign.rhs, builder);
-            std::optional<uint32_t> id = builder.GetIdFor(
-                assign.variable_name, ProgramBuilder::CreateIfMissing::Yes);
-            builder.GetCurrentCode().StoreLocal(*id);
+            if (std::holds_alternative<PrimaryExpression>(assign.lhs->as) &&
+                std::holds_alternative<Identifier>(
+                    std::get<PrimaryExpression>(assign.lhs->as).value)) {
+              compile_expr(assign.rhs, builder);
+
+              std::string var_name =
+                  std::get<Identifier>(
+                      std::get<PrimaryExpression>(assign.lhs->as).value)
+                      .name;
+              std::optional<uint32_t> id = builder.GetIdFor(
+                  var_name, ProgramBuilder::CreateIfMissing::Yes);
+              builder.GetCurrentCode().StoreLocal(*id);
+            } else if (std::holds_alternative<ArrayAccessExpression>(
+                           assign.lhs->as)) {
+              const auto& array_access =
+                  std::get<ArrayAccessExpression>(assign.lhs->as);
+              compile_expr(array_access.array, builder);
+              compile_expr(array_access.index, builder);
+              compile_expr(assign.rhs, builder);
+
+              builder.CallFunction("Array_set", 3);
+            } else {
+              std::cerr << "unsupported LHS in assignment expression"
+                        << std::endl;
+            }
+          },
+          [&](const MemberAccessExpression&) {
+            std::cerr << "member access not yet supported" << std::endl;
+          },
+          [&](const ArrayAccessExpression& array_access) {
+            compile_expr(array_access.array, builder);
+            compile_expr(array_access.index, builder);
+            builder.CallFunction("Array_get", 2);
           }},
-      expr.as);
+      expr->as);
 }
 
 struct LoopContext {
@@ -112,7 +159,7 @@ void compile(const Block& root,
   for (const auto& stmt : root.statements) {
     std::visit(
         Overloaded{[&](const std::unique_ptr<Expression>& expr) {
-                     compile_expr(*expr, builder);
+                     compile_expr(expr, builder);
                    },
                    [&](const FunctionDeclaration& fn) {
                      builder.EnterFunctionScope(fn.name, fn.arguments);
@@ -120,15 +167,15 @@ void compile(const Block& root,
                      builder.ExitFunctionScope();
                    },
                    [&](const ReturnStatement& ret) {
-                     compile_expr(*ret.value, builder);
+                     compile_expr(ret.value, builder);
                      builder.GetCurrentCode().Return();
                    },
                    [&](const ThrowStatement& thr) {
-                     compile_expr(*thr.value, builder);
+                     compile_expr(thr.value, builder);
                      builder.GetCurrentCode().Throw();
                    },
                    [&](const IfStatement& if_stmt) {
-                     compile_expr(*if_stmt.condition, builder);
+                     compile_expr(if_stmt.condition, builder);
                      builder.GetCurrentCode().JumpIfFalse(
                          "else" + std::to_string(if_stmt.id));
                      compile(if_stmt.then_body, builder, loop_ctx);
@@ -147,7 +194,7 @@ void compile(const Block& root,
                          "while_end" + std::to_string(while_stmt.id);
 
                      builder.GetCurrentCode().Label(condition_label);
-                     compile_expr(*while_stmt.condition, builder);
+                     compile_expr(while_stmt.condition, builder);
                      builder.GetCurrentCode().JumpIfFalse(end_label);
                      compile(while_stmt.body, builder,
                              LoopContext{end_label, condition_label});

@@ -369,18 +369,20 @@ std::unique_ptr<Expression> Parser::ParseExpression(Token& token) {
 
 std::unique_ptr<Expression> Parser::ParseAssignment(Token& token) {
   Token entry_token = token;
-  if (token.kind == TokenKind::kIdent) {
-    token = tokenizer_.next();
-    if (token.kind == TokenKind::kAssign) {
-      token = tokenizer_.next();  // consume '='
 
-      auto rhs = ParseExpression(token);
-      if (!rhs)
-        return nullptr;
+  auto expr = ParsePostFix(token);
+  if (!expr)
+    return nullptr;
 
-      return std::make_unique<Expression>(
-          Expression{AssignmentExpression{entry_token.value, std::move(rhs)}});
-    }
+  if (token.kind == TokenKind::kAssign) {
+    token = tokenizer_.next();  // consume '='
+
+    auto rhs = ParseExpression(token);
+    if (!rhs)
+      return nullptr;
+
+    return std::make_unique<Expression>(
+        Expression{AssignmentExpression{std::move(expr), std::move(rhs)}});
   }
 
   token = tokenizer_.seekTo(entry_token);
@@ -430,7 +432,7 @@ std::unique_ptr<Expression> Parser::ParseAdditive(Token& token) {
 }
 
 std::unique_ptr<Expression> Parser::ParseMultiplicative(Token& token) {
-  auto lhs = ParsePrimary(token);
+  auto lhs = ParsePostFix(token);
   if (!lhs)
     return nullptr;
 
@@ -439,7 +441,7 @@ std::unique_ptr<Expression> Parser::ParseMultiplicative(Token& token) {
     Token op = token;
     token = tokenizer_.next();
 
-    auto rhs = ParsePrimary(token);
+    auto rhs = ParsePostFix(token);
     if (!rhs)
       return nullptr;
 
@@ -447,6 +449,63 @@ std::unique_ptr<Expression> Parser::ParseMultiplicative(Token& token) {
   }
 
   return lhs;
+}
+
+std::unique_ptr<Expression> Parser::ParsePostFix(Token& token) {
+  auto expr = ParsePrimary(token);
+  if (!expr)
+    return nullptr;
+
+  while (true) {
+    std::cout << "Postfix loop, current token: " << token
+              << std::endl;
+
+    // Handle function call i.e. $expr(...)
+    if (token.kind == TokenKind::kOpenParen) {
+      expr = ParseCall(token, std::move(expr));
+      if (!expr)
+        return nullptr;
+      continue;
+    }
+
+    if (token.kind == TokenKind::kDot) {
+      token = tokenizer_.next();  // consume '.'
+
+      if (token.kind != TokenKind::kIdent) {
+        HandleError(token, "expected identifier after '.'");
+        return nullptr;
+      }
+      Token ident = token;
+      token = tokenizer_.next();  // consume identifier
+
+      expr = std::make_unique<Expression>(
+          Expression{MemberAccessExpression{std::move(expr), ident.value}});
+      continue;
+    }
+
+    if (token.kind == TokenKind::kSquareOpen) {
+      token = tokenizer_.next();  // consume '['
+
+      auto index = ParseExpression(token);
+      if (!index)
+        return nullptr;
+
+      if (token.kind != TokenKind::kSquareClose) {
+        HandleError(token, "expected ']'");
+        return nullptr;
+      }
+
+      token = tokenizer_.next();  // consume ']'
+
+      expr = std::make_unique<Expression>(
+          Expression{ArrayAccessExpression{std::move(expr), std::move(index)}});
+      continue;
+    }
+    std::cout << "no matching postfix operator, exiting loop" << std::endl;
+    break;
+  }
+
+  return expr;
 }
 
 std::unique_ptr<Expression> Parser::ParsePrimary(Token& token) {
@@ -458,13 +517,6 @@ std::unique_ptr<Expression> Parser::ParsePrimary(Token& token) {
     case TokenKind::kKwFalse: {
       Token value = token;
       token = tokenizer_.next();
-
-      // Function call?
-      if (value.kind == TokenKind::kIdent &&
-          token.kind == TokenKind::kOpenParen) {
-        return ParseCall(token, value);
-      }
-
       return ParseValue(value);
     }
 
@@ -490,7 +542,9 @@ std::unique_ptr<Expression> Parser::ParsePrimary(Token& token) {
   }
 }
 
-std::unique_ptr<Expression> Parser::ParseCall(Token& token, Token fn_name) {
+std::unique_ptr<Expression> Parser::ParseCall(
+    Token& token,
+    std::unique_ptr<Expression> callee) {
   token = tokenizer_.next();  // consume '('
 
   std::vector<std::unique_ptr<Expression>> arguments;
@@ -516,7 +570,7 @@ std::unique_ptr<Expression> Parser::ParseCall(Token& token, Token fn_name) {
   token = tokenizer_.next();  // consume ')'
 
   return std::make_unique<Expression>(
-      Expression{CallExpression{fn_name.value, std::move(arguments)}});
+      Expression{CallExpression{std::move(callee), std::move(arguments)}});
 }
 
 void Parser::HandleError(Token& token, const std::string& message) {

@@ -26,6 +26,9 @@ enum class TokenKind {
   kCloseParen,   // )
   kOpenBrace,    // {
   kCloseBrace,   // }
+  kSquareOpen,   // [
+  kSquareClose,  // ]
+  kDot,          // .
   kPipe,         // |
   kComma,        // ,
   kColon,        // :

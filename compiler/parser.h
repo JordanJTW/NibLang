@@ -22,12 +22,14 @@ class Parser {
   std::unique_ptr<Expression> ParseExpression(Token& current_token);
   std::unique_ptr<Expression> ParseAssignment(Token& current_token);
   std::unique_ptr<Expression> ParseComparison(Token& current_token);
-  std::unique_ptr<Expression> ParseMultiplicative(Token& current_token);
   std::unique_ptr<Expression> ParseAdditive(Token& current_token);
+  std::unique_ptr<Expression> ParseMultiplicative(Token& current_token);
+  std::unique_ptr<Expression> ParsePostFix(Token& current_token);
   std::unique_ptr<Expression> ParsePrimary(Token& current_token);
   std::unique_ptr<Expression> ParseValue(const Token& value);
 
-  std::unique_ptr<Expression> ParseCall(Token& current_token, Token fn_name);
+  std::unique_ptr<Expression> ParseCall(Token& current_token,
+                                        std::unique_ptr<Expression> callee);
 
   void HandleError(Token& error_token, const std::string& message);
 

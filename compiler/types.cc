@@ -33,10 +33,16 @@ static void print_primary(const PrimaryExpression& primary, size_t indent) {
                       << "Bool: " << (b ? "true" : "false") << std::endl;
           },
       },
-      primary);
+      primary.value);
 }
 
-static void print_expression(const Expression& expr, size_t indent) {
+static void print_expression(const std::unique_ptr<Expression>& expr,
+                             size_t indent) {
+  if (expr == nullptr) {
+    std::cerr << std::setw(indent * 2) << " " << "Parse Failure" << std::endl;
+    return;
+  }
+
   std::visit(
       Overloaded{[&](const PrimaryExpression& primary) {
                    print_primary(primary, indent);
@@ -48,35 +54,62 @@ static void print_expression(const Expression& expr, size_t indent) {
                        << ")" << std::endl;
 
                    std::cout << std::setw(indent * 2) << " " << "LHS:\n";
-                   print_expression(*binary.lhs, indent + 1);
+                   print_expression(binary.lhs, indent + 1);
 
                    std::cout << std::setw(indent * 2) << " " << "RHS:\n";
-                   print_expression(*binary.rhs, indent + 1);
+                   print_expression(binary.rhs, indent + 1);
                  },
                  [&](const AssignmentExpression& assign) {
                    std::cout << std::setw(indent * 2) << " "
-                             << "AssignmentExpression: " << assign.variable_name
-                             << std::endl;
+                             << "AssignmentExpression:" << std::endl;
+
+                   std::cout << std::setw(indent * 2) << " " << "LHS:\n";
+                   print_expression(assign.lhs, indent + 1);
 
                    std::cout << std::setw(indent * 2) << " " << "RHS:\n";
-                   print_expression(*assign.rhs, indent + 1);
+                   print_expression(assign.rhs, indent + 1);
                  },
                  [&](const CallExpression& call) {
                    std::cout << std::setw(indent * 2) << " "
-                             << "CallExpression: " << call.fn_name << std::endl;
+                             << "CallExpression:" << std::endl;
+
+                   std::cout << std::setw(indent * 2) << " "
+                             << "Callee:" << std::endl;
+                   print_expression(call.callee, indent + 1);
 
                    std::cout << std::setw(indent * 2) << " " << "Arguments:\n";
                    for (const auto& arg : call.arguments)
-                     print_expression(*arg, indent + 1);
+                     print_expression(arg, indent + 1);
+                 },
+                 [&](const MemberAccessExpression& member_access) {
+                   std::cout << std::setw(indent * 2) << " "
+                             << "MemberAccessExpression: "
+                             << member_access.member_name << std::endl;
+
+                   std::cout << std::setw(indent * 2) << " "
+                             << "Object:" << std::endl;
+                   print_expression(member_access.object, indent + 1);
+                 },
+                 [&](const ArrayAccessExpression& array_access) {
+                   std::cout << std::setw(indent * 2) << " "
+                             << "ArrayAccessExpression:" << std::endl;
+
+                   std::cout << std::setw(indent * 2) << " "
+                             << "Array:" << std::endl;
+                   print_expression(array_access.array, indent + 1);
+
+                   std::cout << std::setw(indent * 2) << " "
+                             << "Index:" << std::endl;
+                   print_expression(array_access.index, indent + 1);
                  }},
-      expr.as);
+      expr->as);
 }
 
 void print_statement(const Statement& stmt, size_t indent) {
   std::visit(Overloaded{[&](const std::unique_ptr<Expression>& expr) {
                           std::cout << std::setw(indent * 2) << " "
                                     << "ExpressionStatement:" << std::endl;
-                          print_expression(*expr, indent + 1);
+                          print_expression(expr, indent + 1);
                         },
                         [&](const FunctionDeclaration& fn) {
                           std::cout << std::setw(indent * 2) << " "
@@ -99,12 +132,12 @@ void print_statement(const Statement& stmt, size_t indent) {
                         [&](const ReturnStatement& ret) {
                           std::cout << std::setw(indent * 2) << " "
                                     << "ReturnStatement:" << std::endl;
-                          print_expression(*ret.value, indent + 1);
+                          print_expression(ret.value, indent + 1);
                         },
                         [&](const ThrowStatement& thr) {
                           std::cout << std::setw(indent * 2) << " "
                                     << "ThrowStatement:" << std::endl;
-                          print_expression(*thr.value, indent + 1);
+                          print_expression(thr.value, indent + 1);
                         },
                         [&](const IfStatement& if_stmt) {
                           std::cout << std::setw(indent * 2) << " "
@@ -112,7 +145,7 @@ void print_statement(const Statement& stmt, size_t indent) {
 
                           std::cout << std::setw(indent * 2) << " "
                                     << "Condition:" << std::endl;
-                          print_expression(*if_stmt.condition, indent + 1);
+                          print_expression(if_stmt.condition, indent + 1);
 
                           std::cout << std::setw(indent * 2) << " "
                                     << "Then Body:" << std::endl;
@@ -130,7 +163,7 @@ void print_statement(const Statement& stmt, size_t indent) {
 
                           std::cout << std::setw(indent * 2) << " "
                                     << "Condition:" << std::endl;
-                          print_expression(*while_stmt.condition, indent + 1);
+                          print_expression(while_stmt.condition, indent + 1);
 
                           std::cout << std::setw(indent * 2) << " "
                                     << "Body:" << std::endl;

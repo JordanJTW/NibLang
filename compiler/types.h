@@ -47,13 +47,21 @@ struct AssignmentExpression {
   std::unique_ptr<Expression> rhs;
 };
 
+// This is codegen'd very differently than BinaryExpression thus separating it.
+struct LogicExpression {
+  enum Kind { AND, OR } kind;
+  std::unique_ptr<Expression> lhs;
+  std::unique_ptr<Expression> rhs;
+};
+
 struct Expression {
   std::variant<PrimaryExpression,
                BinaryExpression,
                CallExpression,
                AssignmentExpression,
                MemberAccessExpression,
-               ArrayAccessExpression>
+               ArrayAccessExpression,
+               LogicExpression>
       as;
 };
 

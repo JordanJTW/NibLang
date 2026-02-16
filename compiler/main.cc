@@ -144,6 +144,34 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
             compile_expr(array_access.array, builder);
             compile_expr(array_access.index, builder);
             builder.CallFunction("Array_get", 2);
+          },
+          [&](const LogicExpression& logic) {
+            compile_expr(logic.lhs, builder);
+
+            static size_t id = 0;
+            std::string lhs_label = "logic_lhs_" + std::to_string(id++);
+            std::string end_label = "logic_end_" + std::to_string(id);
+
+            // Handle short-circuiting to skip evaluating the RHS if possible.
+            if (logic.kind == LogicExpression::AND) {
+              builder.GetCurrentCode().JumpIfFalse(lhs_label);
+            } else {
+              builder.GetCurrentCode().JumpIfTrue(lhs_label);
+            }
+
+            compile_expr(logic.rhs, builder);
+            builder.GetCurrentCode().Jump(end_label);
+
+            // Short-circuiting consumes the LHS value on the stack, so we need
+            // to push the correct value for the result of the logic expression.
+            builder.GetCurrentCode().Label(lhs_label);
+            if (logic.kind == LogicExpression::AND) {
+              builder.GetCurrentCode().PushBool(false);
+            } else {
+              builder.GetCurrentCode().PushBool(true);
+            }
+
+            builder.GetCurrentCode().Label(end_label);
           }},
       expr->as);
 }

@@ -21,6 +21,7 @@ class Parser {
 
   std::unique_ptr<Expression> ParseExpression(Token& current_token);
   std::unique_ptr<Expression> ParseAssignment(Token& current_token);
+  std::unique_ptr<Expression> ParseLogical(Token& current_token);
   std::unique_ptr<Expression> ParseComparison(Token& current_token);
   std::unique_ptr<Expression> ParseAdditive(Token& current_token);
   std::unique_ptr<Expression> ParseMultiplicative(Token& current_token);

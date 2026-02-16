@@ -386,7 +386,29 @@ std::unique_ptr<Expression> Parser::ParseAssignment(Token& token) {
   }
 
   token = tokenizer_.seekTo(entry_token);
-  return ParseComparison(token);
+  return ParseLogical(token);
+}
+
+std::unique_ptr<Expression> Parser::ParseLogical(Token& current_token) {
+  auto lhs = ParseComparison(current_token);
+  if (!lhs)
+    return nullptr;
+
+  while (current_token.kind == TokenKind::kAndAnd ||
+         current_token.kind == TokenKind::kOrOr) {
+    Token op = current_token;
+    current_token = tokenizer_.next();
+
+    auto rhs = ParseComparison(current_token);
+    if (!rhs)
+      return nullptr;
+
+    lhs = std::make_unique<Expression>(Expression{
+        LogicExpression{op.kind == TokenKind::kAndAnd ? LogicExpression::AND
+                                                      : LogicExpression::OR,
+                        std::move(lhs), std::move(rhs)}});
+  }
+  return lhs;
 }
 
 std::unique_ptr<Expression> Parser::ParseComparison(Token& token) {

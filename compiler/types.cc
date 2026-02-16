@@ -101,6 +101,18 @@ static void print_expression(const std::unique_ptr<Expression>& expr,
                    std::cout << std::setw(indent * 2) << " "
                              << "Index:" << std::endl;
                    print_expression(array_access.index, indent + 1);
+                 },
+                 [&](const LogicExpression& logic) {
+                   std::cout
+                       << std::setw(indent * 2) << " "
+                       << "LogicExpression (op=" << static_cast<int>(logic.kind)
+                       << ")" << std::endl;
+
+                   std::cout << std::setw(indent * 2) << " " << "LHS:\n";
+                   print_expression(logic.lhs, indent + 1);
+
+                   std::cout << std::setw(indent * 2) << " " << "RHS:\n";
+                   print_expression(logic.rhs, indent + 1);
                  }},
       expr->as);
 }

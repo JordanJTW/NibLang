@@ -1,26 +1,11 @@
 fn is_whitespace($ch: i32) -> bool{
-  if ($ch == 32) {  // space
-    return true;
-  }
-  if ($ch == 10) {  // newline (\n)
-    return true;
-  }
-  if ($ch == 13) {  // carriage return (\r)
-    return true;
-  }
-  if ($ch == 9) {  // tab (\t)
-    return true;
-  }
-  return false;
+  return ($ch == 32 || $ch == 10 || $ch == 13 || $ch == 9);  // space, newline, carriage return, tab
 }
 
 fn skip_whitespace($input: String, $idx: i32) -> i32 {
-  while (is_whitespace(String_charAt($input, $idx))) {
+  while ($idx < String_length($input) &&
+         is_whitespace(String_charAt($input, $idx))) {
     $idx = $idx + 1;
-    
-    if ($idx >= String_length($input)) {
-      break;
-    }
   }
   return $idx;
 }
@@ -112,7 +97,7 @@ fn parse_value($input: String, $parser: arr) -> bool | String | Map {
 $parser = Array_new(1);
 $parser[0] = 0;
 
-$input = "{\"key\": {\"inner\": \"jordan\"}}";
+$input = "{\"key\": {\"inner\":\t \"jordan\"}}";
 log("input", $input);
 return parse_value($input, $parser);
 

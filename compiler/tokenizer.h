@@ -44,6 +44,8 @@ enum class TokenKind {
   kCompareEq,    // ==
   kCompareNe,    // !=
   kSkinnyArrow,  // ->
+  kAndAnd,       // &&
+  kOrOr,         // ||
   kComment,      // // comment text
   kEndExpr,      // ;
   kEndOfFile,    // EOF

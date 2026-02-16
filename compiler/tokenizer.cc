@@ -64,6 +64,10 @@ std::optional<TokenKind> get_double_char_token(std::string value) {
     return TokenKind::kCompareLe;
   if (value == "->")
     return TokenKind::kSkinnyArrow;
+  if (value == "&&")
+    return TokenKind::kAndAnd;
+  if (value == "||")
+    return TokenKind::kOrOr;
   return std::nullopt;
 }
 
@@ -243,6 +247,8 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kCompareEq);
     KIND_TO_NAME(kCompareNe);
     KIND_TO_NAME(kSkinnyArrow);
+    KIND_TO_NAME(kAndAnd);
+    KIND_TO_NAME(kOrOr);
     KIND_TO_NAME(kComment);
     KIND_TO_NAME(kEndExpr);
     KIND_TO_NAME(kEndOfFile);

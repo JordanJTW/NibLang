@@ -12,33 +12,38 @@
 class Parser {
  public:
   explicit Parser(const std::string& text, ProgramBuilder& builder)
-      : text_(text), tokenizer_(text_), builder_(builder) {}
+      : text_(text),
+        tokenizer_(text_),
+        current_token_(tokenizer_.next()),
+        builder_(builder) {}
 
   Block Parse();
 
  private:
-  void ParseBlock(Token& token, Block& block);
+  void ParseBlock(Block& block);
 
-  std::unique_ptr<Expression> ParseExpression(Token& current_token);
-  std::unique_ptr<Expression> ParseAssignment(Token& current_token);
-  std::unique_ptr<Expression> ParseLogical(Token& current_token);
-  std::unique_ptr<Expression> ParseComparison(Token& current_token);
-  std::unique_ptr<Expression> ParseAdditive(Token& current_token);
-  std::unique_ptr<Expression> ParseMultiplicative(Token& current_token);
-  std::unique_ptr<Expression> ParsePostFix(Token& current_token);
-  std::unique_ptr<Expression> ParsePrimary(Token& current_token);
+  std::unique_ptr<Expression> ParseExpression();
+  std::unique_ptr<Expression> ParseAssignment();
+  std::unique_ptr<Expression> ParseLogical();
+  std::unique_ptr<Expression> ParseComparison();
+  std::unique_ptr<Expression> ParseAdditive();
+  std::unique_ptr<Expression> ParseMultiplicative();
+  std::unique_ptr<Expression> ParsePostFix();
+  std::unique_ptr<Expression> ParsePrimary();
   std::unique_ptr<Expression> ParseValue(const Token& value);
 
-  std::unique_ptr<Expression> ParseCall(Token& current_token,
-                                        std::unique_ptr<Expression> callee);
+  std::unique_ptr<Expression> ParseCall(std::unique_ptr<Expression> callee);
 
-  std::vector<std::string> ParseUnionTypeList(Token& current_token);
-  std::unique_ptr<StructDeclaration> ParseStructDeclaration(Token& token);
-  std::unique_ptr<FunctionDeclaration> ParseFunctionDeclaration(Token& token);
+  std::vector<std::string> ParseUnionTypeList();
+  std::unique_ptr<StructDeclaration> ParseStructDeclaration();
+  std::unique_ptr<FunctionDeclaration> ParseFunctionDeclaration();
 
-  void HandleError(Token& error_token, const std::string& message);
+  std::optional<Token> ExpectNextToken(TokenKind expected_kind,
+                                       std::string_view error_message);
+  void HandleError(std::string_view message);
 
   const std::string& text_;
   Tokenizer tokenizer_;
+  Token current_token_;
   ProgramBuilder& builder_;
 };

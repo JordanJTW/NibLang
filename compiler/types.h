@@ -102,6 +102,12 @@ struct WhileStatement {
 struct BreakStatement {};
 struct ContinueStatement {};
 
+struct AssignStatement {
+  std::string name;
+  std::string type;
+  std::unique_ptr<Expression> value;
+};
+
 struct Statement {
   std::variant<std::unique_ptr<Expression>,  // ExpressionStatement
                FunctionDeclaration,          // fn foo(x, y) {...}
@@ -110,7 +116,8 @@ struct Statement {
                IfStatement,                  // if (<expr>) {...} else { ... }
                WhileStatement,               // while (<expr>) {...}
                BreakStatement,               // break;
-               ContinueStatement             // continue;
+               ContinueStatement,            // continue;
+               AssignStatement               // let x: i32 = 42;
                >
       as;
 };

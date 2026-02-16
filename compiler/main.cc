@@ -121,7 +121,10 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
                       std::get<PrimaryExpression>(assign.lhs->as).value)
                       .name;
               std::optional<uint32_t> id = builder.GetIdFor(
-                  var_name, ProgramBuilder::CreateIfMissing::Yes);
+                  var_name, ProgramBuilder::CreateIfMissing::No);
+              if (!id.has_value()) {
+                std::cerr << "undefined identifier: " << var_name << std::endl;
+              }
               builder.GetCurrentCode().StoreLocal(*id);
             } else if (std::holds_alternative<ArrayAccessExpression>(
                            assign.lhs->as)) {
@@ -244,6 +247,13 @@ void compile(const Block& root,
                        return;
                      }
                      builder.GetCurrentCode().Jump(loop_ctx->continue_label);
+                   },
+                   [&](const AssignStatement& assign) {
+                     compile_expr(assign.value, builder);
+
+                     std::optional<uint32_t> id = builder.GetIdFor(
+                         assign.name, ProgramBuilder::CreateIfMissing::Yes);
+                     builder.GetCurrentCode().StoreLocal(*id);
                    }},
         stmt->as);
   }

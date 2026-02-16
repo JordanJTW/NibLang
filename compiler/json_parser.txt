@@ -1,105 +1,107 @@
-fn is_whitespace($ch: i32) -> bool{
-  return ($ch == 32 || $ch == 10 || $ch == 13 || $ch == 9);  // space, newline, carriage return, tab
+fn is_whitespace(ch: i32) -> bool {
+  return (ch == 32 || ch == 10 || ch == 13 || ch == 9);  // space, newline, carriage return, tab
 }
 
-fn skip_whitespace($input: String, $idx: i32) -> i32 {
-  while ($idx < String_length($input) &&
-         is_whitespace(String_charAt($input, $idx))) {
-    $idx = $idx + 1;
+fn skip_whitespace(input: String, idx: i32) -> i32 {
+  while (idx < String_length(input) &&
+         is_whitespace(String_charAt(input, idx))) {
+    idx = idx + 1;
   }
-  return $idx;
+  return idx;
 }
 
-fn parse_string($input: String, $parser: arr) -> String {
-  $idx = Array_get($parser, 0);
-  $idx = $idx + 1; // skip initial "
-  $start_idx = $idx;
+fn parse_string(input: String, parser: Array) -> String {
+  let idx: i32 = Array_get(parser, 0);
+  idx = idx + 1; // skip initial "
+  let start_idx: i32 = idx;
 
-  while ($idx < String_length($input)) {
-    $ch = String_charAt($input, $idx);
-    if ($ch == 34) {  // closing "
-      $tmp = String_substr($input, $start_idx, $idx);  // [start, end)
-      $idx = $idx + 1; // skip closing "
-      Array_set($parser, 0, $idx);
-      return $tmp;
+  while (idx < String_length(input)) {
+    let ch: i32 = String_charAt(input, idx);
+    if (ch == 34) {  // closing "
+      let tmp: String = String_substr(input, start_idx, idx);  // [start, end)
+      idx = idx + 1; // skip closing "
+      Array_set(parser, 0, idx);
+      return tmp;
     }
-    $idx = $idx + 1;
+    idx = idx + 1;
   }
   throw "unterminated string";
 }
 
-fn parse_object($input: String, $parser: arr) -> Map {
-  $idx = Array_get($parser, 0);
-  $idx = $idx + 1;
-  $idx = skip_whitespace($input, $idx);
-  $obj = Map_new();
+fn parse_object(input: String, parser: Array) -> Map {
+  let idx: i32 = Array_get(parser, 0);
+  idx = idx + 1;
+  idx = skip_whitespace(input, idx);
+  let obj: Map = Map_new();
 
-  if ($idx >= String_length($input)) {
+  if (idx >= String_length(input)) {
     throw "unterminated obj";
   }
-  $ch = String_charAt($input, $idx);
-  while ($ch != 125) {  // }
-    $idx = skip_whitespace($input, $idx);
-    Array_set($parser, 0, $idx);
-    $key = parse_string($input, $parser);
-    $idx = Array_get($parser, 0);
-    $idx = skip_whitespace($input, $idx);
+  let ch: i32 = String_charAt(input, idx);
+  while (ch != 125) {  // }
+    idx = skip_whitespace(input, idx);
+    Array_set(parser, 0, idx);
+    let key: String = parse_string(input, parser);
+    idx = Array_get(parser, 0);
+    idx = skip_whitespace(input, idx);
 
-    $idx = $idx + 1;  // Skip ':'
+    idx = idx + 1;  // Skip ':'
 
-    Array_set($parser, 0, $idx);
-    $value = parse_value($input, $parser);
-    $idx = Array_get($parser, 0);
-    $idx = skip_whitespace($input, $idx);
+    Array_set(parser, 0, idx);
+    let value = parse_value(input, parser);
+    idx = Array_get(parser, 0);
+    idx = skip_whitespace(input, idx);
 
-    Map_set($obj, $key, $value);
+    Map_set(obj, key, value);
 
-    $ch = String_charAt($input, $idx);
-    $idx = $idx + 1;
+    ch = String_charAt(input, idx);
+    idx = idx + 1;
 
-    if ($ch != 44) {
-      Array_set($parser, 0, $idx);
-      return $obj;
+    if (ch != 44) {
+      Array_set(parser, 0, idx);
+      return obj;
     }
 
-    if ($idx >= String_length($input)) {
+    if (idx >= String_length(input)) {
       throw "unterminated obj";
     }
-    $ch = String_charAt($input, $idx);
+    ch = String_charAt(input, idx);
   }
 }
 
-fn parse_value($input: String, $parser: arr) -> bool | String | Map {
-  $idx = $parser[0];
-  log("parse_value idx:", $idx);
-  $idx = skip_whitespace($input, $idx);
-  $ch = String_charAt($input, $idx);
+fn parse_value(input: String, parser: Array) -> bool | String | Map {
+  let idx: i32 = parser[0];
+  log("parse_value idx:",idx);
+  idx = skip_whitespace(input, idx);
+  let ch: i32 = String_charAt(input, idx);
 
-  if ($ch == 123) {
-    Array_set($parser, 0, $idx);
-    return parse_object($input, $parser);
+  if (ch == 123) {
+    Array_set(parser, 0, idx);
+    return parse_object(input, parser);
   }
 
-  if (String_startsWith($input, "true", $idx)) {
-    Array_set($parser, 0, $idx + 4);
+  if (String_startsWith(input, "true", idx)) {
+    Array_set(parser, 0, idx + 4);
     return true;
   }
 
-  if (String_startsWith($input, "false", $idx)) {
-    $parser[0] = $idx + 5;
+  if (String_startsWith(input, "false", idx)) {
+    parser[0] = idx + 5;
     return false;
   }
 
-  $parser[0] = $idx;
-  return parse_string($input, $parser);
+  parser[0] = idx;
+  return parse_string(input, parser);
 }
 
-$parser = Array_new(1);
-$parser[0] = 0;
+let parser: Array = Array_new(1);
+parser[0] = 0;
 
 $input = "{\"key\": {\"inner\":\t \"jordan\"}}";
-log("input", $input);
-return parse_value($input, $parser);
+
+let input: String = "{\"key\": {\"inner\":\t \"jordan\"}}";
+log("input", input);
+return parse_value(input, parser);
 
 // fn foo(x, y) {
 //   if (x > y) {

@@ -189,6 +189,15 @@ void print_statement(const Statement& stmt, size_t indent) {
                         [&](const ContinueStatement&) {
                           std::cout << std::setw(indent * 2) << " "
                                     << "ContinueStatement" << std::endl;
+                        },
+                        [&](const AssignStatement& assign) {
+                          std::cout << std::setw(indent * 2) << " "
+                                    << "AssignStatement: " << assign.name
+                                    << " : " << assign.type << std::endl;
+
+                          std::cout << std::setw(indent * 2) << " "
+                                    << "Value:" << std::endl;
+                          print_expression(assign.value, indent + 1);
                         }},
              stmt.as);
 }

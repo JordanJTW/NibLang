@@ -22,6 +22,9 @@ enum class TokenKind {
   kKwWhile,      // while
   kKwBreak,      // break
   kKwContinue,   // continue
+  kKwStruct,     // struct
+  kKwExtern,     // extern
+  kKwLet,        // let
   kOpenParen,    // (
   kCloseParen,   // )
   kOpenBrace,    // {

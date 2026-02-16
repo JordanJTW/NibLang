@@ -103,7 +103,7 @@ Token Tokenizer::next() {
     return make_token(TokenKind::kEndOfFile);
 
   // Handle keywords
-  static constexpr std::array<std::pair<std::string_view, TokenKind>, 14>
+  static constexpr std::array<std::pair<std::string_view, TokenKind>, 17>
       kKeywordToToken{{{"label", TokenKind::kKwLabel},
                        {"goto", TokenKind::kKwGoto},
                        {"if", TokenKind::kKwIf},
@@ -117,7 +117,10 @@ Token Tokenizer::next() {
                        {"throw", TokenKind::kKwThrow},
                        {"while", TokenKind::kKwWhile},
                        {"break", TokenKind::kKwBreak},
-                       {"continue", TokenKind::kKwContinue}}};
+                       {"continue", TokenKind::kKwContinue},
+                       {"struct", TokenKind::kKwStruct},
+                       {"extern", TokenKind::kKwExtern},
+                       {"let", TokenKind::kKwLet}}};
 
   for (const auto& [keyword, kind] : kKeywordToToken) {
     if (data_.substr(offset_, keyword.size()) == keyword) {
@@ -225,6 +228,9 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kKwWhile);
     KIND_TO_NAME(kKwBreak);
     KIND_TO_NAME(kKwContinue);
+    KIND_TO_NAME(kKwStruct);
+    KIND_TO_NAME(kKwExtern);
+    KIND_TO_NAME(kKwLet);
     KIND_TO_NAME(kOpenParen);
     KIND_TO_NAME(kCloseParen);
     KIND_TO_NAME(kOpenBrace);

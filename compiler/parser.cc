@@ -134,24 +134,7 @@ void Parser::ParseBlock(Token& token, Block& block) {
       if (token.kind == TokenKind::kSkinnyArrow) {
         token = tokenizer_.next();  // consume '->'
 
-        if (token.kind != TokenKind::kIdent) {
-          HandleError(token, "expected return type");
-        } else {
-          return_types.push_back(token.value);
-          token = tokenizer_.next();
-
-          while (token.kind == TokenKind::kPipe) {
-            token = tokenizer_.next();  // consume '|'
-
-            if (token.kind != TokenKind::kIdent) {
-              HandleError(token, "expected type after '|'");
-              break;
-            }
-
-            return_types.push_back(token.value);
-            token = tokenizer_.next();
-          }
-        }
+        return_types = ParseUnionTypeList(token);
       }
 
       FunctionDeclaration fn{name.value, std::move(arguments),
@@ -311,6 +294,54 @@ void Parser::ParseBlock(Token& token, Block& block) {
       }
       block.statements.push_back(
           std::make_unique<Statement>(Statement{ContinueStatement{}}));
+      continue;
+    }
+
+    if (token.kind == TokenKind::kKwLet) {
+      token = tokenizer_.next();  // after 'let'
+
+      if (token.kind != TokenKind::kIdent) {
+        HandleError(token, "expected variable name");
+        continue;
+      }
+
+      std::string var_name = token.value;
+      token = tokenizer_.next();  // after variable name
+
+      std::vector<std::string> type;
+      if (token.kind == TokenKind::kColon) {
+        token = tokenizer_.next();  // after ':'
+
+        type = ParseUnionTypeList(token);
+        if (type.empty()) {
+          HandleError(token, "expected type name");
+          continue;
+        }
+      }
+
+      if (token.kind != TokenKind::kAssign) {
+        HandleError(token, "expected '=' after variable type");
+        continue;
+      }
+
+      token = tokenizer_.next();  // after '='
+
+      auto value = ParseExpression(token);
+      if (!value) {
+        HandleError(token, "invalid expression");
+        continue;
+      }
+
+      if (token.kind != TokenKind::kEndExpr) {
+        HandleError(token, "expected ;");
+        continue;
+      } else {
+        token = tokenizer_.next();  // consume ;
+      }
+
+      block.statements.push_back(
+          std::make_unique<Statement>(Statement{AssignStatement{
+              var_name, type.empty() ? "Nil" : type[0], std::move(value)}}));
       continue;
     }
 
@@ -479,9 +510,6 @@ std::unique_ptr<Expression> Parser::ParsePostFix(Token& token) {
     return nullptr;
 
   while (true) {
-    std::cout << "Postfix loop, current token: " << token
-              << std::endl;
-
     // Handle function call i.e. $expr(...)
     if (token.kind == TokenKind::kOpenParen) {
       expr = ParseCall(token, std::move(expr));
@@ -523,7 +551,6 @@ std::unique_ptr<Expression> Parser::ParsePostFix(Token& token) {
           Expression{ArrayAccessExpression{std::move(expr), std::move(index)}});
       continue;
     }
-    std::cout << "no matching postfix operator, exiting loop" << std::endl;
     break;
   }
 
@@ -593,6 +620,29 @@ std::unique_ptr<Expression> Parser::ParseCall(
 
   return std::make_unique<Expression>(
       Expression{CallExpression{std::move(callee), std::move(arguments)}});
+}
+
+std::vector<std::string> Parser::ParseUnionTypeList(Token& token) {
+  std::vector<std::string> return_types;
+  if (token.kind != TokenKind::kIdent) {
+    HandleError(token, "expected return type");
+  } else {
+    return_types.push_back(token.value);
+    token = tokenizer_.next();
+
+    while (token.kind == TokenKind::kPipe) {
+      token = tokenizer_.next();  // consume '|'
+
+      if (token.kind != TokenKind::kIdent) {
+        HandleError(token, "expected type after '|'");
+        break;
+      }
+
+      return_types.push_back(token.value);
+      token = tokenizer_.next();
+    }
+  }
+  return return_types;
 }
 
 void Parser::HandleError(Token& token, const std::string& message) {

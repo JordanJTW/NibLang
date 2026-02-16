@@ -193,9 +193,11 @@ void compile(const Block& root,
                      compile_expr(expr, builder);
                    },
                    [&](const FunctionDeclaration& fn) {
-                     builder.EnterFunctionScope(fn.name, fn.arguments);
-                     compile(fn.body, builder);
-                     builder.ExitFunctionScope();
+                     if (fn.body) {
+                       builder.EnterFunctionScope(fn.name, fn.arguments);
+                       compile(*fn.body, builder);
+                       builder.ExitFunctionScope();
+                     }
                    },
                    [&](const ReturnStatement& ret) {
                      compile_expr(ret.value, builder);
@@ -254,6 +256,17 @@ void compile(const Block& root,
                      std::optional<uint32_t> id = builder.GetIdFor(
                          assign.name, ProgramBuilder::CreateIfMissing::Yes);
                      builder.GetCurrentCode().StoreLocal(*id);
+                   },
+                   [&](const StructDeclaration& struct_decl) {
+                     if (struct_decl.is_extern)
+                       return;
+
+                     for (const auto& method : struct_decl.methods) {
+                       builder.EnterFunctionScope(method.first,
+                                                  method.second.arguments);
+                       compile(*method.second.body, builder);
+                       builder.ExitFunctionScope();
+                     }
                    }},
         stmt->as);
   }

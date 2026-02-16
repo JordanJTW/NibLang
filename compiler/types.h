@@ -75,7 +75,7 @@ struct FunctionDeclaration {
   std::string name;
   std::vector<std::pair<std::string, std::string>> arguments;
   std::vector<std::string> return_types;
-  Block body;
+  std::unique_ptr<Block> body;
 };
 
 struct ReturnStatement {
@@ -102,6 +102,13 @@ struct WhileStatement {
 struct BreakStatement {};
 struct ContinueStatement {};
 
+struct StructDeclaration {
+  std::string name;
+  std::vector<std::pair<std::string, std::string>> fields;
+  std::vector<std::pair<std::string, FunctionDeclaration>> methods;
+  bool is_extern;
+};
+
 struct AssignStatement {
   std::string name;
   std::string type;
@@ -117,9 +124,12 @@ struct Statement {
                WhileStatement,               // while (<expr>) {...}
                BreakStatement,               // break;
                ContinueStatement,            // continue;
-               AssignStatement               // let x: i32 = 42;
+               AssignStatement,              // let x: i32 = 42;
+               StructDeclaration             // struct Foo { ... }
                >
       as;
 };
 
 void print_statement(const Statement& stmt, size_t indent = 0);
+void print_expression(const std::unique_ptr<Expression>& expr,
+                      size_t indent = 0);

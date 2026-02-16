@@ -71,86 +71,20 @@ void Parser::ParseBlock(Token& token, Block& block) {
     Token start = token;
     // Function definition i.e. fn $name($args,...):
     if (token.kind == TokenKind::kKwFn) {
-      token = tokenizer_.next();
-
-      const Token name = token;
-      if (name.kind != TokenKind::kIdent) {
-        HandleError(token, "requires a function name");
-        token = tokenizer_.next();
-        continue;
+      if (auto fn = ParseFunctionDeclaration(token)) {
+        block.statements.push_back(
+            std::make_unique<Statement>(Statement{std::move(*(fn.release()))}));
       }
+      continue;
+    }
 
-      token = tokenizer_.next();
-      if (token.kind != TokenKind::kOpenParen) {
-        HandleError(token, "expected (");
-        token = tokenizer_.next();
-        continue;
+    if (token.kind == TokenKind::kKwStruct ||
+        token.kind == TokenKind::kKwExtern) {
+      std::cout << "Parsing struct declaration, token: " << token << std::endl;
+      if (auto struct_decl = ParseStructDeclaration(token)) {
+        block.statements.push_back(std::make_unique<Statement>(
+            Statement{std::move(*(struct_decl.release()))}));
       }
-      token = tokenizer_.next();  // after '('
-
-      std::vector<std::pair<std::string, std::string>> arguments;
-      if (token.kind != TokenKind::kCloseParen) {
-        while (true) {
-          if (token.kind != TokenKind::kIdent) {
-            HandleError(token, "expected parameter name");
-            break;
-          }
-
-          std::string param_name = token.value;
-          token = tokenizer_.next();  // after parameter name
-
-          if (token.kind != TokenKind::kColon) {
-            HandleError(token, "expected ':' after parameter name");
-            break;
-          }
-
-          token = tokenizer_.next();  // after ':'
-
-          if (token.kind != TokenKind::kIdent) {
-            HandleError(token, "expected type name");
-            break;
-          }
-
-          std::string param_type = token.value;
-          arguments.emplace_back(param_name, param_type);
-          token = tokenizer_.next();  // after type
-
-          if (token.kind == TokenKind::kComma) {
-            token = tokenizer_.next();
-            continue;  // next parameter
-          }
-
-          if (token.kind == TokenKind::kCloseParen)
-            break;  // done
-
-          HandleError(token, "expected ',' or ')'");
-          break;
-        }
-      }
-
-      token = tokenizer_.next();  // after ')'
-
-      std::vector<std::string> return_types;
-      if (token.kind == TokenKind::kSkinnyArrow) {
-        token = tokenizer_.next();  // consume '->'
-
-        return_types = ParseUnionTypeList(token);
-      }
-
-      FunctionDeclaration fn{name.value, std::move(arguments),
-                             std::move(return_types), Block{}};
-
-      // ---- now expect '{' ----
-      if (token.kind != TokenKind::kOpenBrace) {
-        HandleError(token, "expected '{'");
-        continue;
-      }
-
-      token = tokenizer_.next();  // afer '{'
-      ParseBlock(token, fn.body);
-
-      block.statements.push_back(
-          std::make_unique<Statement>(Statement{std::move(fn)}));
       continue;
     }
 
@@ -643,6 +577,173 @@ std::vector<std::string> Parser::ParseUnionTypeList(Token& token) {
     }
   }
   return return_types;
+}
+
+std::unique_ptr<StructDeclaration> Parser::ParseStructDeclaration(
+    Token& token) {
+  bool is_extern = token.kind == TokenKind::kKwExtern;
+  if (is_extern)
+    token = tokenizer_.next();  // consume 'extern'
+
+  if (token.kind != TokenKind::kKwStruct) {
+    HandleError(token, "expected 'struct'");
+    return nullptr;
+  }
+  token = tokenizer_.next();  // consume 'struct'
+
+  if (token.kind != TokenKind::kIdent) {
+    HandleError(token, "expected struct name");
+    return nullptr;
+  }
+
+  Token struct_name = token;
+  token = tokenizer_.next();  // consume struct name
+
+  if (token.kind != TokenKind::kOpenBrace) {
+    HandleError(token, "expected '{' after struct name");
+    return nullptr;
+  }
+
+  auto struct_decl = std::make_unique<StructDeclaration>();
+  struct_decl->name = struct_name.value;
+  struct_decl->is_extern = is_extern;
+
+  token = tokenizer_.next();  // consume '{'
+  while (token.kind != TokenKind::kCloseBrace &&
+         token.kind != TokenKind::kEndOfFile) {
+    if (token.kind == TokenKind::kKwFn) {
+      auto method = ParseFunctionDeclaration(token);
+      if (!method) {
+        HandleError(token, "invalid method declaration");
+        return nullptr;
+      }
+      struct_decl->methods.emplace_back(method->name, std::move(*method));
+      continue;
+    }
+
+    if (token.kind == TokenKind::kIdent) {
+      Token field_name = token;
+      token = tokenizer_.next();  // consume <name>
+
+      if (token.kind != TokenKind::kColon) {
+        HandleError(token, "expected ':' after field name");
+        return nullptr;
+      }
+
+      token = tokenizer_.next();  // consume ':'
+
+      std::vector<std::string> type = ParseUnionTypeList(token);
+      if (type.empty()) {
+        HandleError(token, "expected type name");
+        return nullptr;
+      }
+
+      struct_decl->fields.emplace_back(field_name.value, type[0]);
+
+      if (token.kind != TokenKind::kEndExpr) {
+        HandleError(token, "expected ';'");
+        return nullptr;
+      }
+      token = tokenizer_.next();
+      continue;
+    }
+
+    if (token.kind == TokenKind::kCloseBrace)
+      break;
+
+    HandleError(token, "invalid struct member declaration");
+    return nullptr;
+  }
+  token = tokenizer_.next();  // consume '}'
+  return struct_decl;
+}
+
+std::unique_ptr<FunctionDeclaration> Parser::ParseFunctionDeclaration(
+    Token& token) {
+  token = tokenizer_.next();
+
+  const Token name = token;
+  if (name.kind != TokenKind::kIdent) {
+    HandleError(token, "requires a function name");
+    token = tokenizer_.next();
+    return nullptr;
+  }
+
+  token = tokenizer_.next();
+  if (token.kind != TokenKind::kOpenParen) {
+    HandleError(token, "expected (");
+    token = tokenizer_.next();
+    return nullptr;
+  }
+  token = tokenizer_.next();  // after '('
+
+  std::vector<std::pair<std::string, std::string>> arguments;
+  if (token.kind != TokenKind::kCloseParen) {
+    while (true) {
+      if (token.kind != TokenKind::kIdent) {
+        HandleError(token, "expected parameter name");
+        break;
+      }
+
+      std::string param_name = token.value;
+      token = tokenizer_.next();  // after parameter name
+
+      if (token.kind != TokenKind::kColon) {
+        HandleError(token, "expected ':' after parameter name");
+        break;
+      }
+
+      token = tokenizer_.next();  // after ':'
+
+      if (token.kind != TokenKind::kIdent) {
+        HandleError(token, "expected type name");
+        break;
+      }
+
+      std::string param_type = token.value;
+      arguments.emplace_back(param_name, param_type);
+      token = tokenizer_.next();  // after type
+
+      if (token.kind == TokenKind::kComma) {
+        token = tokenizer_.next();
+        continue;  // next parameter
+      }
+
+      if (token.kind == TokenKind::kCloseParen)
+        break;  // done
+
+      HandleError(token, "expected ',' or ')'");
+      break;
+    }
+  }
+
+  token = tokenizer_.next();  // after ')'
+
+  std::vector<std::string> return_types;
+  if (token.kind == TokenKind::kSkinnyArrow) {
+    token = tokenizer_.next();  // consume '->'
+
+    return_types = ParseUnionTypeList(token);
+  }
+
+  FunctionDeclaration fn{name.value, std::move(arguments),
+                         std::move(return_types)};
+
+  if (token.kind == TokenKind::kEndExpr) {
+    token = tokenizer_.next();  // consume ';'
+    return std::make_unique<FunctionDeclaration>(std::move(fn));
+  }
+
+  if (token.kind != TokenKind::kOpenBrace) {
+    HandleError(token, "expected '{'");
+    return nullptr;
+  }
+
+  token = tokenizer_.next();  // afer '{'
+  Block body;
+  ParseBlock(token, body);
+  fn.body = std::make_unique<Block>(std::move(body));
+  return std::make_unique<FunctionDeclaration>(std::move(fn));
 }
 
 void Parser::HandleError(Token& token, const std::string& message) {

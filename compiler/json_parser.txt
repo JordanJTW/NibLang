@@ -1,3 +1,14 @@
+extern struct String {
+  fn length(s: String) -> i32;
+  fn charAt(s: String, idx: i32) -> i32;
+  fn substr(s: String, start: i32, end: i32) -> String;
+  fn startsWith(s: String, prefix: String, idx: i32) -> bool;
+}
+
+struct Parser {
+  idx: i32;
+}
+
 fn is_whitespace(ch: i32) -> bool {
   return (ch == 32 || ch == 10 || ch == 13 || ch == 9);  // space, newline, carriage return, tab
 }
@@ -97,8 +108,6 @@ fn parse_value(input: String, parser: Array) -> bool | String | Map {
 let parser: Array = Array_new(1);
 parser[0] = 0;
 
-$input = "{\"key\": {\"inner\":\t \"jordan\"}}";
-
 let input: String = "{\"key\": {\"inner\":\t \"jordan\"}}";
 log("input", input);
 return parse_value(input, parser);
@@ -113,4 +122,13 @@ return parse_value(input, parser);
 
 // fn bar(a, b) {
 //   return foo(a * (b + 4), 5);
+// }
+
+// struct Hello {
+//   x: i32;
+//   y: i32;
+
+//   fn world(self: Hello) -> i32 {
+//     return self.x + self.y;
+//   }
 // }

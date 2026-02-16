@@ -33,6 +33,8 @@ class Parser {
                                         std::unique_ptr<Expression> callee);
 
   std::vector<std::string> ParseUnionTypeList(Token& current_token);
+  std::unique_ptr<StructDeclaration> ParseStructDeclaration(Token& token);
+  std::unique_ptr<FunctionDeclaration> ParseFunctionDeclaration(Token& token);
 
   void HandleError(Token& error_token, const std::string& message);
 

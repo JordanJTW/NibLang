@@ -507,7 +507,7 @@ std::unique_ptr<Expression> Parser::ParseCall(
 std::vector<std::string> Parser::ParseUnionTypeList() {
   std::vector<std::string> return_types;
   if (current_token_.kind != TokenKind::kIdent) {
-    HandleError("expected return type");
+    HandleError("expected type");
   } else {
     return_types.push_back(current_token_.value);
     current_token_ = tokenizer_.next();
@@ -561,7 +561,6 @@ std::unique_ptr<StructDeclaration> Parser::ParseStructDeclaration() {
     if (current_token_.kind == TokenKind::kKwFn) {
       auto method = ParseFunctionDeclaration();
       if (!method) {
-        HandleError("invalid method declaration");
         return nullptr;
       }
       struct_decl->methods.emplace_back(method->name, std::move(*method));
@@ -616,14 +615,12 @@ std::unique_ptr<FunctionDeclaration> Parser::ParseFunctionDeclaration() {
   const Token name = current_token_;
   if (name.kind != TokenKind::kIdent) {
     HandleError("requires a function name");
-    current_token_ = tokenizer_.next();
     return nullptr;
   }
+  current_token_ = tokenizer_.next();  // after function name
 
-  current_token_ = tokenizer_.next();
   if (current_token_.kind != TokenKind::kOpenParen) {
     HandleError("expected (");
-    current_token_ = tokenizer_.next();
     return nullptr;
   }
   current_token_ = tokenizer_.next();  // after '('
@@ -707,10 +704,21 @@ std::optional<Token> Parser::ExpectNextToken(TokenKind expected_kind,
 
 void Parser::HandleError(std::string_view message) {
   print_error(text_, current_token_, message);
-  while (current_token_.kind != TokenKind::kEndExpr &&
+
+  auto is_start_of_statement = [](TokenKind kind) {
+    return kind == TokenKind::kKwLet || kind == TokenKind::kKwStruct ||
+           kind == TokenKind::kKwExtern || kind == TokenKind::kKwWhile ||
+           kind == TokenKind::kKwReturn || kind == TokenKind::kKwBreak ||
+           kind == TokenKind::kKwFn || kind == TokenKind::kKwContinue ||
+           kind == TokenKind::kKwThrow;
+  };
+
+  while (!is_start_of_statement(current_token_.kind) &&
+         current_token_.kind != TokenKind::kEndExpr &&
          current_token_.kind != TokenKind::kEndOfFile)
     current_token_ = tokenizer_.next();
 
-  // Sync past end of expression or EOF (EOF is returned repeatedly).
-  current_token_ = tokenizer_.next();
+  // Sync past ';' as that does not start a statement
+  if (current_token_.kind == TokenKind::kEndExpr)
+    current_token_ = tokenizer_.next();
 }

@@ -1,6 +1,9 @@
 add_library(assembler assembler.cc)
 target_include_directories(assembler PRIVATE ${CMAKE_SOURCE_DIR})
 
+add_library(logging logging.cc)
+target_include_directories(logging PRIVATE ${CMAKE_SOURCE_DIR})
+
 add_library(parser parser.cc types.cc)
 target_include_directories(parser PRIVATE ${CMAKE_SOURCE_DIR})
 

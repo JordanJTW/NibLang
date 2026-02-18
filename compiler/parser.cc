@@ -710,4 +710,7 @@ void Parser::HandleError(std::string_view message) {
   while (current_token_.kind != TokenKind::kEndExpr &&
          current_token_.kind != TokenKind::kEndOfFile)
     current_token_ = tokenizer_.next();
+
+  // Sync past end of expression or EOF (EOF is returned repeatedly).
+  current_token_ = tokenizer_.next();
 }

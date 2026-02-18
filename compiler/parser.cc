@@ -595,6 +595,11 @@ std::unique_ptr<StructDeclaration> Parser::ParseStructDeclaration() {
       continue;
     }
 
+    if (current_token_.kind == TokenKind::kComment) {
+      current_token_ = tokenizer_.next();
+      continue;
+    }
+
     if (current_token_.kind == TokenKind::kCloseBrace)
       break;
 

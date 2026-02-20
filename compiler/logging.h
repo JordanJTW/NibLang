@@ -47,7 +47,7 @@ class VoidifyStream final {
 // Helper macro which avoids evaluating the arguents to a stream if the
 // condition is false.
 #define LAZY_CHECK_STREAM(stream, condition) \
-  (condition) ? (void)0 : ::core::logging::VoidifyStream() & (stream)
+  (condition) ? (void)0 : ::core::logging::internal::VoidifyStream() & (stream)
 
 }  // namespace internal
 

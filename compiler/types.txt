@@ -1,0 +1,29 @@
+extern struct String {
+  fn length(self: String) -> i32;
+
+  fn sum(self: String) -> i32 {
+    return self.length() + 9;
+  }
+}
+
+fn add(x: i32, y: i32) -> i32 {
+  return x + y;
+}
+
+fn createDog() -> Dog;
+
+struct Dog {
+  fn bark(self: Dog) -> i32 {
+    let x: i32 = 0;
+    while (x < "who let the dogs".length()) {
+      x = x + 1;
+    }
+    return x;
+  } 
+}
+
+let x = 3 + add(4, 2);
+let y: i32 = 1 + x + "hello world".length();
+
+let dog: Dog = createDog();
+dog.bark();

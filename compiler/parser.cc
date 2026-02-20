@@ -6,6 +6,7 @@
 #include <string_view>
 
 #include "compiler/assembler.h"
+#include "compiler/logging.h"
 #include "compiler/tokenizer.h"
 #include "compiler/types.h"
 
@@ -45,6 +46,10 @@ void print_error(const std::string& file,
             << "^ " << message << std::endl;
 }
 
+TextRange make_text_range(Token start, Token end) {
+  return {start.idx, end.idx};
+}
+
 Block Parser::Parse() {
   Block root_block;
   ParseBlock(root_block);
@@ -79,8 +84,9 @@ void Parser::ParseBlock(Block& block) {
     // Function definition i.e. fn $name($args,...):
     if (current_token_.kind == TokenKind::kKwFn) {
       if (auto fn = ParseFunctionDeclaration()) {
-        block.statements.push_back(
-            std::make_unique<Statement>(Statement{std::move(*(fn.release()))}));
+        block.statements.push_back(std::make_unique<Statement>(
+            Statement{std::move(*(fn.release())),
+                      make_text_range(start, current_token_)}));
       }
       continue;
     }
@@ -90,7 +96,8 @@ void Parser::ParseBlock(Block& block) {
         current_token_.kind == TokenKind::kKwExtern) {
       if (auto struct_decl = ParseStructDeclaration()) {
         block.statements.push_back(std::make_unique<Statement>(
-            Statement{std::move(*(struct_decl.release()))}));
+            Statement{std::move(*(struct_decl.release())),
+                      make_text_range(start, current_token_)}));
       }
       continue;
     }
@@ -114,8 +121,8 @@ void Parser::ParseBlock(Block& block) {
 
       ParseBlock(while_stmt.body);
 
-      block.statements.push_back(
-          std::make_unique<Statement>(Statement{std::move(while_stmt)}));
+      block.statements.push_back(std::make_unique<Statement>(Statement{
+          std::move(while_stmt), make_text_range(start, current_token_)}));
       continue;
     }
 
@@ -148,8 +155,8 @@ void Parser::ParseBlock(Block& block) {
         ParseBlock(if_stmt.else_body);
       }
 
-      block.statements.push_back(
-          std::make_unique<Statement>(Statement{std::move(if_stmt)}));
+      block.statements.push_back(std::make_unique<Statement>(Statement{
+          std::move(if_stmt), make_text_range(start, current_token_)}));
       continue;
     }
 
@@ -159,7 +166,8 @@ void Parser::ParseBlock(Block& block) {
         CONTINUE_IF_FALSE(ExpectNextToken(TokenKind::kEndExpr,
                                           "expected ';' after return value"));
         block.statements.push_back(std::make_unique<Statement>(
-            Statement{ReturnStatement{std::move(expr)}}));
+            Statement{ReturnStatement{std::move(expr)},
+                      make_text_range(start, current_token_)}));
       }
       continue;
     }
@@ -170,7 +178,8 @@ void Parser::ParseBlock(Block& block) {
         CONTINUE_IF_FALSE(ExpectNextToken(TokenKind::kEndExpr,
                                           "expected ';' after throw value"));
         block.statements.push_back(std::make_unique<Statement>(
-            Statement{ThrowStatement{std::move(expr)}}));
+            Statement{ThrowStatement{std::move(expr)},
+                      make_text_range(start, current_token_)}));
       }
       continue;
     }
@@ -179,8 +188,8 @@ void Parser::ParseBlock(Block& block) {
       current_token_ = tokenizer_.next();
       CONTINUE_IF_FALSE(
           ExpectNextToken(TokenKind::kEndExpr, "expected ';' after break"));
-      block.statements.push_back(
-          std::make_unique<Statement>(Statement{BreakStatement{}}));
+      block.statements.push_back(std::make_unique<Statement>(
+          Statement{BreakStatement{}, make_text_range(start, current_token_)}));
       continue;
     }
 
@@ -190,8 +199,8 @@ void Parser::ParseBlock(Block& block) {
       CONTINUE_IF_FALSE(
           ExpectNextToken(TokenKind::kEndExpr, "expected ';' after continue"));
 
-      block.statements.push_back(
-          std::make_unique<Statement>(Statement{ContinueStatement{}}));
+      block.statements.push_back(std::make_unique<Statement>(Statement{
+          ContinueStatement{}, make_text_range(start, current_token_)}));
       continue;
     }
 
@@ -221,9 +230,12 @@ void Parser::ParseBlock(Block& block) {
 
       CONTINUE_IF_FALSE(ExpectNextToken(TokenKind::kEndExpr, "expected ';'"));
 
-      block.statements.push_back(std::make_unique<Statement>(Statement{
-          AssignStatement{variable_name->value, type.empty() ? "Nil" : type[0],
-                          std::move(value_expr)}}));
+      std::string assignment_type;
+      if (!type.empty())
+        assignment_type = type[0];
+      block.statements.push_back(
+          std::make_unique<Statement>(Statement{AssignStatement{
+              variable_name->value, assignment_type, std::move(value_expr)}}));
       continue;
     }
 
@@ -232,8 +244,8 @@ void Parser::ParseBlock(Block& block) {
         HandleError("expected ;");
         continue;
       } else {
-        block.statements.push_back(
-            std::make_unique<Statement>(Statement{std::move(expr)}));
+        block.statements.push_back(std::make_unique<Statement>(Statement{
+            std::move(expr), make_text_range(start, current_token_)}));
         current_token_ = tokenizer_.next();  // consume ;
       }
       continue;

@@ -6,6 +6,7 @@
 #include "compiler/parser.h"
 #include "compiler/program_builder.h"
 #include "compiler/tokenizer.h"
+#include "compiler/type_checker.h"
 #include "src/vm.h"
 
 template <class... Ts>
@@ -55,6 +56,33 @@ void emit_op(const Token& op, ProgramBuilder& builder) {
 }
 
 void compile_expr(const std::unique_ptr<Expression>& expr,
+                  ProgramBuilder& builder);
+
+void compile_call(const CallExpression& call, ProgramBuilder& builder) {
+  if (call.resolved) {
+    switch (call.resolved->kind) {
+      case Free:
+        for (const auto& arg : call.arguments)
+          compile_expr(arg, builder);
+        builder.GetCurrentCode().Call(call.resolved->function_idx,
+                                      call.arguments.size());
+        break;
+      case Method:
+        if (const auto* const member_access =
+                std::get_if<MemberAccessExpression>(&call.callee->as)) {
+          compile_expr(member_access->object, builder);
+          for (const auto& arg : call.arguments)
+            compile_expr(arg, builder);
+
+          builder.GetCurrentCode().Call(call.resolved->function_idx,
+                                        call.arguments.size() + 1);
+        }
+        break;
+    }
+  }
+}
+
+void compile_expr(const std::unique_ptr<Expression>& expr,
                   ProgramBuilder& builder) {
   if (expr == nullptr) {
     std::cerr << "Failed to compile null expression" << std::endl;
@@ -93,23 +121,7 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
             compile_expr(binary.rhs, builder);
             emit_op(Token{.kind = binary.op}, builder);
           },
-          [&](const CallExpression& call) {
-            for (const auto& arg : call.arguments)
-              compile_expr(arg, builder);
-
-            if (std::holds_alternative<PrimaryExpression>(call.callee->as) &&
-                std::holds_alternative<Identifier>(
-                    std::get<PrimaryExpression>(call.callee->as).value)) {
-              std::string fn_name =
-                  std::get<Identifier>(
-                      std::get<PrimaryExpression>(call.callee->as).value)
-                      .name;
-              builder.CallFunction(fn_name, call.arguments.size());
-            } else {
-              std::cerr << "unsupported callee type in call expression"
-                        << std::endl;
-            }
-          },
+          [&](const CallExpression& call) { compile_call(call, builder); },
           [&](const AssignmentExpression& assign) {
             if (std::holds_alternative<PrimaryExpression>(assign.lhs->as) &&
                 std::holds_alternative<Identifier>(
@@ -258,12 +270,13 @@ void compile(const Block& root,
                      builder.GetCurrentCode().StoreLocal(*id);
                    },
                    [&](const StructDeclaration& struct_decl) {
-                     if (struct_decl.is_extern)
-                       return;
-
                      for (const auto& method : struct_decl.methods) {
-                       builder.EnterFunctionScope(method.first,
-                                                  method.second.arguments);
+                       if (!method.second.body)
+                         continue;
+
+                       builder.EnterFunctionScope(
+                           struct_decl.name + "_" + method.first,
+                           method.second.arguments);
                        compile(*method.second.body, builder);
                        builder.ExitFunctionScope();
                      }
@@ -291,14 +304,17 @@ int main(int argc, char* argv[]) {
   Parser parser(contents, builder);
 
   Block root = parser.Parse();
+  TypeChecker type_checker(contents);
+  type_checker.Check(root);
+
   std::cout << "Finished parsing. Printing AST:\n";
   for (const auto& stmt : root.statements) {
     print_statement(*stmt);
   }
 
   compile(root, builder);
-  std::vector<uint8_t> program_image = builder.GenerateImage();
 
+  std::vector<uint8_t> program_image = builder.GenerateImage();
   std::ofstream out("/tmp/prog.ink", std::ios::binary);
 
   if (out.is_open()) {

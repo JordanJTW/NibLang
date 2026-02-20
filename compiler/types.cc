@@ -50,7 +50,7 @@ void print_expression(const std::unique_ptr<Expression>& expr, size_t indent) {
           [&](const BinaryExpression& binary) {
             std::cout << std::string(indent, ' ')
                       << "BinaryExpression (op=" << static_cast<int>(binary.op)
-                      << ")" << std::endl;
+                      << ") type: " << expr->type << std::endl;
 
             std::cout << std::string(indent + 2, ' ') << "LHS:" << std::endl;
             print_expression(binary.lhs, indent + 4);
@@ -60,7 +60,8 @@ void print_expression(const std::unique_ptr<Expression>& expr, size_t indent) {
           },
           [&](const AssignmentExpression& assign) {
             std::cout << std::string(indent, ' ')
-                      << "AssignmentExpression:" << std::endl;
+                      << "AssignmentExpression type: " << expr->type
+                      << std::endl;
 
             std::cout << std::string(indent + 2, ' ') << "LHS:" << std::endl;
             print_expression(assign.lhs, indent + 4);
@@ -69,7 +70,7 @@ void print_expression(const std::unique_ptr<Expression>& expr, size_t indent) {
           },
           [&](const CallExpression& call) {
             std::cout << std::string(indent, ' ')
-                      << "CallExpression:" << std::endl;
+                      << "CallExpression type: " << expr->type << std::endl;
             std::cout << std::string(indent + 2, ' ') << "Callee:" << std::endl;
             print_expression(call.callee, indent + 4);
 
@@ -77,18 +78,25 @@ void print_expression(const std::unique_ptr<Expression>& expr, size_t indent) {
                       << "Arguments:" << std::endl;
             for (const auto& arg : call.arguments)
               print_expression(arg, indent + 4);
+
+            std::cout << std::string(indent + 2, ' ') << "Call Idx: "
+                      << (call.resolved.has_value()
+                              ? std::to_string(call.resolved->function_idx)
+                              : "Unresolved")
+                      << std::endl;
           },
           [&](const MemberAccessExpression& member_access) {
             std::cout << std::string(indent, ' ')
                       << "MemberAccessExpression: " << member_access.member_name
-                      << std::endl;
+                      << " type: " << expr->type << std::endl;
 
             std::cout << std::string(indent + 2, ' ') << "Object:" << std::endl;
             print_expression(member_access.object, indent + 4);
           },
           [&](const ArrayAccessExpression& array_access) {
             std::cout << std::string(indent, ' ')
-                      << "ArrayAccessExpression:" << std::endl;
+                      << "ArrayAccessExpression type: " << expr->type
+                      << std::endl;
 
             std::cout << std::string(indent + 2, ' ') << "Array:" << std::endl;
             print_expression(array_access.array, indent + 4);
@@ -99,7 +107,7 @@ void print_expression(const std::unique_ptr<Expression>& expr, size_t indent) {
           [&](const LogicExpression& logic) {
             std::cout << std::string(indent, ' ')
                       << "LogicExpression (op=" << static_cast<int>(logic.kind)
-                      << ")" << std::endl;
+                      << ") type: " << expr->type << std::endl;
 
             std::cout << std::string(indent + 2, ' ') << "LHS:" << std::endl;
             print_expression(logic.lhs, indent + 4);
@@ -112,7 +120,10 @@ void print_expression(const std::unique_ptr<Expression>& expr, size_t indent) {
 
 void print_function(const FunctionDeclaration& fn, size_t indent) {
   std::cout << std::string(indent, ' ') << "FunctionDeclaration: " << fn.name
-            << std::endl;
+            << " ["
+            << (fn.call_idx.has_value() ? std::to_string(fn.call_idx.value())
+                                        : "Unresolved")
+            << "]" << std::endl;
 
   std::cout << std::string(indent + 2, ' ') << "Arguments:" << std::endl;
   for (const auto& arg : fn.arguments) {
@@ -190,7 +201,7 @@ void print_statement(const Statement& stmt, size_t indent) {
           },
           [&](const AssignStatement& assign) {
             std::cout << std::string(indent, ' ')
-                      << "AssignStatement: " << assign.name << " : "
+                      << "AssignStatement: " << assign.name << ": "
                       << assign.type << std::endl;
 
             std::cout << std::string(indent + 2, ' ') << "Value:" << std::endl;

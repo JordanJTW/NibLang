@@ -27,9 +27,19 @@ struct PrimaryExpression {
   std::variant<StringLiteral, Identifier, int32_t, float, bool> value;
 };
 
+using CallIdx = size_t;
+
+enum FunctionKind { Free, Method };
+
+struct ResolvedCall {
+  CallIdx function_idx;
+  FunctionKind kind;
+};
+
 struct CallExpression {
   std::unique_ptr<Expression> callee;
   std::vector<std::unique_ptr<Expression>> arguments;
+  std::optional<ResolvedCall> resolved;
 };
 
 struct MemberAccessExpression {
@@ -54,6 +64,9 @@ struct LogicExpression {
   std::unique_ptr<Expression> rhs;
 };
 
+using TypeId = size_t;
+using TextRange = std::pair<size_t, size_t>;
+
 struct Expression {
   std::variant<PrimaryExpression,
                BinaryExpression,
@@ -63,6 +76,9 @@ struct Expression {
                ArrayAccessExpression,
                LogicExpression>
       as;
+
+  TypeId type;
+  TextRange text_range;
 };
 
 struct Statement;
@@ -76,6 +92,7 @@ struct FunctionDeclaration {
   std::vector<std::pair<std::string, std::string>> arguments;
   std::vector<std::string> return_types;
   std::unique_ptr<Block> body;
+  std::optional<CallIdx> call_idx;
 };
 
 struct ReturnStatement {
@@ -128,6 +145,7 @@ struct Statement {
                StructDeclaration             // struct Foo { ... }
                >
       as;
+  TextRange text_range;
 };
 
 void print_statement(const Statement& stmt, size_t indent = 0);

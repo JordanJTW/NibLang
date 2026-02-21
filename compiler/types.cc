@@ -114,6 +114,15 @@ void print_expression(const std::unique_ptr<Expression>& expr, size_t indent) {
 
             std::cout << std::string(indent + 2, ' ') << "RHS:" << std::endl;
             print_expression(logic.rhs, indent + 4);
+          },
+          [&](const NewExpression& new_expr) {
+            std::cout << std::string(indent, ' ')
+                      << "NewExpression: " << new_expr.struct_name
+                      << " type: " << expr->type << std::endl;
+
+            for (const auto& expr : new_expr.arguments) {
+              print_expression(expr, indent + 2);
+            }
           }},
       expr->as);
 }

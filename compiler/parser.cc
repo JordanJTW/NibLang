@@ -480,6 +480,40 @@ std::unique_ptr<Expression> Parser::ParsePrimary() {
       return expr;
     }
 
+    case TokenKind::kKwNew: {
+      current_token_ = tokenizer_.next();  // consume "new"
+
+      std::optional<Token> ident =
+          ExpectNextToken(TokenKind::kIdent, "struct name required");
+      if (!ident)
+        return nullptr;
+
+      if (!ExpectNextToken(TokenKind::kOpenParen, "missing '('"))
+        return nullptr;
+
+      NewExpression new_expr{ident->value};
+      if (current_token_.kind != TokenKind::kCloseParen) {
+        while (true) {
+          auto arg = ParseExpression();
+          if (!arg)
+            return nullptr;
+          new_expr.arguments.push_back(std::move(arg));
+
+          if (current_token_.kind == TokenKind::kCloseParen)
+            break;
+
+          if (current_token_.kind != TokenKind::kComma) {
+            HandleError("expected ',' or ')'");
+            return nullptr;
+          }
+
+          current_token_ = tokenizer_.next();
+        }
+      }
+      current_token_ = tokenizer_.next();  // consume ')'
+      return std::make_unique<Expression>(Expression{std::move(new_expr)});
+    }
+
     default:
       HandleError("expected expression");
       return nullptr;

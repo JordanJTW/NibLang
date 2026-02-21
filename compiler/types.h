@@ -42,9 +42,16 @@ struct CallExpression {
   std::optional<ResolvedCall> resolved;
 };
 
+using MemberIdx = size_t;
+
+struct ResolvedAccess {
+  MemberIdx index;
+};
+
 struct MemberAccessExpression {
   std::unique_ptr<Expression> object;
   std::string member_name;
+  std::optional<ResolvedAccess> resolved;
 };
 
 struct ArrayAccessExpression {
@@ -64,6 +71,16 @@ struct LogicExpression {
   std::unique_ptr<Expression> rhs;
 };
 
+struct ResolvedNew {
+  std::string new_function;
+};
+
+struct NewExpression {
+  std::string struct_name;
+  std::vector<std::unique_ptr<Expression>> arguments;
+  std::optional<ResolvedNew> resolved;
+};
+
 using TypeId = size_t;
 using TextRange = std::pair<size_t, size_t>;
 
@@ -74,7 +91,8 @@ struct Expression {
                AssignmentExpression,
                MemberAccessExpression,
                ArrayAccessExpression,
-               LogicExpression>
+               LogicExpression,
+               NewExpression>
       as;
 
   TypeId type;

@@ -38,7 +38,7 @@ class TypeChecker {
   std::map<std::string, TypeId> string_to_type_;
   TypeId next_type_id_;
 
-  CallIdx next_call_idx_ = 0;
+  CallIdx next_call_idx_ = 1;
   const std::string& file_;
 
   struct FunctionType {
@@ -48,8 +48,14 @@ class TypeChecker {
     CallIdx call_idx;
   };
 
+  struct MemberType {
+    std::optional<MemberIdx> index_in_array;
+    TypeId type_id;
+  };
+
   struct StructType {
-    std::map<std::string, TypeId> member_types;
+    std::map<std::string, MemberType> member_types;
+    std::vector<TypeId> field_members;
     const StructDeclaration* parsed_struct;
   };
 

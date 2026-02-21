@@ -16,6 +16,20 @@ vm_value_t vm_array_new(vm_value_t* argv, size_t argc, void* vm) {
   return (vm_value_t){.type = VALUE_TYPE_ARRAY, .as.array = array};
 }
 
+vm_value_t vm_array_init(vm_value_t* argv, size_t argc, void* vm) {
+  assert(argc > 1 && (argv[0].type == VALUE_TYPE_INT) && "requires size");
+
+  int length = argv[0].as.i32;
+  Array* array = calloc(1, sizeof(Array) + length * sizeof(vm_value_t));
+  array->len = length;
+  array->rc.deleter = &free;
+
+  for (int i = 1; i <= length; ++i) {
+    array->data[i - 1] = argv[i];
+  }
+  return (vm_value_t){.type = VALUE_TYPE_ARRAY, .as.array = array};
+}
+
 vm_value_t vm_array_get(vm_value_t* argv, size_t argc, void* vm) {
   assert(argc == 2 && (argv[0].type == VALUE_TYPE_ARRAY) &&
          (argv[1].type == VALUE_TYPE_INT) &&

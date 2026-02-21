@@ -68,14 +68,17 @@ void TypeChecker::Check(Block& block) {
       StructType struct_type;
       struct_type.parsed_struct = struct_decl;
 
+      MemberIdx next_member_idx = 0;
       for (const auto& [name, type] : struct_decl->fields) {
         if (auto type_id = GetIdFor({type}, CreateIfMissing::No)) {
-          struct_type.member_types[name] = type_id.value();
+          struct_type.member_types[name] = {next_member_idx++, type_id.value()};
+          struct_type.field_members.push_back(type_id.value());
         }
       }
       for (auto& [name, fn] : struct_decl->methods) {
         if (auto type_id = DefineFunction(fn, FunctionKind::Method)) {
-          struct_type.member_types[name] = type_id.value();
+          // Methods are not stored within the struct memory so no index.
+          struct_type.member_types[name] = {std::nullopt, type_id.value()};
         }
       }
 
@@ -96,7 +99,6 @@ void TypeChecker::Check(Block& block) {
   }
 
   for (auto& statement : block.statements) {
-    print_error(file_, statement->text_range);
     CheckStatement(statement);
   }
 }
@@ -239,7 +241,12 @@ TypeId TypeChecker::CheckExpression(std::unique_ptr<Expression>& expression) {
             const StructType& s = std::get<StructType>(struct_type);
             if (auto it = s.member_types.find(member_access.member_name);
                 it != s.member_types.end()) {
-              return it->second;
+              if (auto index = it->second.index_in_array) {
+                member_access.resolved = ResolvedAccess{index.value()};
+              } else {
+                LOG(ERROR) << "Unable to resolve: " << it->first;
+              }
+              return it->second.type_id;
             }
 
             LOG(ERROR) << "No member '" << member_access.member_name << "' on "
@@ -257,6 +264,35 @@ TypeId TypeChecker::CheckExpression(std::unique_ptr<Expression>& expression) {
               LOG(ERROR) << "LHS and RHS must be the same type";
 
             return LiteralType::BOOL;
+          },
+          [&](NewExpression& new_expr) -> TypeId {
+            TypeId type_id = string_to_type_[new_expr.struct_name];
+            auto& struct_type = type_info_[type_id];
+            if (!std::holds_alternative<StructType>(struct_type)) {
+              LOG(ERROR) << "new only works with structs";
+              return LiteralType::Void;
+            }
+
+            const StructType& s = std::get<StructType>(struct_type);
+            if (s.parsed_struct->is_extern) {
+              new_expr.resolved = ResolvedNew{s.parsed_struct->name + "_new"};
+              return type_id;
+            }
+
+            if (s.field_members.size() != new_expr.arguments.size()) {
+              LOG(ERROR) << "Incorrect number of arguments to instantiate "
+                            "struct: expected("
+                         << s.field_members.size() << ") vs. provided("
+                         << new_expr.arguments.size() << ")";
+            } else {
+              for (size_t i = 0; i < new_expr.arguments.size(); ++i) {
+                TypeId type_id = CheckExpression(new_expr.arguments[i]);
+                if (type_id != s.field_members[i]) {
+                  LOG(ERROR) << "Argument to new has incorrect type";
+                }
+              }
+            }
+            return type_id;
           }},
       expression->as);
 
@@ -268,7 +304,6 @@ std::optional<TypeId> TypeChecker::GetIdFor(std::set<std::string> sumtype,
   if (sumtype.size() == 1) {
     if (auto it = string_to_type_.find(*sumtype.begin());
         it != string_to_type_.end()) {
-      LOG(INFO) << "Id for " << *sumtype.begin() << " is " << it->second;
       return it->second;
     } else if (create == CreateIfMissing::Yes) {
       TypeId next_id = next_type_id_++;

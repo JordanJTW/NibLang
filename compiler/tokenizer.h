@@ -25,6 +25,7 @@ enum class TokenKind {
   kKwStruct,     // struct
   kKwExtern,     // extern
   kKwLet,        // let
+  kKwNew,        // new
   kOpenParen,    // (
   kCloseParen,   // )
   kOpenBrace,    // {

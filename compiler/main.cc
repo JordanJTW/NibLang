@@ -3,6 +3,7 @@
 #include <fstream>
 
 #include "compiler/assembler.h"
+#include "compiler/logging.h"
 #include "compiler/parser.h"
 #include "compiler/program_builder.h"
 #include "compiler/tokenizer.h"
@@ -152,8 +153,15 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
                         << std::endl;
             }
           },
-          [&](const MemberAccessExpression&) {
-            std::cerr << "member access not yet supported" << std::endl;
+          [&](const MemberAccessExpression& member_access) {
+            if (const auto& resolved = member_access.resolved) {
+              compile_expr(member_access.object, builder);
+              builder.GetCurrentCode().PushInt32(resolved->index);
+              builder.CallFunction("Array_get", 2);
+            } else {
+              LOG(FATAL) << "Unresolved member access: "
+                         << member_access.member_name;
+            }
           },
           [&](const ArrayAccessExpression& array_access) {
             compile_expr(array_access.array, builder);
@@ -187,6 +195,18 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
             }
 
             builder.GetCurrentCode().Label(end_label);
+          },
+          [&](const NewExpression& new_expr) {
+            builder.GetCurrentCode().PushInt32(new_expr.arguments.size());
+            for (const auto& expr : new_expr.arguments) {
+              compile_expr(expr, builder);
+            }
+            if (const auto& resolved = new_expr.resolved) {
+              builder.CallFunction(resolved->new_function,
+                                   new_expr.arguments.size() + 1);
+            } else {
+              builder.CallFunction("Array_init", new_expr.arguments.size() + 1);
+            }
           }},
       expr->as);
 }

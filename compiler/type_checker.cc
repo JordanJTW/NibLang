@@ -197,34 +197,56 @@ TypeId TypeChecker::CheckExpression(std::unique_ptr<Expression>& expression) {
             TypeId callee_type = CheckExpression(call.callee);
 
             auto& fn_type = type_info_[callee_type];
-            if (!std::holds_alternative<FunctionType>(fn_type)) {
-              LOG(ERROR) << "Called object is not a function";
+            if (std::holds_alternative<FunctionType>(fn_type)) {
+              const FunctionType& f = std::get<FunctionType>(fn_type);
+
+              // Account for the implicit "self" argument for method calls
+              size_t extra_argc = 0;
+              if (f.kind == FunctionKind::Method) {
+                if (f.argument_types.size() == 0) {
+                  LOG(ERROR) << "Methods must begin with a `self` argument";
+                }
+                extra_argc += 1;
+              }
+
+              if (call.arguments.size() + extra_argc !=
+                  f.argument_types.size()) {
+                LOG(ERROR) << "Wrong number of arguments";
+              } else {
+                for (size_t i = 0; i < call.arguments.size(); ++i) {
+                  TypeId arg_type = CheckExpression(call.arguments[i]);
+                  if (arg_type != f.argument_types[i + extra_argc])
+                    LOG(ERROR) << "Argument type mismatch";
+                }
+              }
+
+              call.resolved = ResolvedCall{f.call_idx, f.kind};
+              return f.return_type;
+            } else if (std::holds_alternative<StructType>(fn_type)) {
+              const StructType& s = std::get<StructType>(fn_type);
+              if (s.parsed_struct->is_extern) {
+                LOG(ERROR) << "extern structs can not be instantiated";
+                return LiteralType::Void;
+              }
+              call.resolved = ResolvedCall{0, FunctionKind::Constructor};
+              if (s.field_members.size() != call.arguments.size()) {
+                LOG(ERROR) << "Incorrect number of arguments to instantiate "
+                              "struct: expected("
+                           << s.field_members.size() << ") vs. provided("
+                           << call.arguments.size() << ")";
+              } else {
+                for (size_t i = 0; i < call.arguments.size(); ++i) {
+                  TypeId type_id = CheckExpression(call.arguments[i]);
+                  if (type_id != s.field_members[i]) {
+                    LOG(ERROR) << "Argument to new has incorrect type";
+                  }
+                }
+              }
+              return callee_type;
+            } else {
+              LOG(ERROR) << "Calling non-callable type";
               return LiteralType::Void;
             }
-
-            const FunctionType& f = std::get<FunctionType>(fn_type);
-
-            // Account for the implicit "self" argument for method calls
-            size_t extra_argc = 0;
-            if (f.kind == FunctionKind::Method) {
-              if (f.argument_types.size() == 0) {
-                LOG(ERROR) << "Methods must begin with a `self` argument";
-              }
-              extra_argc += 1;
-            }
-
-            if (call.arguments.size() + extra_argc != f.argument_types.size()) {
-              LOG(ERROR) << "Wrong number of arguments";
-            }
-
-            for (size_t i = 0; i < call.arguments.size(); ++i) {
-              TypeId arg_type = CheckExpression(call.arguments[i]);
-              if (arg_type != f.argument_types[i + extra_argc])
-                LOG(ERROR) << "Argument type mismatch";
-            }
-
-            call.resolved = ResolvedCall{f.call_idx, f.kind};
-            return f.return_type;
           },
           [&](const AssignmentExpression& assign) -> TypeId {
             return LiteralType::Void;
@@ -243,8 +265,6 @@ TypeId TypeChecker::CheckExpression(std::unique_ptr<Expression>& expression) {
                 it != s.member_types.end()) {
               if (auto index = it->second.index_in_array) {
                 member_access.resolved = ResolvedAccess{index.value()};
-              } else {
-                LOG(ERROR) << "Unable to resolve: " << it->first;
               }
               return it->second.type_id;
             }
@@ -275,8 +295,8 @@ TypeId TypeChecker::CheckExpression(std::unique_ptr<Expression>& expression) {
 
             const StructType& s = std::get<StructType>(struct_type);
             if (s.parsed_struct->is_extern) {
-              new_expr.resolved = ResolvedNew{s.parsed_struct->name + "_new"};
-              return type_id;
+              LOG(ERROR) << "extern structs can not be instantiated";
+              return LiteralType::Void;
             }
 
             if (s.field_members.size() != new_expr.arguments.size()) {

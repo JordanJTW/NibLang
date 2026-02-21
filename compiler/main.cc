@@ -79,6 +79,12 @@ void compile_call(const CallExpression& call, ProgramBuilder& builder) {
                                         call.arguments.size() + 1);
         }
         break;
+      case Constructor:
+        builder.GetCurrentCode().PushInt32(call.arguments.size());
+        for (const auto& arg : call.arguments)
+          compile_expr(arg, builder);
+        builder.CallFunction("Array_init", call.arguments.size() + 1);
+        break;
     }
   }
 }
@@ -201,12 +207,7 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
             for (const auto& expr : new_expr.arguments) {
               compile_expr(expr, builder);
             }
-            if (const auto& resolved = new_expr.resolved) {
-              builder.CallFunction(resolved->new_function,
-                                   new_expr.arguments.size() + 1);
-            } else {
-              builder.CallFunction("Array_init", new_expr.arguments.size() + 1);
-            }
+            builder.CallFunction("Array_init", new_expr.arguments.size() + 1);
           }},
       expr->as);
 }

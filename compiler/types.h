@@ -29,7 +29,7 @@ struct PrimaryExpression {
 
 using CallIdx = size_t;
 
-enum FunctionKind { Free, Method };
+enum FunctionKind { Free, Method, Constructor };
 
 struct ResolvedCall {
   CallIdx function_idx;
@@ -71,14 +71,9 @@ struct LogicExpression {
   std::unique_ptr<Expression> rhs;
 };
 
-struct ResolvedNew {
-  std::string new_function;
-};
-
 struct NewExpression {
   std::string struct_name;
   std::vector<std::unique_ptr<Expression>> arguments;
-  std::optional<ResolvedNew> resolved;
 };
 
 using TypeId = size_t;

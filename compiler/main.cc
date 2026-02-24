@@ -154,6 +154,21 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
               compile_expr(assign.rhs, builder);
 
               builder.CallFunction("Array_set", 3);
+            } else if (auto* const member_access =
+                           std::get_if<MemberAccessExpression>(
+                               &assign.lhs->as)) {
+              if (!member_access->resolved) {
+                std::cerr << "Member was never resolved "
+                             "during type checking!"
+                          << std::endl;
+                return;
+              }
+
+              compile_expr(member_access->object, builder);
+              builder.GetCurrentCode().PushInt32(
+                  member_access->resolved->index);
+              compile_expr(assign.rhs, builder);
+              builder.CallFunction("Array_set", 3);
             } else {
               std::cerr << "unsupported LHS in assignment expression"
                         << std::endl;
@@ -166,7 +181,8 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
               builder.CallFunction("Array_get", 2);
             } else {
               LOG(FATAL) << "Unresolved member access: "
-                         << member_access.member_name;
+                         << member_access.member_name
+                         << " at line: " << expr->meta.line_range.start;
             }
           },
           [&](const ArrayAccessExpression& array_access) {

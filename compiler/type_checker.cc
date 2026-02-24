@@ -3,8 +3,11 @@
 #include <iomanip>
 #include <iostream>
 #include <numeric>
+#include <string>
+#include <string_view>
 
 #include "compiler/logging.h"
+#include "src/vm.h"
 
 namespace {
 
@@ -15,38 +18,40 @@ struct Overloaded : Ts... {
 template <class... Ts>
 Overloaded(Ts...) -> Overloaded<Ts...>;
 
-enum LiteralType : TypeId { Void = 0, i32, f32, BOOL, STRING, kNextValue };
+enum LiteralType : TypeId { Void = 0, i32, f32, Bool, Any, kCount };
 
-void print_error(const std::string& file, TextRange range) {
-  size_t line_start = file.rfind('\n', range.first);
+void print_error(const std::string& file,
+                 Metadata metadata,
+                 std::string_view message) {
+  size_t line_start = file.rfind('\n', metadata.text_range.start);
   if (line_start == std::string_view::npos)
     line_start = 0;
   else
     ++line_start;
 
-  size_t line_end = file.find('\n', range.first);
+  size_t line_end = file.find('\n', metadata.text_range.start);
   if (line_end == std::string_view::npos)
     line_end = file.size();
 
   std::string line = file.substr(line_start, line_end - line_start);
-  size_t relative_offset = range.first - line_start;
+  size_t relative_offset = metadata.text_range.start - line_start;
 
-  std::string kErrorPrefix = "Parsing: ";
-  std::cerr << kErrorPrefix << line << std::endl;
+  std::string kErrorPrefix =
+      "Error: " + std::to_string(metadata.line_range.start) + ": ";
+  std::cerr << kErrorPrefix << line << std::endl
+            << std::setw(kErrorPrefix.length() + relative_offset) << " "
+            << "^ " << message << std::endl;
 }
 
 }  // namespace
 
 TypeChecker::TypeChecker(const std::string& file)
-    : file_(file), next_type_id_(kNextValue) {
-  string_to_type_ = {
-      {"Void", LiteralType::Void},
-      {"i32", LiteralType::i32},
-      {"f32", LiteralType::f32},
-      {"bool", LiteralType::BOOL},
-  };
-
+    : file_(file), next_type_id_(LiteralType::kCount) {
   scopes_.emplace_back();
+
+  // Add dummy entries for the built-in types to simplify logic.
+  for (size_t i = 0; i < LiteralType::kCount; ++i)
+    type_info_[i] = BuiltInType{};
 }
 
 void TypeChecker::Check(Block& block) {
@@ -54,7 +59,6 @@ void TypeChecker::Check(Block& block) {
   for (auto& statement : block.statements) {
     if (auto* struct_decl = std::get_if<StructDeclaration>(&statement->as)) {
       TypeId type_id = next_type_id_++;
-      string_to_type_[struct_decl->name] = type_id;
       scopes_.back().symbols[struct_decl->name] = Symbol{
           .kind = Symbol::Struct,
           .type_id = type_id,
@@ -70,16 +74,22 @@ void TypeChecker::Check(Block& block) {
 
       MemberIdx next_member_idx = 0;
       for (const auto& [name, type] : struct_decl->fields) {
-        if (auto type_id = GetIdFor({type}, CreateIfMissing::No)) {
+        if (auto type_id = GetTypeIdFor(type)) {
           struct_type.member_types[name] = {next_member_idx++, type_id.value()};
           struct_type.field_members.push_back(type_id.value());
         }
       }
       for (auto& [name, fn] : struct_decl->methods) {
-        if (auto type_id = DefineFunction(fn, FunctionKind::Method)) {
+        if (auto type_id = DefineFunction(fn, struct_decl)) {
           // Methods are not stored within the struct memory so no index.
           struct_type.member_types[name] = {std::nullopt, type_id.value()};
         }
+      }
+
+      // External structs can be constructed with a provided native function.
+      if (struct_decl->is_extern) {
+        struct_type.constructor_call_idx =
+            GetCallIdxFor(struct_decl->name + "_new", CreateIfMissing::NO);
       }
 
       Symbol symbol = scopes_.back().symbols[struct_decl->name];
@@ -87,9 +97,7 @@ void TypeChecker::Check(Block& block) {
     }
 
     if (auto* fn_decl = std::get_if<FunctionDeclaration>(&statement->as)) {
-      if (std::optional<TypeId> type_id =
-              DefineFunction(*fn_decl, FunctionKind::Free)) {
-        string_to_type_[fn_decl->name] = type_id.value();
+      if (std::optional<TypeId> type_id = DefineFunction(*fn_decl)) {
         scopes_.back().symbols[fn_decl->name] = Symbol{
             .kind = Symbol::Function,
             .type_id = type_id.value(),
@@ -112,18 +120,23 @@ void TypeChecker::CheckStatement(std::unique_ptr<Statement>& statement) {
             TypeId return_type = CheckExpression(ret.value);
 
             const auto& expected_return_type = scopes_.back().return_type;
-            if (expected_return_type.has_value()) {
-              if (*expected_return_type != return_type) {
-                LOG(ERROR) << "Function return type is " << return_type
-                           << " but expected " << *expected_return_type;
-              }
+            if (expected_return_type.has_value() &&
+                !IsTypeSubsetOf(return_type, expected_return_type.value())) {
+              LOG(ERROR) << "Function return type is " << return_type
+                         << " but expected " << *expected_return_type;
             }
           },
-          [&](const ThrowStatement& thr) {}, [&](const IfStatement& if_stmt) {},
+          [&](ThrowStatement& thr) { CheckExpression(thr.value); },
+          [&](IfStatement& if_stmt) {
+            CheckExpression(if_stmt.condition);
+            Check(if_stmt.then_body);
+            Check(if_stmt.else_body);
+          },
           [&](WhileStatement& while_stmt) {
             CheckExpression(while_stmt.condition);
             Check(while_stmt.body);
           },
+          // `break` and `continue` are single word statements.
           [&](const BreakStatement&) {}, [&](const ContinueStatement&) {},
           [&](AssignStatement& assign) {
             // Check this is the first assignment in this scope with that name.
@@ -136,14 +149,16 @@ void TypeChecker::CheckStatement(std::unique_ptr<Statement>& statement) {
             // Ensure assignment expression's type matches the declared type (if
             // given, otherwise the variable's type is deduced from the value).
             std::optional<TypeId> expected_type;
-            if (!assign.type.empty()) {
-              expected_type = GetIdFor({assign.type}, CreateIfMissing::No);
-            }
+            if (assign.type.has_value())
+              expected_type = GetTypeIdFor(*assign.type);
+
             TypeId value_type = CheckExpression(assign.value);
 
-            if (expected_type.has_value() && *expected_type != value_type) {
-              LOG(ERROR) << "Assigning " << value_type << " to "
-                         << *expected_type;
+            if (expected_type.has_value() &&
+                !IsTypeSubsetOf(value_type, *expected_type)) {
+              print_error(file_, statement->meta,
+                          "Assigning " + std::to_string(value_type) + " to " +
+                              std::to_string(*expected_type));
             }
 
             // Register the variable's type within the current scope.
@@ -170,18 +185,20 @@ TypeId TypeChecker::CheckExpression(std::unique_ptr<Expression>& expression) {
             return std::visit(
                 Overloaded{
                     [&](const StringLiteral&) -> TypeId {
-                      if (auto symbol = GetSymbolFor("String"))
+                      if (auto symbol =
+                              GetSymbolFor("String", expression->meta))
                         return symbol->type_id;
                       return LiteralType::Void;
                     },
                     [&](const Identifier& ident) -> TypeId {
-                      if (auto symbol = GetSymbolFor(ident.name))
+                      if (auto symbol =
+                              GetSymbolFor(ident.name, expression->meta))
                         return symbol->type_id;
                       return LiteralType::Void;
                     },
                     [&](int32_t) -> TypeId { return LiteralType::i32; },
                     [&](float) -> TypeId { return LiteralType::f32; },
-                    [&](bool) -> TypeId { return LiteralType::BOOL; },
+                    [&](bool) -> TypeId { return LiteralType::Bool; },
                 },
                 primary.value);
           },
@@ -190,6 +207,15 @@ TypeId TypeChecker::CheckExpression(std::unique_ptr<Expression>& expression) {
             TypeId rhs = CheckExpression(binary.rhs);
             if (lhs != rhs)
               LOG(ERROR) << "LHS and RHS must be the same type";
+
+            // Comparison operators will always generate a boolean
+            if (binary.op == TokenKind::kCompareGt ||
+                binary.op == TokenKind::kCompareLt ||
+                binary.op == TokenKind::kCompareGe ||
+                binary.op == TokenKind::kCompareLe ||
+                binary.op == TokenKind::kCompareEq ||
+                binary.op == TokenKind::kCompareNe)
+              return LiteralType::Bool;
 
             return lhs;
           },
@@ -211,22 +237,29 @@ TypeId TypeChecker::CheckExpression(std::unique_ptr<Expression>& expression) {
 
               if (call.arguments.size() + extra_argc !=
                   f.argument_types.size()) {
-                LOG(ERROR) << "Wrong number of arguments";
+                print_error(file_, expression->meta,
+                            "Wrong number of arguments");
               } else {
                 for (size_t i = 0; i < call.arguments.size(); ++i) {
                   TypeId arg_type = CheckExpression(call.arguments[i]);
-                  if (arg_type != f.argument_types[i + extra_argc])
-                    LOG(ERROR) << "Argument type mismatch";
+                  if (!IsTypeSubsetOf(arg_type,
+                                      f.argument_types[i + extra_argc])) {
+                    print_error(file_, expression->meta,
+                                "Argument type mismatch");
+                  }
                 }
               }
-
               call.resolved = ResolvedCall{f.call_idx, f.kind};
               return f.return_type;
             } else if (std::holds_alternative<StructType>(fn_type)) {
               const StructType& s = std::get<StructType>(fn_type);
-              if (s.parsed_struct->is_extern) {
-                LOG(ERROR) << "extern structs can not be instantiated";
-                return LiteralType::Void;
+              if (s.parsed_struct->is_extern &&
+                  s.constructor_call_idx.has_value()) {
+                call.resolved =
+                    ResolvedCall{*s.constructor_call_idx, FunctionKind::Free};
+                // Constructor function signature should be stored and type
+                // checked but this requires refactoring out the above logic.
+                return callee_type;
               }
               call.resolved = ResolvedCall{0, FunctionKind::Constructor};
               if (s.field_members.size() != call.arguments.size()) {
@@ -237,19 +270,25 @@ TypeId TypeChecker::CheckExpression(std::unique_ptr<Expression>& expression) {
               } else {
                 for (size_t i = 0; i < call.arguments.size(); ++i) {
                   TypeId type_id = CheckExpression(call.arguments[i]);
-                  if (type_id != s.field_members[i]) {
+                  if (!IsTypeSubsetOf(type_id, s.field_members[i])) {
                     LOG(ERROR) << "Argument to new has incorrect type";
                   }
                 }
               }
               return callee_type;
             } else {
-              LOG(ERROR) << "Calling non-callable type";
+              LOG(ERROR) << "Calling non-callable type: " << callee_type;
               return LiteralType::Void;
             }
           },
-          [&](const AssignmentExpression& assign) -> TypeId {
-            return LiteralType::Void;
+          [&](AssignmentExpression& assign) -> TypeId {
+            TypeId lhs = CheckExpression(assign.lhs);
+            TypeId rhs = CheckExpression(assign.rhs);
+
+            if (lhs != rhs)
+              print_error(file_, expression->meta, "Mismatched assignment");
+
+            return lhs;
           },
           [&](MemberAccessExpression& member_access) -> TypeId {
             TypeId obj_id = CheckExpression(member_access.object);
@@ -283,11 +322,22 @@ TypeId TypeChecker::CheckExpression(std::unique_ptr<Expression>& expression) {
             if (lhs != rhs)
               LOG(ERROR) << "LHS and RHS must be the same type";
 
-            return LiteralType::BOOL;
+            return LiteralType::Bool;
           },
           [&](NewExpression& new_expr) -> TypeId {
-            TypeId type_id = string_to_type_[new_expr.struct_name];
-            auto& struct_type = type_info_[type_id];
+            std::optional<Symbol> symbol =
+                GetSymbolFor(new_expr.struct_name, expression->meta);
+
+            // Error is logged within GetSymbolFor
+            if (!symbol.has_value())
+              return LiteralType::Void;
+
+            if (symbol->kind != Symbol::Struct) {
+              LOG(ERROR) << "new only works with structs";
+              return LiteralType::Void;
+            }
+
+            auto& struct_type = type_info_[symbol->type_id];
             if (!std::holds_alternative<StructType>(struct_type)) {
               LOG(ERROR) << "new only works with structs";
               return LiteralType::Void;
@@ -307,63 +357,115 @@ TypeId TypeChecker::CheckExpression(std::unique_ptr<Expression>& expression) {
             } else {
               for (size_t i = 0; i < new_expr.arguments.size(); ++i) {
                 TypeId type_id = CheckExpression(new_expr.arguments[i]);
-                if (type_id != s.field_members[i]) {
+                if (!IsTypeSubsetOf(type_id, s.field_members[i])) {
                   LOG(ERROR) << "Argument to new has incorrect type";
                 }
               }
             }
-            return type_id;
+            return symbol->type_id;
           }},
       expression->as);
 
   return expression->type;
 }
 
-std::optional<TypeId> TypeChecker::GetIdFor(std::set<std::string> sumtype,
-                                            CreateIfMissing create) {
-  if (sumtype.size() == 1) {
-    if (auto it = string_to_type_.find(*sumtype.begin());
-        it != string_to_type_.end()) {
-      return it->second;
-    } else if (create == CreateIfMissing::Yes) {
-      TypeId next_id = next_type_id_++;
-      string_to_type_[*sumtype.begin()] = next_id;
-      return next_id;
-    } else {
-      LOG(ERROR) << "Type not found: " << *sumtype.begin();
-      return std::nullopt;
-    }
-  }
+std::optional<TypeId> TypeChecker::GetTypeIdFor(ParsedType type) {
+  return std::visit(
+      Overloaded{
+          [&](const ParsedTypeName& type) -> std::optional<TypeId> {
+            static const std::unordered_map<std::string, TypeId> kBuiltInTypes =
+                {
+                    {"Void", LiteralType::Void}, {"i32", LiteralType::i32},
+                    {"f32", LiteralType::f32},   {"bool", LiteralType::Bool},
+                    {"any", LiteralType::Any},
+                };
 
-  std::string joined_sumtype = std::accumulate(
-      sumtype.begin(), sumtype.end(), std::string{},
-      [](std::string a, std::string b) { return std::move(a) + "|" + b; });
+            // Fast path for built-in type names which are used frequently.
+            if (const auto& it = kBuiltInTypes.find(type.name);
+                it != kBuiltInTypes.end()) {
+              return it->second;
+            }
 
-  return GetIdFor({joined_sumtype}, create);
+            // Structure types are resolved nominally, while Functions would be
+            // resolved structurally to allow for flexible callbacks, etc.
+            if (auto symbol = GetSymbolFor(type.name, type.metadata);
+                symbol.has_value() && symbol->kind == Symbol::Struct) {
+              return symbol->type_id;
+            }
+            return std::nullopt;
+          },
+          [&](const ParsedUnionType& type) -> std::optional<TypeId> {
+            // Look-up member types and normalize (sorted/dedupe) using set.
+            std::set<TypeId> normalized_types;
+            for (const auto& name : type.names) {
+              std::optional<TypeId> member_type = GetTypeIdFor(name);
+              if (!member_type.has_value())
+                return std::nullopt;
+              normalized_types.insert(member_type.value());
+            }
+            CHECK_GT(normalized_types.size(), 1)
+                << "Parser returned a weird ParsedUnionType";
+
+            // Intern unions structurally to a TypeId for faster comparisons.
+            // UnionType stores the types as a std::vector instead of a std::set
+            // to take advatange of better cache-locality and moves from the
+            // contiguous memory (as opposed to the tree used by std::set).
+            auto key =
+                UnionType{{normalized_types.begin(), normalized_types.end()}};
+            if (const auto& it = interned_union_type_.find(key);
+                it != interned_union_type_.end()) {
+              return it->second;
+            }
+
+            TypeId type_id = next_type_id_++;
+            // Ensure UnionType can be looked-up later for comparisons.
+            type_info_[type_id] = key;
+            interned_union_type_[key] = type_id;
+            return type_id;
+          },
+      },
+      type);
 }
 
-std::optional<TypeId> TypeChecker::DefineFunction(FunctionDeclaration& fn,
-                                                  FunctionKind kind) {
+std::optional<TypeId> TypeChecker::DefineFunction(
+    FunctionDeclaration& fn,
+    std::optional<StructDeclaration*> object) {
   TypeId type_id = next_type_id_++;
 
   std::vector<TypeId> typed_arguments;
   for (const auto& [name, type] : fn.arguments) {
-    if (auto id = GetIdFor({type}, CreateIfMissing::No); id.has_value()) {
+    if (auto id = GetTypeIdFor(type); id.has_value()) {
       typed_arguments.push_back(*id);
     } else {
       return std::nullopt;
     }
   }
-  std::optional<TypeId> return_type = GetIdFor(
-      std::set<std::string>({fn.return_types.begin(), fn.return_types.end()}),
-      CreateIfMissing::No);
+  std::optional<TypeId> return_type = GetTypeIdFor(fn.return_type);
   if (!return_type.has_value())
     return std::nullopt;
 
-  CallIdx call_idx = next_call_idx_++;
+  std::string qualified_name = fn.name;
+  bool is_function_extern = false;
+  if (object) {
+    qualified_name = object.value()->name + "_" + fn.name;
+    is_function_extern = object.value()->is_extern;
+  }
+
+  // Ensure that extern (built-in) functions that do not exist print an error
+  // instead of blindly creating a new CallIdx for them :^)
+  std::optional<CallIdx> call_idx =
+      GetCallIdxFor(qualified_name, is_function_extern ? CreateIfMissing::NO
+                                                       : CreateIfMissing::YES);
+  if (!call_idx.has_value()) {
+    LOG(ERROR) << "Function " << qualified_name << " is not found";
+    return std::nullopt;
+  }
+
   fn.call_idx = call_idx;
-  type_info_[type_id] =
-      FunctionType{typed_arguments, *return_type, kind, call_idx};
+  type_info_[type_id] = FunctionType{
+      typed_arguments, *return_type,
+      object.has_value() ? FunctionKind::Method : FunctionKind::Free,
+      call_idx.value()};
   return type_id;
 }
 
@@ -372,12 +474,10 @@ void TypeChecker::CheckFunctionBody(const FunctionDeclaration& fn) {
     return;
 
   Scope& function_scope = scopes_.emplace_back();
-  function_scope.return_type = GetIdFor(
-      std::set<std::string>({fn.return_types.begin(), fn.return_types.end()}),
-      CreateIfMissing::No);
+  function_scope.return_type = GetTypeIdFor(fn.return_type);
 
   for (const auto& [name, type] : fn.arguments) {
-    std::optional<TypeId> type_id = GetIdFor({type}, CreateIfMissing::No);
+    std::optional<TypeId> type_id = GetTypeIdFor(type);
     if (!type_id.has_value())
       return;
 
@@ -391,13 +491,78 @@ void TypeChecker::CheckFunctionBody(const FunctionDeclaration& fn) {
   scopes_.pop_back();
 }
 
+std::optional<CallIdx> TypeChecker::GetCallIdxFor(const std::string& name,
+                                                  CreateIfMissing create) {
+  static const std::map<std::string, CallIdx> kBuiltInCallIdx = {
+      {"Array_get", VM_BUILTIN_ARRAY_GET},
+      {"Array_init", VM_BUILTIN_ARRAY_INIT},
+      {"Array_new", VM_BUILTIN_ARRAY_NEW},
+      {"Array_set", VM_BUILTIN_ARRAY_SET},
+      {"Log", VM_BUILTIN_LOG},
+      {"Map_new", VM_BUILTIN_MAP_NEW},
+      {"Map_set", VM_BUILTIN_MAP_SET},
+      {"Math_pow", VM_BUILTIN_MATH_POW},
+      {"Promise_fulfill", VM_BUILTIN_PROMISE_FULFILL},
+      {"Promise_new", VM_BUILTIN_PROMISE_NEW},
+      {"Promise_reject", VM_BUILTIN_PROMISE_REJECT},
+      {"Promise_then", VM_BUILTIN_PROMISE_THEN},
+      {"String_charAt", VM_BUILTIN_STRINGS_GET},
+      {"String_length", VM_BUILTIN_STRING_LENGTH},
+      {"String_startsWith", VM_BUILTIN_STRINGS_STARTWITH},
+      {"String_substr", VM_BUILTIN_STRINGS_SUBSTRING},
+  };
+
+  if (auto it = kBuiltInCallIdx.find(name); it != kBuiltInCallIdx.end())
+    return it->second;
+
+  if (create == CreateIfMissing::YES)
+    return next_call_idx_++;
+
+  return std::nullopt;
+}
+
 std::optional<TypeChecker::Symbol> TypeChecker::GetSymbolFor(
-    const std::string& name) {
+    const std::string& name,
+    Metadata metadata) {
   for (auto it = scopes_.rbegin(); it != scopes_.rend(); ++it) {
     if (auto found = it->symbols.find(name); found != it->symbols.end()) {
       return found->second;
     }
   }
-  LOG(ERROR) << "Unknown identifier: " << name;
+
+  print_error(file_, metadata, "Unknown identifier: " + name);
   return std::nullopt;
+}
+
+bool TypeChecker::IsTypeSubsetOf(TypeId sub_type_id, TypeId super_type_id) {
+  if (sub_type_id == super_type_id || super_type_id == LiteralType::Any)
+    return true;
+
+  const Type& sub_type = type_info_.at(sub_type_id);
+  const Type& super_type = type_info_.at(super_type_id);
+
+  if (!std::holds_alternative<UnionType>(sub_type) &&
+      std::holds_alternative<UnionType>(super_type)) {
+    const auto& super_types = std::get<UnionType>(super_type).types;
+    return std::binary_search(super_types.begin(), super_types.end(),
+                              sub_type_id);
+  }
+
+  if (std::holds_alternative<UnionType>(sub_type) &&
+      !std::holds_alternative<UnionType>(super_type)) {
+    return false;  // a union cannot be subset of a single concrete type
+  }
+
+  if (std::holds_alternative<UnionType>(sub_type) &&
+      std::holds_alternative<UnionType>(super_type)) {
+    const auto& sub_types = std::get<UnionType>(sub_type).types;
+    const auto& super_types = std::get<UnionType>(super_type).types;
+
+    return std::all_of(sub_types.begin(), sub_types.end(), [&](TypeId id) {
+      return std::binary_search(super_types.begin(), super_types.end(), id);
+    });
+  }
+
+  // Neither type is a union so they must be different concrete types.
+  return false;
 }

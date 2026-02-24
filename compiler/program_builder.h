@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "compiler/assembler.h"
+#include "compiler/types.h"
 
 class ProgramBuilder {
  public:
@@ -15,7 +16,7 @@ class ProgramBuilder {
 
   void EnterFunctionScope(
       const std::string& name,
-      std::vector<std::pair<std::string, std::string>> arguments);
+      std::vector<std::pair<std::string, ParsedType>> arguments);
   void ExitFunctionScope();
 
   enum class CreateIfMissing { No, Yes };

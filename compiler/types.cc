@@ -10,6 +10,23 @@ struct Overloaded : Ts... {
 template <class... Ts>
 Overloaded(Ts...) -> Overloaded<Ts...>;
 
+std::ostream& operator<<(std::ostream& os, const ParsedType& type) {
+  std::visit(Overloaded{[&](const ParsedTypeName& type) { os << type.name; },
+                        [&](const ParsedUnionType& type) {
+                          for (const auto& name : type.names) {
+                            for (size_t i = 0; i < type.names.size(); ++i) {
+                              if (i > 0) {
+                                os << "|";
+                              }
+                              os << type.names[i];
+                            }
+                          }
+                        }},
+             type);
+
+  return os;
+}
+
 static void print_primary(const PrimaryExpression& primary, size_t indent) {
   std::visit(Overloaded{
                  [&](const StringLiteral& str) {
@@ -92,6 +109,10 @@ void print_expression(const std::unique_ptr<Expression>& expr, size_t indent) {
 
             std::cout << std::string(indent + 2, ' ') << "Object:" << std::endl;
             print_expression(member_access.object, indent + 4);
+
+            std::cout << std::string(indent + 2, ' ') << "Resolved: "
+                      << (member_access.resolved.has_value() ? "YES" : "NO")
+                      << std::endl;
           },
           [&](const ArrayAccessExpression& array_access) {
             std::cout << std::string(indent, ' ')
@@ -210,8 +231,11 @@ void print_statement(const Statement& stmt, size_t indent) {
           },
           [&](const AssignStatement& assign) {
             std::cout << std::string(indent, ' ')
-                      << "AssignStatement: " << assign.name << ": "
-                      << assign.type << std::endl;
+                      << "AssignStatement: " << assign.name;
+            if (assign.type.has_value())
+              std::cout << " type: " << assign.type.value() << std::endl;
+            else
+              std::cout << " type: ?" << std::endl;
 
             std::cout << std::string(indent + 2, ' ') << "Value:" << std::endl;
             print_expression(assign.value, indent + 4);

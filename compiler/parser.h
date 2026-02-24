@@ -34,7 +34,7 @@ class Parser {
 
   std::unique_ptr<Expression> ParseCall(std::unique_ptr<Expression> callee);
 
-  std::vector<std::string> ParseUnionTypeList();
+  std::optional<ParsedType> ParseType();
   std::unique_ptr<StructDeclaration> ParseStructDeclaration();
   std::unique_ptr<FunctionDeclaration> ParseFunctionDeclaration();
 

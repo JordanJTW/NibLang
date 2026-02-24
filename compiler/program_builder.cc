@@ -30,7 +30,7 @@ ProgramBuilder::ProgramBuilder() {
 
 void ProgramBuilder::EnterFunctionScope(
     const std::string& name,
-    std::vector<std::pair<std::string, std::string>> arguments) {
+    std::vector<std::pair<std::string, ParsedType>> arguments) {
   size_t fn_id = next_func_id_++;
   function_decl_stack_.push(fn_id);
   func_ids_[name] = fn_id;

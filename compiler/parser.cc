@@ -11,17 +11,12 @@
 #include "compiler/types.h"
 
 template <typename T>
-std::unique_ptr<Expression> make_primary_expression(T&& value) {
+std::unique_ptr<Expression> make_primary_expression(T&& value,
+                                                    const Token& token) {
   return std::make_unique<Expression>(
-      Expression{PrimaryExpression{std::forward<T>(value)}});
-}
-
-std::unique_ptr<Expression> make_binary_expression(
-    TokenKind op,
-    std::unique_ptr<Expression> lhs,
-    std::unique_ptr<Expression> rhs) {
-  return std::make_unique<Expression>(
-      Expression{BinaryExpression{op, std::move(lhs), std::move(rhs)}});
+      Expression{PrimaryExpression{std::forward<T>(value)},
+                 Metadata{Range{token.idx, token.idx + token.length},
+                          Range{token.meta.line, token.meta.line}}});
 }
 
 void print_error(const std::string& file,
@@ -46,8 +41,9 @@ void print_error(const std::string& file,
             << "^ " << message << std::endl;
 }
 
-TextRange make_text_range(Token start, Token end) {
-  return {start.idx, end.idx};
+Metadata make_metadata(Token start, Token end) {
+  return Metadata{Range{start.idx, end.idx},
+                  Range{start.meta.line, end.meta.line}};
 }
 
 Block Parser::Parse() {
@@ -80,13 +76,13 @@ void Parser::ParseBlock(Block& block) {
       continue;
     }
 
-    Token start = current_token_;
+    Token start_token = current_token_;
     // Function definition i.e. fn $name($args,...):
     if (current_token_.kind == TokenKind::kKwFn) {
       if (auto fn = ParseFunctionDeclaration()) {
         block.statements.push_back(std::make_unique<Statement>(
             Statement{std::move(*(fn.release())),
-                      make_text_range(start, current_token_)}));
+                      make_metadata(start_token, current_token_)}));
       }
       continue;
     }
@@ -97,7 +93,7 @@ void Parser::ParseBlock(Block& block) {
       if (auto struct_decl = ParseStructDeclaration()) {
         block.statements.push_back(std::make_unique<Statement>(
             Statement{std::move(*(struct_decl.release())),
-                      make_text_range(start, current_token_)}));
+                      make_metadata(start_token, current_token_)}));
       }
       continue;
     }
@@ -122,7 +118,7 @@ void Parser::ParseBlock(Block& block) {
       ParseBlock(while_stmt.body);
 
       block.statements.push_back(std::make_unique<Statement>(Statement{
-          std::move(while_stmt), make_text_range(start, current_token_)}));
+          std::move(while_stmt), make_metadata(start_token, current_token_)}));
       continue;
     }
 
@@ -156,7 +152,7 @@ void Parser::ParseBlock(Block& block) {
       }
 
       block.statements.push_back(std::make_unique<Statement>(Statement{
-          std::move(if_stmt), make_text_range(start, current_token_)}));
+          std::move(if_stmt), make_metadata(start_token, current_token_)}));
       continue;
     }
 
@@ -167,7 +163,7 @@ void Parser::ParseBlock(Block& block) {
                                           "expected ';' after return value"));
         block.statements.push_back(std::make_unique<Statement>(
             Statement{ReturnStatement{std::move(expr)},
-                      make_text_range(start, current_token_)}));
+                      make_metadata(start_token, current_token_)}));
       }
       continue;
     }
@@ -179,7 +175,7 @@ void Parser::ParseBlock(Block& block) {
                                           "expected ';' after throw value"));
         block.statements.push_back(std::make_unique<Statement>(
             Statement{ThrowStatement{std::move(expr)},
-                      make_text_range(start, current_token_)}));
+                      make_metadata(start_token, current_token_)}));
       }
       continue;
     }
@@ -188,8 +184,8 @@ void Parser::ParseBlock(Block& block) {
       current_token_ = tokenizer_.next();
       CONTINUE_IF_FALSE(
           ExpectNextToken(TokenKind::kEndExpr, "expected ';' after break"));
-      block.statements.push_back(std::make_unique<Statement>(
-          Statement{BreakStatement{}, make_text_range(start, current_token_)}));
+      block.statements.push_back(std::make_unique<Statement>(Statement{
+          BreakStatement{}, make_metadata(start_token, current_token_)}));
       continue;
     }
 
@@ -200,7 +196,7 @@ void Parser::ParseBlock(Block& block) {
           ExpectNextToken(TokenKind::kEndExpr, "expected ';' after continue"));
 
       block.statements.push_back(std::make_unique<Statement>(Statement{
-          ContinueStatement{}, make_text_range(start, current_token_)}));
+          ContinueStatement{}, make_metadata(start_token, current_token_)}));
       continue;
     }
 
@@ -211,14 +207,14 @@ void Parser::ParseBlock(Block& block) {
           variable_name,
           ExpectNextToken(TokenKind::kIdent, "expected variable name"));
 
-      std::vector<std::string> type;
+      std::optional<ParsedType> var_type;
       // : <type> is optional, but if there is a ':' there must be a type.
       if (current_token_.kind == TokenKind::kColon) {
         current_token_ = tokenizer_.next();  // after ':'
 
-        type = ParseUnionTypeList();
-        if (type.empty()) {
-          HandleError("expected type name");
+        var_type = ParseType();
+        if (!var_type.has_value()) {
+          HandleError("expected type nam after ':'");
           continue;
         }
       }
@@ -230,12 +226,10 @@ void Parser::ParseBlock(Block& block) {
 
       CONTINUE_IF_FALSE(ExpectNextToken(TokenKind::kEndExpr, "expected ';'"));
 
-      std::string assignment_type;
-      if (!type.empty())
-        assignment_type = type[0];
-      block.statements.push_back(
-          std::make_unique<Statement>(Statement{AssignStatement{
-              variable_name->value, assignment_type, std::move(value_expr)}}));
+      block.statements.push_back(std::make_unique<Statement>(
+          Statement{AssignStatement{variable_name->value, std::move(var_type),
+                                    std::move(value_expr)},
+                    make_metadata(start_token, current_token_)}));
       continue;
     }
 
@@ -245,7 +239,7 @@ void Parser::ParseBlock(Block& block) {
         continue;
       } else {
         block.statements.push_back(std::make_unique<Statement>(Statement{
-            std::move(expr), make_text_range(start, current_token_)}));
+            std::move(expr), make_metadata(start_token, current_token_)}));
         current_token_ = tokenizer_.next();  // consume ;
       }
       continue;
@@ -264,23 +258,23 @@ std::unique_ptr<Expression> Parser::ParseValue(const Token& value) {
       if ((value.value.find('.') != std::string::npos) ||
           value.value.back() == 'f') {
         float f32 = std::stof(value.value);
-        return make_primary_expression(f32);
+        return make_primary_expression(f32, value);
       } else {
         int i32 = std::stoi(value.value);
-        return make_primary_expression(i32);
+        return make_primary_expression(i32, value);
       }
     }
     case TokenKind::kIdent: {
-      return make_primary_expression(Identifier{.name = value.value});
+      return make_primary_expression(Identifier{.name = value.value}, value);
     }
     case TokenKind::kString: {
-      return make_primary_expression(StringLiteral{value.value});
+      return make_primary_expression(StringLiteral{value.value}, value);
     }
     case TokenKind::kKwTrue: {
-      return make_primary_expression(true);
+      return make_primary_expression(true, value);
     }
     case TokenKind::kKwFalse: {
-      return make_primary_expression(false);
+      return make_primary_expression(false, value);
     }
     default:
       print_error(text_, value, "unassignable type");
@@ -293,7 +287,7 @@ std::unique_ptr<Expression> Parser::ParseExpression() {
 }
 
 std::unique_ptr<Expression> Parser::ParseAssignment() {
-  Token entry_token = current_token_;
+  Token start_token = current_token_;
 
   auto expr = ParsePostFix();
   if (!expr)
@@ -307,14 +301,17 @@ std::unique_ptr<Expression> Parser::ParseAssignment() {
       return nullptr;
 
     return std::make_unique<Expression>(
-        Expression{AssignmentExpression{std::move(expr), std::move(rhs)}});
+        Expression{AssignmentExpression{std::move(expr), std::move(rhs)},
+                   make_metadata(start_token, current_token_)});
   }
 
-  current_token_ = tokenizer_.seekTo(entry_token);
+  current_token_ = tokenizer_.seekTo(start_token);
   return ParseLogical();
 }
 
 std::unique_ptr<Expression> Parser::ParseLogical() {
+  Token start_token = current_token_;
+
   auto lhs = ParseComparison();
   if (!lhs)
     return nullptr;
@@ -331,12 +328,15 @@ std::unique_ptr<Expression> Parser::ParseLogical() {
     lhs = std::make_unique<Expression>(Expression{
         LogicExpression{op.kind == TokenKind::kAndAnd ? LogicExpression::AND
                                                       : LogicExpression::OR,
-                        std::move(lhs), std::move(rhs)}});
+                        std::move(lhs), std::move(rhs)},
+        make_metadata(start_token, current_token_)});
   }
   return lhs;
 }
 
 std::unique_ptr<Expression> Parser::ParseComparison() {
+  Token start_token = current_token_;
+
   auto lhs = ParseAdditive();
   if (!lhs)
     return nullptr;
@@ -354,12 +354,16 @@ std::unique_ptr<Expression> Parser::ParseComparison() {
     if (!rhs)
       return nullptr;
 
-    lhs = make_binary_expression(op.kind, std::move(lhs), std::move(rhs));
+    lhs = std::make_unique<Expression>(
+        Expression{BinaryExpression{op.kind, std::move(lhs), std::move(rhs)},
+                   make_metadata(start_token, current_token_)});
   }
   return lhs;
 }
 
 std::unique_ptr<Expression> Parser::ParseAdditive() {
+  Token start_token = current_token_;
+
   auto lhs = ParseMultiplicative();
   if (!lhs)
     return nullptr;
@@ -373,13 +377,17 @@ std::unique_ptr<Expression> Parser::ParseAdditive() {
     if (!rhs)
       return nullptr;
 
-    lhs = make_binary_expression(op.kind, std::move(lhs), std::move(rhs));
+    lhs = std::make_unique<Expression>(
+        Expression{BinaryExpression{op.kind, std::move(lhs), std::move(rhs)},
+                   make_metadata(start_token, current_token_)});
   }
 
   return lhs;
 }
 
 std::unique_ptr<Expression> Parser::ParseMultiplicative() {
+  Token start_token = current_token_;
+
   auto lhs = ParsePostFix();
   if (!lhs)
     return nullptr;
@@ -393,13 +401,17 @@ std::unique_ptr<Expression> Parser::ParseMultiplicative() {
     if (!rhs)
       return nullptr;
 
-    lhs = make_binary_expression(op.kind, std::move(lhs), std::move(rhs));
+    lhs = std::make_unique<Expression>(
+        Expression{BinaryExpression{op.kind, std::move(lhs), std::move(rhs)},
+                   make_metadata(start_token, current_token_)});
   }
 
   return lhs;
 }
 
 std::unique_ptr<Expression> Parser::ParsePostFix() {
+  Token start_token = current_token_;
+
   auto expr = ParsePrimary();
   if (!expr)
     return nullptr;
@@ -424,7 +436,8 @@ std::unique_ptr<Expression> Parser::ParsePostFix() {
       current_token_ = tokenizer_.next();  // consume identifier
 
       expr = std::make_unique<Expression>(
-          Expression{MemberAccessExpression{std::move(expr), ident.value}});
+          Expression{MemberAccessExpression{std::move(expr), ident.value},
+                     make_metadata(start_token, current_token_)});
       continue;
     }
 
@@ -443,7 +456,8 @@ std::unique_ptr<Expression> Parser::ParsePostFix() {
       current_token_ = tokenizer_.next();  // consume ']'
 
       expr = std::make_unique<Expression>(
-          Expression{ArrayAccessExpression{std::move(expr), std::move(index)}});
+          Expression{ArrayAccessExpression{std::move(expr), std::move(index)},
+                     make_metadata(start_token, current_token_)});
       continue;
     }
     break;
@@ -522,6 +536,7 @@ std::unique_ptr<Expression> Parser::ParsePrimary() {
 
 std::unique_ptr<Expression> Parser::ParseCall(
     std::unique_ptr<Expression> callee) {
+  Token start_token = current_token_;
   current_token_ = tokenizer_.next();  // consume '('
 
   std::vector<std::unique_ptr<Expression>> arguments;
@@ -547,15 +562,18 @@ std::unique_ptr<Expression> Parser::ParseCall(
   current_token_ = tokenizer_.next();  // consume ')'
 
   return std::make_unique<Expression>(
-      Expression{CallExpression{std::move(callee), std::move(arguments)}});
+      Expression{CallExpression{std::move(callee), std::move(arguments)},
+                 make_metadata(start_token, current_token_)});
 }
 
-std::vector<std::string> Parser::ParseUnionTypeList() {
-  std::vector<std::string> return_types;
+std::optional<ParsedType> Parser::ParseType() {
+  std::vector<ParsedTypeName> type_names;
   if (current_token_.kind != TokenKind::kIdent) {
     HandleError("expected type");
+    return std::nullopt;
   } else {
-    return_types.push_back(current_token_.value);
+    type_names.push_back(ParsedTypeName{
+        current_token_.value, make_metadata(current_token_, current_token_)});
     current_token_ = tokenizer_.next();
 
     while (current_token_.kind == TokenKind::kPipe) {
@@ -563,14 +581,19 @@ std::vector<std::string> Parser::ParseUnionTypeList() {
 
       if (current_token_.kind != TokenKind::kIdent) {
         HandleError("expected type after '|'");
-        break;
+        return std::nullopt;
       }
 
-      return_types.push_back(current_token_.value);
+      type_names.push_back(ParsedTypeName{
+          current_token_.value, make_metadata(current_token_, current_token_)});
       current_token_ = tokenizer_.next();
     }
   }
-  return return_types;
+
+  if (type_names.size() == 1) {
+    return type_names[0];
+  }
+  return ParsedUnionType{type_names};
 }
 
 std::unique_ptr<StructDeclaration> Parser::ParseStructDeclaration() {
@@ -624,13 +647,13 @@ std::unique_ptr<StructDeclaration> Parser::ParseStructDeclaration() {
 
       current_token_ = tokenizer_.next();  // consume ':'
 
-      std::vector<std::string> type = ParseUnionTypeList();
-      if (type.empty()) {
+      std::optional<ParsedType> type = ParseType();
+      if (!type.has_value()) {
         HandleError("expected type name");
         return nullptr;
       }
 
-      struct_decl->fields.emplace_back(field_name.value, type[0]);
+      struct_decl->fields.emplace_back(field_name.value, type.value());
 
       if (current_token_.kind != TokenKind::kEndExpr) {
         HandleError("expected ';'");
@@ -671,7 +694,7 @@ std::unique_ptr<FunctionDeclaration> Parser::ParseFunctionDeclaration() {
   }
   current_token_ = tokenizer_.next();  // after '('
 
-  std::vector<std::pair<std::string, std::string>> arguments;
+  std::vector<std::pair<std::string, ParsedType>> arguments;
   if (current_token_.kind != TokenKind::kCloseParen) {
     while (true) {
       if (current_token_.kind != TokenKind::kIdent) {
@@ -679,7 +702,7 @@ std::unique_ptr<FunctionDeclaration> Parser::ParseFunctionDeclaration() {
         break;
       }
 
-      std::string param_name = current_token_.value;
+      std::string arg_name = current_token_.value;
       current_token_ = tokenizer_.next();  // after parameter name
 
       if (current_token_.kind != TokenKind::kColon) {
@@ -689,14 +712,13 @@ std::unique_ptr<FunctionDeclaration> Parser::ParseFunctionDeclaration() {
 
       current_token_ = tokenizer_.next();  // after ':'
 
-      if (current_token_.kind != TokenKind::kIdent) {
+      std::optional<ParsedType> arg_type = ParseType();
+      if (!arg_type.has_value()) {
         HandleError("expected type name");
         break;
       }
 
-      std::string param_type = current_token_.value;
-      arguments.emplace_back(param_name, param_type);
-      current_token_ = tokenizer_.next();  // after type
+      arguments.emplace_back(std::move(arg_name), std::move(arg_type.value()));
 
       if (current_token_.kind == TokenKind::kComma) {
         current_token_ = tokenizer_.next();
@@ -712,15 +734,16 @@ std::unique_ptr<FunctionDeclaration> Parser::ParseFunctionDeclaration() {
   }
   current_token_ = tokenizer_.next();  // after ')'
 
-  std::vector<std::string> return_types;
+  std::optional<ParsedType> return_type;
   if (current_token_.kind == TokenKind::kSkinnyArrow) {
     current_token_ = tokenizer_.next();  // consume '->'
 
-    return_types = ParseUnionTypeList();
+    return_type = ParseType();
   }
 
-  FunctionDeclaration fn{name.value, std::move(arguments),
-                         std::move(return_types)};
+  FunctionDeclaration fn{
+      name.value, std::move(arguments),
+      std::move(return_type.value_or(ParsedTypeName{"Void"}))};
 
   if (current_token_.kind == TokenKind::kEndExpr) {
     current_token_ = tokenizer_.next();  // consume ';'

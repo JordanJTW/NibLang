@@ -5,6 +5,10 @@ extern struct String {
   fn startsWith(s: String, prefix: String, idx: i32) -> bool;
 }
 
+extern struct Map {
+  fn set(self: Map, key: any, value: any) -> Void;
+}
+
 struct Parser {
   idx: i32;
 }
@@ -14,24 +18,24 @@ fn is_whitespace(ch: i32) -> bool {
 }
 
 fn skip_whitespace(input: String, idx: i32) -> i32 {
-  while (idx < String_length(input) &&
-         is_whitespace(String_charAt(input, idx))) {
+  while (idx < input.length() &&
+         is_whitespace(input.charAt(idx))) {
     idx = idx + 1;
   }
   return idx;
 }
 
-fn parse_string(input: String, parser: Array) -> String {
-  let idx: i32 = Array_get(parser, 0);
+fn parse_string(input: String, parser: Parser) -> String {
+  let idx: i32 = parser.idx;
   idx = idx + 1; // skip initial "
   let start_idx: i32 = idx;
 
-  while (idx < String_length(input)) {
-    let ch: i32 = String_charAt(input, idx);
+  while (idx < input.length()) {
+    let ch: i32 = input.charAt(idx);
     if (ch == 34) {  // closing "
-      let tmp: String = String_substr(input, start_idx, idx);  // [start, end)
+      let tmp: String = input.substr(start_idx, idx);  // [start, end)
       idx = idx + 1; // skip closing "
-      Array_set(parser, 0, idx);
+      parser.idx = idx;
       return tmp;
     }
     idx = idx + 1;
@@ -39,96 +43,95 @@ fn parse_string(input: String, parser: Array) -> String {
   throw "unterminated string";
 }
 
-fn parse_object(input: String, parser: Array) -> Map {
-  let idx: i32 = Array_get(parser, 0);
+fn parse_object(input: String, parser: Parser) -> Map {
+  let idx: i32 = parser.idx;
   idx = idx + 1;
   idx = skip_whitespace(input, idx);
-  let obj: Map = Map_new();
+  let obj: Map = Map();
 
-  if (idx >= String_length(input)) {
+  if (idx >= input.length()) {
     throw "unterminated obj";
   }
-  let ch: i32 = String_charAt(input, idx);
+  let ch: i32 = input.charAt(idx);
   while (ch != 125) {  // }
     idx = skip_whitespace(input, idx);
-    Array_set(parser, 0, idx);
+    parser.idx = idx;
     let key: String = parse_string(input, parser);
-    idx = Array_get(parser, 0);
+    idx = parser.idx;
     idx = skip_whitespace(input, idx);
 
     idx = idx + 1;  // Skip ':'
 
-    Array_set(parser, 0, idx);
+    parser.idx = idx;
     let value = parse_value(input, parser);
-    idx = Array_get(parser, 0);
+    idx = parser.idx;
     idx = skip_whitespace(input, idx);
 
-    Map_set(obj, key, value);
+    obj.set(key, value);
 
-    ch = String_charAt(input, idx);
+    ch = input.charAt(idx);
     idx = idx + 1;
 
     if (ch != 44) {
-      Array_set(parser, 0, idx);
+      parser.idx = idx;
       return obj;
     }
 
-    if (idx >= String_length(input)) {
+    if (idx >= input.length()) {
       throw "unterminated obj";
     }
-    ch = String_charAt(input, idx);
+    ch = input.charAt(idx);
   }
 }
 
-fn parse_value(input: String, parser: Array) -> bool | String | Map {
-  let idx: i32 = parser[0];
-  log("parse_value idx:",idx);
+fn parse_value(input: String, parser: Parser) -> bool | String | Map {
+  let idx: i32 = parser.idx;
+  // log("parse_value idx:",idx);
   idx = skip_whitespace(input, idx);
-  let ch: i32 = String_charAt(input, idx);
+  let ch: i32 = input.charAt(idx);
 
   if (ch == 123) {
-    Array_set(parser, 0, idx);
+     parser.idx = idx;
     return parse_object(input, parser);
   }
 
-  if (String_startsWith(input, "true", idx)) {
-    Array_set(parser, 0, idx + 4);
+  if (input.startsWith("true", idx)) {
+     parser.idx = idx + 4;
     return true;
   }
 
-  if (String_startsWith(input, "false", idx)) {
-    parser[0] = idx + 5;
+  if (input.startsWith("false", idx)) {
+    parser.idx = idx + 5;
     return false;
   }
 
-  parser[0] = idx;
+  parser.idx = idx;
   return parse_string(input, parser);
 }
 
-let parser: Array = Array_new(1);
-parser[0] = 0;
+let parser = Parser(0);
 
 let input: String = "{\"key\": {\"inner\":\t \"jordan\"}}";
-log("input", input);
+// log("input", input);
 return parse_value(input, parser);
 
-// fn foo(x, y) {
-//   if (x > y) {
-//     return x - y;
-//   } else {
-//     return x + 2;
-//   }
-// }
+fn foo(x: i32, y: i32) -> i32 {
+  if (x > y) {
+    return x - y;
+  } else {
+    return x + 2;
+  }
+}
 
-// fn bar(a, b) {
-//   return foo(a * (b + 4), 5);
-// }
+fn bar(a: i32, b: i32) -> i32 {
+  return foo(a * (b + 4), 5);
+}
 
-// struct Hello {
-//   x: i32;
-//   y: i32;
+struct Hello {
+  x: i32;
+  y: i32;
 
-//   fn world(self: Hello) -> i32 {
-//     return self.x + self.y;
-//   }
-// }
+  fn world(self: Hello) -> i32 {
+    return self.x + self.y;
+  }
+}

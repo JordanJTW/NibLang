@@ -77,7 +77,14 @@ struct NewExpression {
 };
 
 using TypeId = size_t;
-using TextRange = std::pair<size_t, size_t>;
+struct Range {
+  size_t start, end;
+};
+
+struct Metadata {
+  Range text_range;
+  Range line_range;
+};
 
 struct Expression {
   std::variant<PrimaryExpression,
@@ -90,8 +97,8 @@ struct Expression {
                NewExpression>
       as;
 
+  Metadata meta;
   TypeId type;
-  TextRange text_range;
 };
 
 struct Statement;
@@ -100,10 +107,21 @@ struct Block {
   std::vector<std::unique_ptr<Statement>> statements;
 };
 
+struct ParsedTypeName {
+  std::string name;
+  Metadata metadata;
+};
+
+struct ParsedUnionType {
+  std::vector<ParsedTypeName> names;
+};
+
+using ParsedType = std::variant<ParsedTypeName, ParsedUnionType>;
+
 struct FunctionDeclaration {
   std::string name;
-  std::vector<std::pair<std::string, std::string>> arguments;
-  std::vector<std::string> return_types;
+  std::vector<std::pair<std::string, ParsedType>> arguments;
+  ParsedType return_type;
   std::unique_ptr<Block> body;
   std::optional<CallIdx> call_idx;
 };
@@ -134,14 +152,14 @@ struct ContinueStatement {};
 
 struct StructDeclaration {
   std::string name;
-  std::vector<std::pair<std::string, std::string>> fields;
+  std::vector<std::pair<std::string, ParsedType>> fields;
   std::vector<std::pair<std::string, FunctionDeclaration>> methods;
   bool is_extern;
 };
 
 struct AssignStatement {
   std::string name;
-  std::string type;
+  std::optional<ParsedType> type;
   std::unique_ptr<Expression> value;
 };
 
@@ -158,7 +176,7 @@ struct Statement {
                StructDeclaration             // struct Foo { ... }
                >
       as;
-  TextRange text_range;
+  Metadata meta;
 };
 
 void print_statement(const Statement& stmt, size_t indent = 0);

@@ -254,7 +254,9 @@ static void run_frame(vm_t* vm, const char* name) {
 
     if (vm->unhandled_exception) {
       if (!handle_exception(vm)) {
-        fprintf(stderr, "Failed to exception!\n");
+        char* message = NULL;
+        size_t len = vm_as_str(&vm->exception, &message);
+        fprintf(stderr, "Failed to exception: %.*s\n", (int)len, message);
         return;
       }
     }

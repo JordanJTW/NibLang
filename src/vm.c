@@ -633,7 +633,8 @@ vm_value_t allocate_str_from_c(const char* str) {
 vm_value_t allocate_str_from_c_with_length(const char* str, size_t length) {
   String* string = calloc(1, sizeof(String) + length + 1);
   string->len = length;
-  memcpy(string->c_str, str, length + 1);  // Add in the \0 terminator
+  memcpy(string->c_str, str, length);
+  string->c_str[length] = '\0';  // Add in the \0 terminator
   string->rc.deleter = &free;
   return (vm_value_t){.type = VALUE_TYPE_STR, .as.str = string};
 }

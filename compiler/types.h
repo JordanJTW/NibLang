@@ -30,8 +30,15 @@ struct StringLiteral {
 };
 
 using CallIdx = size_t;
+
+struct ResolvedIdentifier {
+  enum { TypeName, Function, Value } kind;
+  CallIdx function_idx;
+};
+
 struct Identifier {
   std::string name;
+  std::optional<ResolvedIdentifier> resolved;
 };
 
 struct PrimaryExpression {

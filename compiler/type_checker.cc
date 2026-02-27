@@ -181,7 +181,7 @@ void TypeChecker::CheckStatement(std::unique_ptr<Statement>& statement) {
 TypeId TypeChecker::CheckExpression(std::unique_ptr<Expression>& expression) {
   expression->type = std::visit(
       Overloaded{
-          [&](const PrimaryExpression& primary) -> TypeId {
+          [&](PrimaryExpression& primary) -> TypeId {
             return std::visit(
                 Overloaded{
                     [&](const StringLiteral&) -> TypeId {
@@ -190,10 +190,29 @@ TypeId TypeChecker::CheckExpression(std::unique_ptr<Expression>& expression) {
                         return symbol->type_id;
                       return LiteralType::Void;
                     },
-                    [&](const Identifier& ident) -> TypeId {
+                    [&](Identifier& ident) -> TypeId {
                       if (auto symbol =
-                              GetSymbolFor(ident.name, expression->meta))
+                              GetSymbolFor(ident.name, expression->meta)) {
+                        switch (symbol->kind) {
+                          case Symbol::Kind::Function: {
+                            Type type = type_info_[symbol->type_id];
+                            auto& fn_type = std::get<FunctionType>(type);
+
+                            ident.resolved = ResolvedIdentifier{
+                                ResolvedIdentifier::Function, fn_type.call_idx};
+                            break;
+                          }
+                          case Symbol::Kind::Variable:
+                            ident.resolved =
+                                ResolvedIdentifier{ResolvedIdentifier::Value};
+                            break;
+                          case Symbol::Kind::Struct:
+                            ident.resolved = ResolvedIdentifier{
+                                ResolvedIdentifier::TypeName};
+                            break;
+                        }
                         return symbol->type_id;
+                      }
                       return LiteralType::Void;
                     },
                     [&](int32_t) -> TypeId { return LiteralType::i32; },

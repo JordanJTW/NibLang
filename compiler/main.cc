@@ -117,13 +117,28 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
                           builder.GetIdForConstant(str.value));
                     },
                     [&](const Identifier& ident) {
-                      std::optional<uint32_t> id = builder.GetIdFor(
-                          ident.name, ProgramBuilder::CreateIfMissing::No);
-                      if (id.has_value()) {
-                        builder.GetCurrentCode().PushLocal(*id);
-                      } else {
-                        std::cerr << "undefined identifier: " << ident.name
-                                  << std::endl;
+                      CHECK(ident.resolved)
+                          << "Unresolved identifier: " << ident.name;
+
+                      switch (ident.resolved->kind) {
+                        case ResolvedIdentifier::Function:
+                          builder.GetCurrentCode().Bind(
+                              ident.resolved->function_idx, /*argc=*/0);
+                          break;
+                        case ResolvedIdentifier::Value: {
+                          std::optional<uint32_t> id = builder.GetIdFor(
+                              ident.name, ProgramBuilder::CreateIfMissing::No);
+                          if (id.has_value()) {
+                            builder.GetCurrentCode().PushLocal(*id);
+                          } else {
+                            std::cerr << "undefined identifier: " << ident.name
+                                      << std::endl;
+                          }
+                          break;
+                        }
+                        case ResolvedIdentifier::TypeName:
+                          LOG(ERROR) << "type names are not valid identifiers";
+                          break;
                       }
                     },
                     [&](int32_t i32) {

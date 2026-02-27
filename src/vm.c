@@ -22,15 +22,14 @@
 #ifdef NDEBUG
 #define DEBUG_LOG($fmt, ...)
 #else
-// Only used in assert() statements to verify value types.
+#define DEBUG_LOG($fmt, ...) LOG($fmt, ##__VA_ARGS__)
+#endif  // NDEBUG
+
 static bool is_number_type(vm_value_t value) {
   return value.type == VALUE_TYPE_INT || value.type == VALUE_TYPE_FLOAT;
 }
 
-#define DEBUG_LOG($fmt, ...) LOG($fmt, ##__VA_ARGS__)
-#endif  // NDEBUG
-
-#define VM_BUILTIN_FUNCTION_COUNT 16
+#define VM_BUILTIN_FUNCTION_COUNT 18
 
 typedef struct vm_frame vm_frame_t;
 
@@ -862,12 +861,14 @@ static void install_builtins(vm_t* vm) {
   INSTALL(7, vm_map_set, 3);
   INSTALL(8, vm_strings_starts_with, 3);
   INSTALL(9, math_pow, 2);
-  INSTALL(10, vm_array_new, 1);
+  INSTALL(10, vm_array_new, 0);
   INSTALL(11, vm_array_get, 2);
   INSTALL(12, vm_array_set, 3);
   INSTALL(13, vm_log, 1);
   INSTALL(14, vm_string_length, 1);
   INSTALL(15, vm_array_init, 1);
+  INSTALL(16, vm_array_push, 2);
+  INSTALL(17, vm_map_get, 2);
 }
 
 static void free_closure(void* self) {

@@ -2,40 +2,55 @@
 #include <stdlib.h>
 
 #include "src/map.h"
+#include "src/promise.h"
 #include "src/types.h"
 #include "src/vm.h"
 
 void print_result(vm_value_t result, int indent) {
-  printf("%*s", indent, "");
-
   switch (result.type) {
     case VALUE_TYPE_BOOL:
-      printf("%s\n", result.as.boolean ? "true" : "false");
+      printf("%s", result.as.boolean ? "true" : "false");
       break;
     case VALUE_TYPE_FLOAT:
-      printf("%f\n", result.as.f32);
+      printf("%f", result.as.f32);
       break;
     case VALUE_TYPE_FUNCTION:
-      printf("fn %s\n", result.as.fn->fn->name);
+      printf("fn %s", result.as.fn->fn->name);
       break;
     case VALUE_TYPE_INT:
-      printf("%d\n", result.as.i32);
+      printf("%d", result.as.i32);
       break;
     case VALUE_TYPE_STR:
-      printf("%.*s\n", (int)result.as.str->len, result.as.str->c_str);
+      printf("\"%s\"", result.as.str->c_str);
       break;
     case VALUE_TYPE_ARRAY:
-      printf("[\n");
+      printf("[ ");
       for (size_t i = 0; i < result.as.array->len; ++i) {
-        print_result(result.as.array->data[i], indent + 2);
+        print_result(result.as.array->data[i], 0);
+        printf(", ");
       }
-      printf("]\n");
+      printf("]");
       break;
     case VALUE_TYPE_MAP:
-      DumpMap(result.as.map);
+      printf("{\n");
+      for (size_t i = 0; i < result.as.map->bucket_count; ++i) {
+        for (MapNode* node = result.as.map->buckets[i]; node;
+             node = node->next) {
+          printf("%*skey: ", indent + 2, "");
+          print_result(node->key, indent + 2);
+
+          printf(" value: ");
+          print_result(node->value, indent + 2);
+          printf("\n");
+        }
+      }
+      printf("%*s}", indent, "");
       break;
     case VALUE_TYPE_PROMISE:
-      printf("(promise)\n");
+      printf("Promise {\n%*sstate: %d\n%*sresult: ", indent + 2, "",
+             result.as.promise->state, indent + 2, "");
+      print_result(result.as.promise->value, indent + 2);
+      printf("\n%*s}", indent, "");
       break;
     case VALUE_TYPE_NULL:
       printf("(null)\n");
@@ -76,8 +91,10 @@ int main(int argc, char* argv[]) {
   vm_t* vm = init_vm(buffer, file_size);
   if (vm != NULL) {
     vm_value_t result = vm_run(vm, 0, true);
+    run_promise_jobs(vm, vm_get_job_queue(vm));
     printf("Result: ");
     print_result(result, 0);
+    printf("\n");
   }
 
   fclose(file);

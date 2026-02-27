@@ -24,9 +24,9 @@ bool map_has_key(Map* map, vm_value_t key);
 bool map_remove(Map* map, vm_value_t key);
 
 vm_value_t allocate_map();
-vm_value_t vm_map_set(vm_value_t* argv, size_t argc, void*);
 
-void DumpMap(Map* map);
+vm_value_t vm_map_get(vm_value_t* argv, size_t argc, void*);
+vm_value_t vm_map_set(vm_value_t* argv, size_t argc, void*);
 
 #ifdef __cplusplus
 }  // extern "C"

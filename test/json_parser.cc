@@ -630,7 +630,6 @@ int main() {
 
   vm_value_t map = vm_run(vm, 0, true);
 
-  DumpMap(map.as.map);
   vm_free_ref(&map);
   free_vm(vm);
 

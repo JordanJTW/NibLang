@@ -116,7 +116,8 @@ typedef struct vm_promise_t {
 typedef struct vm_array_t {
   ref_count_t rc;
   size_t len;
-  vm_value_t data[];
+  size_t capacity;
+  vm_value_t* data;
 } Array;
 
 #ifdef __cplusplus

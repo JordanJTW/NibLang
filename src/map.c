@@ -57,7 +57,7 @@ static uint32_t hash(vm_value_t value) {
 
 static int compare(vm_value_t v1, vm_value_t v2) {
   // There is no type coercion so unlike types will never be equal BUT ordering
-  // by type provides some consistency.
+  // by type provides consistency.
   if (v1.type != v2.type)
     return v1.type - v2.type;
 
@@ -150,6 +150,19 @@ vm_value_t allocate_map() {
   return (vm_value_t){.type = VALUE_TYPE_MAP, .as.map = map};
 }
 
+vm_value_t vm_map_get(vm_value_t* argv, size_t argc, void* vm) {
+  assert(argc == 2 && is_map(argv[0]) &&
+         "incorrect number of args or arg types");
+
+  RC_AUTOFREE vm_value_t this = argv[0];
+  vm_value_t* value = map_get(this.as.map, argv[1]);
+  if (value == NULL)
+    return (vm_value_t){.type = VALUE_TYPE_NULL};
+
+  vm_adopt_ref(*value);
+  return *value;
+}
+
 vm_value_t vm_map_set(vm_value_t* argv, size_t argc, void* vm) {
   assert(argc == 3 && is_map(argv[0]) &&
          "incorrect number of args or arg types");
@@ -157,49 +170,4 @@ vm_value_t vm_map_set(vm_value_t* argv, size_t argc, void* vm) {
   RC_AUTOFREE vm_value_t this = argv[0];
   map_insert(this.as.map, argv[1], argv[2]);
   return (vm_value_t){.type = VALUE_TYPE_NULL};
-}
-
-static void DumpValue(vm_value_t value) {
-  switch (value.type) {
-    case VALUE_TYPE_BOOL:
-      printf(value.as.boolean ? "true" : "false");
-      break;
-    case VALUE_TYPE_FLOAT:
-      printf("%f", value.as.f32);
-      break;
-    case VALUE_TYPE_FUNCTION:
-      printf("Function [%s]", value.as.fn->fn->name);
-      break;
-    case VALUE_TYPE_INT:
-      printf("%d", value.as.i32);
-      break;
-    case VALUE_TYPE_MAP:
-      DumpMap(value.as.map);
-      break;
-    case VALUE_TYPE_NULL:
-      printf("(null)");
-      break;
-    case VALUE_TYPE_PROMISE:
-      printf("Promise <");
-      DumpValue(value.as.promise->value);
-      printf(">");
-      break;
-    case VALUE_TYPE_STR:
-      printf("\"%.*s\"", (int)value.as.str->len, value.as.str->c_str);
-      break;
-  }
-}
-
-void DumpMap(Map* map) {
-  printf("Map {\n");
-  for (size_t i = 0; i < map->bucket_count; ++i) {
-    for (MapNode* node = map->buckets[i]; node; node = node->next) {
-      printf("key: ");
-      DumpValue(node->key);
-      printf(" value: ");
-      DumpValue(node->value);
-      printf(",\n");
-    }
-  }
-  printf("}\n");
 }

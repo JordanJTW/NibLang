@@ -19,5 +19,5 @@ target_link_libraries(type_checker PRIVATE logging)
 
 add_executable(compiler main.cc)
 target_include_directories(compiler PRIVATE ${CMAKE_SOURCE_DIR})
-target_link_libraries(compiler PRIVATE assembler parser program_builder tokenizer)
+target_link_libraries(compiler PRIVATE assembler parser program_builder tokenizer type_checker)
 

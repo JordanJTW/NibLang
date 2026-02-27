@@ -53,6 +53,30 @@ static void print_primary(const PrimaryExpression& primary, size_t indent) {
              primary.value);
 }
 
+void print_function(const FunctionDeclaration& fn, size_t indent) {
+  std::cout << std::string(indent, ' ') << "FunctionDeclaration: " << fn.name
+            << " ["
+            << (fn.resolved.has_value() ? std::to_string(fn.resolved->call_idx)
+                                        : "Unresolved")
+            << "]" << std::endl;
+
+  std::cout << std::string(indent + 2, ' ') << "Arguments:" << std::endl;
+  for (const auto& arg : fn.arguments) {
+    std::cout << std::string(indent + 4, ' ') << arg.first << ": " << arg.second
+              << std::endl;
+  }
+
+  if (fn.body) {
+    std::cout << std::string(indent + 2, ' ') << "Body:" << std::endl;
+    for (const auto& stmt : fn.body->statements)
+      print_statement(*stmt, indent + 4);
+
+  } else {
+    std::cout << std::string(indent + 2, ' ') << " "
+              << "Extern function, no body" << std::endl;
+  }
+}
+
 void print_expression(const std::unique_ptr<Expression>& expr, size_t indent) {
   if (expr == nullptr) {
     std::cerr << std::string(indent, ' ') << "Parse Failure" << std::endl;
@@ -146,30 +170,6 @@ void print_expression(const std::unique_ptr<Expression>& expr, size_t indent) {
             }
           }},
       expr->as);
-}
-
-void print_function(const FunctionDeclaration& fn, size_t indent) {
-  std::cout << std::string(indent, ' ') << "FunctionDeclaration: " << fn.name
-            << " ["
-            << (fn.call_idx.has_value() ? std::to_string(fn.call_idx.value())
-                                        : "Unresolved")
-            << "]" << std::endl;
-
-  std::cout << std::string(indent + 2, ' ') << "Arguments:" << std::endl;
-  for (const auto& arg : fn.arguments) {
-    std::cout << std::string(indent + 4, ' ') << arg.first << ": " << arg.second
-              << std::endl;
-  }
-
-  if (fn.body) {
-    std::cout << std::string(indent + 2, ' ') << "Body:" << std::endl;
-    for (const auto& stmt : fn.body->statements)
-      print_statement(*stmt, indent + 4);
-
-  } else {
-    std::cout << std::string(indent + 2, ' ') << " "
-              << "Extern function, no body" << std::endl;
-  }
 }
 
 void print_statement(const Statement& stmt, size_t indent) {

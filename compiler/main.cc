@@ -245,6 +245,9 @@ void compile(const Block& root,
                      if (fn.body) {
                        builder.EnterFunctionScope(fn.name, fn.arguments);
                        compile(*fn.body, builder);
+                       // Insert an return; to unwind the stack
+                       if (fn.resolved->is_void_return)
+                         builder.GetCurrentCode().Return();
                        builder.ExitFunctionScope();
                      }
                    },

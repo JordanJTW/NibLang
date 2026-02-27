@@ -118,12 +118,17 @@ struct ParsedUnionType {
 
 using ParsedType = std::variant<ParsedTypeName, ParsedUnionType>;
 
+struct ResolvedFunction {
+  CallIdx call_idx;
+  bool is_void_return;
+};
+
 struct FunctionDeclaration {
   std::string name;
   std::vector<std::pair<std::string, ParsedType>> arguments;
   ParsedType return_type;
   std::unique_ptr<Block> body;
-  std::optional<CallIdx> call_idx;
+  std::optional<ResolvedFunction> resolved;
 };
 
 struct ReturnStatement {

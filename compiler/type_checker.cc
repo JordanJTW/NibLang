@@ -461,7 +461,7 @@ std::optional<TypeId> TypeChecker::DefineFunction(
     return std::nullopt;
   }
 
-  fn.call_idx = call_idx;
+  fn.resolved = ResolvedFunction{*call_idx, return_type == LiteralType::Void};
   type_info_[type_id] = FunctionType{
       typed_arguments, *return_type,
       object.has_value() ? FunctionKind::Method : FunctionKind::Free,

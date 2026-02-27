@@ -33,7 +33,8 @@ void ProgramBuilder::EnterFunctionScope(
     std::vector<std::pair<std::string, ParsedType>> arguments) {
   size_t fn_id = next_func_id_++;
   function_decl_stack_.push(fn_id);
-  func_ids_[name] = fn_id;
+  if (!name.empty())
+    func_ids_[name] = fn_id;
 
   Function& function = functions_.emplace_back();
   function.name = name;

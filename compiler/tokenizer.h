@@ -5,54 +5,56 @@
 
 enum class TokenKind {
   kUnknown = 0,
-  kIdent,        // $id, $id1
-  kNumber,       // 5, 5.0
-  kString,       // "hello world"
-  kKwLabel,      // label
-  kKwGoto,       // goto
-  kKwIf,         // if
-  kKwElse,       // else
-  kKwFn,         // fn
-  kKwTrue,       // true
-  kKwFalse,      // false
-  kKwReturn,     // return
-  kKwTry,        // try
-  kKwCatch,      // catch
-  kKwThrow,      // throw
-  kKwWhile,      // while
-  kKwBreak,      // break
-  kKwContinue,   // continue
-  kKwStruct,     // struct
-  kKwExtern,     // extern
-  kKwLet,        // let
-  kKwNew,        // new
-  kOpenParen,    // (
-  kCloseParen,   // )
-  kOpenBrace,    // {
-  kCloseBrace,   // }
-  kSquareOpen,   // [
-  kSquareClose,  // ]
-  kDot,          // .
-  kPipe,         // |
-  kComma,        // ,
-  kColon,        // :
-  kAssign,       // =
-  kAdd,          // +
-  kSubtract,     // -
-  kMultiply,     // *
-  kDivide,       // /
-  kCompareGt,    // >
-  kCompareLt,    // <
-  kCompareGe,    // >=
-  kCompareLe,    // <=
-  kCompareEq,    // ==
-  kCompareNe,    // !=
-  kSkinnyArrow,  // ->
-  kAndAnd,       // &&
-  kOrOr,         // ||
-  kComment,      // // comment text
-  kEndExpr,      // ;
-  kEndOfFile,    // EOF
+  kIdent,           // $id, $id1
+  kNumber,          // 5, 5.0
+  kString,          // "hello world"
+  kTemplateString,  // `hello ${world}`
+  kKwLabel,         // label
+  kKwGoto,          // goto
+  kKwIf,            // if
+  kKwElse,          // else
+  kKwFn,            // fn
+  kKwTrue,          // true
+  kKwFalse,         // false
+  kKwReturn,        // return
+  kKwTry,           // try
+  kKwCatch,         // catch
+  kKwThrow,         // throw
+  kKwWhile,         // while
+  kKwBreak,         // break
+  kKwContinue,      // continue
+  kKwStruct,        // struct
+  kKwExtern,        // extern
+  kKwLet,           // let
+  kKwNew,           // new
+  kVariadic,        // ...
+  kOpenParen,       // (
+  kCloseParen,      // )
+  kOpenBrace,       // {
+  kCloseBrace,      // }
+  kSquareOpen,      // [
+  kSquareClose,     // ]
+  kDot,             // .
+  kPipe,            // |
+  kComma,           // ,
+  kColon,           // :
+  kAssign,          // =
+  kAdd,             // +
+  kSubtract,        // -
+  kMultiply,        // *
+  kDivide,          // /
+  kCompareGt,       // >
+  kCompareLt,       // <
+  kCompareGe,       // >=
+  kCompareLe,       // <=
+  kCompareEq,       // ==
+  kCompareNe,       // !=
+  kSkinnyArrow,     // ->
+  kAndAnd,          // &&
+  kOrOr,            // ||
+  kComment,         // // comment text
+  kEndExpr,         // ;
+  kEndOfFile,       // EOF
 };
 
 struct MetaInfo {
@@ -74,6 +76,8 @@ class Tokenizer {
   Token seekTo(const Token& token);
 
  private:
+  std::string read_until(char endpoint);
+
   const std::string data_;
   size_t offset_{0};
 

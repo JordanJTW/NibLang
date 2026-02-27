@@ -235,15 +235,20 @@ TypeId TypeChecker::CheckExpression(std::unique_ptr<Expression>& expression) {
                 extra_argc += 1;
               }
 
-              if (call.arguments.size() + extra_argc !=
-                  f.argument_types.size()) {
+              size_t expected_argc = f.argument_types.size();
+              size_t actual_argc = call.arguments.size() + extra_argc;
+
+              if ((f.is_variadic && actual_argc < expected_argc) ||
+                  (!f.is_variadic && actual_argc != expected_argc)) {
                 print_error(file_, expression->meta,
                             "Wrong number of arguments");
               } else {
                 for (size_t i = 0; i < call.arguments.size(); ++i) {
                   TypeId arg_type = CheckExpression(call.arguments[i]);
-                  if (!IsTypeSubsetOf(arg_type,
-                                      f.argument_types[i + extra_argc])) {
+                  TypeId expected_type = LiteralType::Any;
+                  if (i + extra_argc < f.argument_types.size())
+                    expected_type = f.argument_types[i + extra_argc];
+                  if (!IsTypeSubsetOf(arg_type, expected_type)) {
                     print_error(file_, expression->meta,
                                 "Argument type mismatch");
                   }
@@ -363,6 +368,13 @@ TypeId TypeChecker::CheckExpression(std::unique_ptr<Expression>& expression) {
               }
             }
             return symbol->type_id;
+          },
+          [&](ClosureExpression& closure) -> TypeId {
+            if (std::optional<TypeId> type_id = DefineFunction(closure.fn)) {
+              CheckFunctionBody(closure.fn);
+              return *type_id;
+            }
+            return LiteralType::Void;
           }},
       expression->as);
 
@@ -465,7 +477,7 @@ std::optional<TypeId> TypeChecker::DefineFunction(
   type_info_[type_id] = FunctionType{
       typed_arguments, *return_type,
       object.has_value() ? FunctionKind::Method : FunctionKind::Free,
-      call_idx.value()};
+      call_idx.value(), fn.is_variadic};
   return type_id;
 }
 

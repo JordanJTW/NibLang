@@ -168,6 +168,11 @@ void print_expression(const std::unique_ptr<Expression>& expr, size_t indent) {
             for (const auto& expr : new_expr.arguments) {
               print_expression(expr, indent + 2);
             }
+          },
+          [&](const ClosureExpression& closure) {
+            std::cout << std::string(indent, ' ')
+                      << "ClosureExpression: " << std::endl;
+            print_function(closure.fn, indent + 2);
           }},
       expr->as);
 }

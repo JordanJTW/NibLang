@@ -52,6 +52,7 @@ class TypeChecker {
     TypeId return_type;
     FunctionKind kind;
     CallIdx call_idx;
+    bool is_variadic;
   };
 
   struct MemberType {

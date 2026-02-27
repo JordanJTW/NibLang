@@ -56,6 +56,15 @@ void emit_op(const Token& op, ProgramBuilder& builder) {
   }
 }
 
+struct LoopContext {
+  std::string break_label;
+  std::string continue_label;
+};
+
+void compile(const Block& root,
+             ProgramBuilder& builder,
+             std::optional<LoopContext> loop_ctx = std::nullopt);
+
 void compile_expr(const std::unique_ptr<Expression>& expr,
                   ProgramBuilder& builder);
 
@@ -63,6 +72,8 @@ void compile_call(const CallExpression& call, ProgramBuilder& builder) {
   if (call.resolved) {
     switch (call.resolved->kind) {
       case Free:
+      case Extern:
+      case Anonymous:
         for (const auto& arg : call.arguments)
           compile_expr(arg, builder);
         builder.GetCurrentCode().Call(call.resolved->function_idx,
@@ -224,18 +235,21 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
               compile_expr(expr, builder);
             }
             builder.CallFunction("Array_init", new_expr.arguments.size() + 1);
+          },
+          [&](const ClosureExpression& closure) {
+            CHECK(closure.fn.resolved) << "Unresolved function!";
+            builder.EnterFunctionScope(closure.fn.name, closure.fn.arguments);
+            compile(*closure.fn.body, builder);
+            builder.ExitFunctionScope();
+            builder.GetCurrentCode().Bind(closure.fn.resolved->call_idx,
+                                          /*argc=*/0);
           }},
       expr->as);
 }
 
-struct LoopContext {
-  std::string break_label;
-  std::string continue_label;
-};
-
 void compile(const Block& root,
              ProgramBuilder& builder,
-             std::optional<LoopContext> loop_ctx = std::nullopt) {
+             std::optional<LoopContext> loop_ctx) {
   for (const auto& stmt : root.statements) {
     std::visit(
         Overloaded{[&](const std::unique_ptr<Expression>& expr) {

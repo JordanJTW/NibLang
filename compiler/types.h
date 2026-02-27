@@ -8,6 +8,16 @@
 #include "compiler/tokenizer.h"
 
 struct Expression;
+struct Statement;
+
+struct Range {
+  size_t start, end;
+};
+
+struct Metadata {
+  Range text_range;
+  Range line_range;
+};
 
 struct BinaryExpression {
   TokenKind op;
@@ -19,6 +29,7 @@ struct StringLiteral {
   std::string value;
 };
 
+using CallIdx = size_t;
 struct Identifier {
   std::string name;
 };
@@ -27,9 +38,7 @@ struct PrimaryExpression {
   std::variant<StringLiteral, Identifier, int32_t, float, bool> value;
 };
 
-using CallIdx = size_t;
-
-enum FunctionKind { Free, Method, Constructor };
+enum FunctionKind { Free, Extern, Anonymous, Method, Constructor };
 
 struct ResolvedCall {
   CallIdx function_idx;
@@ -76,33 +85,6 @@ struct NewExpression {
   std::vector<std::unique_ptr<Expression>> arguments;
 };
 
-using TypeId = size_t;
-struct Range {
-  size_t start, end;
-};
-
-struct Metadata {
-  Range text_range;
-  Range line_range;
-};
-
-struct Expression {
-  std::variant<PrimaryExpression,
-               BinaryExpression,
-               CallExpression,
-               AssignmentExpression,
-               MemberAccessExpression,
-               ArrayAccessExpression,
-               LogicExpression,
-               NewExpression>
-      as;
-
-  Metadata meta;
-  TypeId type;
-};
-
-struct Statement;
-
 struct Block {
   std::vector<std::unique_ptr<Statement>> statements;
 };
@@ -124,11 +106,36 @@ struct ResolvedFunction {
 };
 
 struct FunctionDeclaration {
+  // Function name is expected to be empty for `Anonymous` functions.
   std::string name;
   std::vector<std::pair<std::string, ParsedType>> arguments;
   ParsedType return_type;
+  FunctionKind function_kind;
+  bool is_variadic = false;
   std::unique_ptr<Block> body;
   std::optional<ResolvedFunction> resolved;
+};
+
+struct ClosureExpression {
+  FunctionDeclaration fn;
+};
+
+using TypeId = size_t;
+
+struct Expression {
+  std::variant<PrimaryExpression,
+               BinaryExpression,
+               CallExpression,
+               AssignmentExpression,
+               MemberAccessExpression,
+               ArrayAccessExpression,
+               LogicExpression,
+               NewExpression,
+               ClosureExpression>
+      as;
+
+  Metadata meta;
+  TypeId type;
 };
 
 struct ReturnStatement {

@@ -77,24 +77,37 @@ void Parser::ParseBlock(Block& block) {
     }
 
     Token start_token = current_token_;
+
+    bool is_extern = false;
+    if (current_token_.kind == TokenKind::kKwExtern) {
+      is_extern = true;
+      current_token_ = tokenizer_.next();
+    }
+
     // Function definition i.e. fn $name($args,...):
     if (current_token_.kind == TokenKind::kKwFn) {
-      if (auto fn = ParseFunctionDeclaration()) {
-        block.statements.push_back(std::make_unique<Statement>(
-            Statement{std::move(*(fn.release())),
-                      make_metadata(start_token, current_token_)}));
+      FunctionKind parse_function_as =
+          is_extern ? FunctionKind::Extern : FunctionKind::Free;
+      if (auto fn = ParseFunctionDeclaration(parse_function_as)) {
+        block.statements.push_back(std::make_unique<Statement>(Statement{
+            std::move(*fn), make_metadata(start_token, current_token_)}));
       }
       continue;
     }
 
     // struct definition i.e. struct $name { $field: $type, ... }
-    if (current_token_.kind == TokenKind::kKwStruct ||
-        current_token_.kind == TokenKind::kKwExtern) {
-      if (auto struct_decl = ParseStructDeclaration()) {
+    if (current_token_.kind == TokenKind::kKwStruct) {
+      if (auto struct_decl = ParseStructDeclaration(
+              is_extern ? ExternStruct::YES : ExternStruct::NO)) {
         block.statements.push_back(std::make_unique<Statement>(
-            Statement{std::move(*(struct_decl.release())),
+            Statement{std::move(*struct_decl),
                       make_metadata(start_token, current_token_)}));
       }
+      continue;
+    }
+
+    if (is_extern) {
+      HandleError("extern is only valid before struct/fn");
       continue;
     }
 
@@ -528,6 +541,14 @@ std::unique_ptr<Expression> Parser::ParsePrimary() {
       return std::make_unique<Expression>(Expression{std::move(new_expr)});
     }
 
+    case TokenKind::kKwFn: {
+      if (auto fn = ParseFunctionDeclaration(FunctionKind::Anonymous)) {
+        return std::make_unique<Expression>(
+            Expression{ClosureExpression{std::move(*fn)}});
+      }
+      return nullptr;
+    }
+
     default:
       HandleError("expected expression");
       return nullptr;
@@ -596,20 +617,13 @@ std::optional<ParsedType> Parser::ParseType() {
   return ParsedUnionType{type_names};
 }
 
-std::unique_ptr<StructDeclaration> Parser::ParseStructDeclaration() {
-  bool is_extern = current_token_.kind == TokenKind::kKwExtern;
-  if (is_extern)
-    current_token_ = tokenizer_.next();  // consume 'extern'
-
-  if (current_token_.kind != TokenKind::kKwStruct) {
-    HandleError("expected 'struct'");
-    return nullptr;
-  }
-  current_token_ = tokenizer_.next();  // consume 'struct'
+std::optional<StructDeclaration> Parser::ParseStructDeclaration(
+    ExternStruct is_extern) {
+  ExpectNextToken(TokenKind::kKwStruct, "expected 'struct'");
 
   if (current_token_.kind != TokenKind::kIdent) {
     HandleError("expected struct name");
-    return nullptr;
+    return std::nullopt;
   }
 
   Token struct_name = current_token_;
@@ -617,22 +631,22 @@ std::unique_ptr<StructDeclaration> Parser::ParseStructDeclaration() {
 
   if (current_token_.kind != TokenKind::kOpenBrace) {
     HandleError("expected '{' after struct name");
-    return nullptr;
+    return std::nullopt;
   }
 
-  auto struct_decl = std::make_unique<StructDeclaration>();
-  struct_decl->name = struct_name.value;
-  struct_decl->is_extern = is_extern;
+  StructDeclaration struct_decl;
+  struct_decl.name = struct_name.value;
+  struct_decl.is_extern = is_extern == ExternStruct::YES;
 
   current_token_ = tokenizer_.next();  // consume '{'
   while (current_token_.kind != TokenKind::kCloseBrace &&
          current_token_.kind != TokenKind::kEndOfFile) {
     if (current_token_.kind == TokenKind::kKwFn) {
-      auto method = ParseFunctionDeclaration();
+      auto method = ParseFunctionDeclaration(FunctionKind::Method);
       if (!method) {
-        return nullptr;
+        return std::nullopt;
       }
-      struct_decl->methods.emplace_back(method->name, std::move(*method));
+      struct_decl.methods.emplace_back(method->name, std::move(*method));
       continue;
     }
 
@@ -642,7 +656,7 @@ std::unique_ptr<StructDeclaration> Parser::ParseStructDeclaration() {
 
       if (current_token_.kind != TokenKind::kColon) {
         HandleError("expected ':' after field name");
-        return nullptr;
+        return std::nullopt;
       }
 
       current_token_ = tokenizer_.next();  // consume ':'
@@ -650,14 +664,14 @@ std::unique_ptr<StructDeclaration> Parser::ParseStructDeclaration() {
       std::optional<ParsedType> type = ParseType();
       if (!type.has_value()) {
         HandleError("expected type name");
-        return nullptr;
+        return std::nullopt;
       }
 
-      struct_decl->fields.emplace_back(field_name.value, type.value());
+      struct_decl.fields.emplace_back(field_name.value, type.value());
 
       if (current_token_.kind != TokenKind::kEndExpr) {
         HandleError("expected ';'");
-        return nullptr;
+        return std::nullopt;
       }
       current_token_ = tokenizer_.next();
       continue;
@@ -672,31 +686,63 @@ std::unique_ptr<StructDeclaration> Parser::ParseStructDeclaration() {
       break;
 
     HandleError("invalid struct member declaration");
-    return nullptr;
+    return std::nullopt;
   }
   current_token_ = tokenizer_.next();  // consume '}'
   return struct_decl;
 }
 
-std::unique_ptr<FunctionDeclaration> Parser::ParseFunctionDeclaration() {
-  current_token_ = tokenizer_.next();
+std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
+    FunctionKind function_kind) {
+  ExpectNextToken(TokenKind::kKwFn, "expected 'fn'");
 
-  const Token name = current_token_;
-  if (name.kind != TokenKind::kIdent) {
-    HandleError("requires a function name");
-    return nullptr;
+  std::string function_name;
+  if (function_kind == FunctionKind::Anonymous) {
+    // Perform single-token deletion recovery to try to keep parsing happy.
+    if (current_token_.kind == TokenKind::kIdent) {
+      print_error(text_, current_token_,
+                  "Anonymous functions should not have a name");
+      current_token_ = tokenizer_.next();  // skip name
+    }
+  } else {
+    Token name = current_token_;
+    if (name.kind != TokenKind::kIdent) {
+      HandleError("requires a function name");
+      return std::nullopt;
+    }
+    function_name = name.value;
+    current_token_ = tokenizer_.next();  // after function name
   }
-  current_token_ = tokenizer_.next();  // after function name
 
   if (current_token_.kind != TokenKind::kOpenParen) {
     HandleError("expected (");
-    return nullptr;
+    return std::nullopt;
   }
   current_token_ = tokenizer_.next();  // after '('
 
+  bool is_variadic = false;
   std::vector<std::pair<std::string, ParsedType>> arguments;
   if (current_token_.kind != TokenKind::kCloseParen) {
     while (true) {
+      // extern functions support passing raw variadic arguments to the runtime.
+      // This must be the very last parameter passed to the function.
+      if (current_token_.kind == TokenKind::kVariadic) {
+        if (function_kind != FunctionKind::Extern) {
+          HandleError("'...' is only allowed in extern functions");
+          return std::nullopt;
+        }
+
+        is_variadic = true;
+        current_token_ = tokenizer_.next();  // skip ...
+
+        if (current_token_.kind != TokenKind::kCloseParen) {
+          print_error(text_, current_token_,
+                      "'...' must be the last argument in a function");
+          return std::nullopt;
+        }
+        break;
+      }
+
       if (current_token_.kind != TokenKind::kIdent) {
         HandleError("expected parameter name");
         break;
@@ -742,21 +788,22 @@ std::unique_ptr<FunctionDeclaration> Parser::ParseFunctionDeclaration() {
   }
 
   FunctionDeclaration fn{
-      name.value, std::move(arguments),
-      std::move(return_type.value_or(ParsedTypeName{"Void"}))};
+      function_name, std::move(arguments),
+      std::move(return_type.value_or(ParsedTypeName{"Void"})), function_kind,
+      is_variadic};
 
   if (current_token_.kind == TokenKind::kEndExpr) {
     current_token_ = tokenizer_.next();  // consume ';'
-    return std::make_unique<FunctionDeclaration>(std::move(fn));
+    return std::move(fn);
   }
 
   if (!ExpectNextToken(TokenKind::kOpenBrace, "expected function body"))
-    return nullptr;
+    return std::nullopt;
 
   Block body;
   ParseBlock(body);
   fn.body = std::make_unique<Block>(std::move(body));
-  return std::make_unique<FunctionDeclaration>(std::move(fn));
+  return std::move(fn);
 }
 
 std::optional<Token> Parser::ExpectNextToken(TokenKind expected_kind,

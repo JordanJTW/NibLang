@@ -35,8 +35,11 @@ class Parser {
   std::unique_ptr<Expression> ParseCall(std::unique_ptr<Expression> callee);
 
   std::optional<ParsedType> ParseType();
-  std::unique_ptr<StructDeclaration> ParseStructDeclaration();
-  std::unique_ptr<FunctionDeclaration> ParseFunctionDeclaration();
+  enum class ExternStruct { YES, NO };
+  std::optional<StructDeclaration> ParseStructDeclaration(
+      ExternStruct is_extern);
+  std::optional<FunctionDeclaration> ParseFunctionDeclaration(
+      FunctionKind function_kind);
 
   std::optional<Token> ExpectNextToken(TokenKind expected_kind,
                                        std::string_view error_message);

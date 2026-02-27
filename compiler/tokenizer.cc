@@ -4,6 +4,8 @@
 #include <array>
 #include <optional>
 
+#include "compiler/logging.h"
+
 namespace {
 
 bool isnumber(char ch) {
@@ -53,7 +55,7 @@ std::optional<TokenKind> get_single_char_token(char ch) {
   }
 }
 
-std::optional<TokenKind> get_double_char_token(std::string value) {
+std::optional<TokenKind> get_double_char_token(std::string_view value) {
   if (value == "==")
     return TokenKind::kCompareEq;
   if (value == "!=")
@@ -123,13 +125,6 @@ Token Tokenizer::next() {
                        {"let", TokenKind::kKwLet},
                        {"new", TokenKind::kKwNew}}};
 
-  for (const auto& [keyword, kind] : kKeywordToToken) {
-    if (data_.substr(offset_, keyword.size()) == keyword) {
-      offset_ += keyword.size();
-      return make_token(kind);
-    }
-  }
-
   char ch = data_[offset_];
 
   // Identifier
@@ -138,6 +133,12 @@ Token Tokenizer::next() {
     while (offset_ < data_.size() &&
            (std::isalnum(data_[offset_]) || data_[offset_] == '_'))
       ++offset_;
+
+    std::string_view ident(data_.data() + start_idx, offset_ - start_idx);
+    for (const auto& [keyword, kind] : kKeywordToToken) {
+      if (ident == keyword)
+        return make_token(kind);
+    }
 
     return make_token(TokenKind::kIdent);
   }
@@ -153,31 +154,17 @@ Token Tokenizer::next() {
   // String
   if (ch == '"') {
     ++offset_;  // Skip initial '"'
-    std::string value;
-    while (offset_ < data_.size() && data_[offset_] != '"') {
-      if (data_[offset_] == '\\') {
-        ++offset_;  // skip backslash
-        char escaped = data_[offset_++];
+    return make_token(TokenKind::kString, read_until('"'));
+  }
 
-        switch (escaped) {
-          case 'n':
-            value.push_back('\n');
-            break;
-          case 't':
-            value.push_back('\t');
-            break;
-          case 'r':
-            value.push_back('\r');
-          default:
-            value.push_back(escaped);
-        }
-      } else {
-        value.push_back(data_[offset_++]);
-      }
-    }
+  if (ch == '`') {
+    ++offset_;  // Skip initial '`'
+    return make_token(TokenKind::kTemplateString, read_until('`'));
+  }
 
-    ++offset_;  // Skip final '"'
-    return make_token(TokenKind::kString, value);
+  if (std::string_view{data_.data() + offset_, 3} == "...") {
+    offset_ += 3;
+    return make_token(TokenKind::kVariadic);
   }
 
   // Comment
@@ -190,7 +177,7 @@ Token Tokenizer::next() {
   }
 
   // Handles double character token types (&&||++,etc)
-  if (auto kind = get_double_char_token(data_.substr(offset_, 2));
+  if (auto kind = get_double_char_token({data_.data() + offset_, 2});
       kind.has_value()) {
     offset_ += 2;
     return make_token(*kind);
@@ -206,6 +193,33 @@ Token Tokenizer::next() {
   return make_token(TokenKind::kUnknown);
 }
 
+std::string Tokenizer::read_until(char endpoint) {
+  std::string value;
+  while (offset_ < data_.size() && data_[offset_] != endpoint) {
+    if (data_[offset_] == '\\') {
+      ++offset_;  // skip backslash
+      char escaped = data_[offset_++];
+
+      switch (escaped) {
+        case 'n':
+          value.push_back('\n');
+          break;
+        case 't':
+          value.push_back('\t');
+          break;
+        case 'r':
+          value.push_back('\r');
+        default:
+          value.push_back(escaped);
+      }
+    } else {
+      value.push_back(data_[offset_++]);
+    }
+  }
+  ++offset_;  // Skip $endpoint
+  return value;
+}
+
 std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
 #define KIND_TO_NAME($type) \
   case TokenKind::$type:    \
@@ -215,6 +229,7 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kIdent);
     KIND_TO_NAME(kNumber);
     KIND_TO_NAME(kString);
+    KIND_TO_NAME(kTemplateString);
     KIND_TO_NAME(kKwLabel);
     KIND_TO_NAME(kKwGoto);
     KIND_TO_NAME(kKwIf);
@@ -233,6 +248,7 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kKwExtern);
     KIND_TO_NAME(kKwLet);
     KIND_TO_NAME(kKwNew);
+    KIND_TO_NAME(kVariadic);
     KIND_TO_NAME(kOpenParen);
     KIND_TO_NAME(kCloseParen);
     KIND_TO_NAME(kOpenBrace);

@@ -485,12 +485,33 @@ static void run_frame(vm_t* vm, const char* name) {
   case $op: {                                                                 \
     vm_value_t v2 = pop_stack(&vm->stack);                                    \
     vm_value_t v1 = pop_stack(&vm->stack);                                    \
-    assert(v1.type == VALUE_TYPE_INT && v2.type == VALUE_TYPE_INT &&          \
-           "only i32 are comparable");                                        \
-    DEBUG_LOG(#$op " %d" #$condition "%d", v1.as.i32, v2.as.i32);             \
-    push_stack(&vm->stack,                                                    \
-               (vm_value_t){.type = VALUE_TYPE_BOOL,                          \
-                            .as.boolean = (v1.as.i32 $condition v2.as.i32)}); \
+    assert(v1.type == v2.type && "comparisons must be same type");            \
+    switch (v1.type) {                                                        \
+      case VALUE_TYPE_BOOL:                                                   \
+        DEBUG_LOG(#$op " %d" #$condition "%d", v1.as.boolean, v2.as.boolean); \
+        push_stack(                                                           \
+            &vm->stack,                                                       \
+            (vm_value_t){                                                     \
+                .type = VALUE_TYPE_BOOL,                                      \
+                .as.boolean = (v1.as.boolean $condition v2.as.boolean)});     \
+        break;                                                                \
+      case VALUE_TYPE_INT:                                                    \
+        DEBUG_LOG(#$op " %d" #$condition "%d", v1.as.i32, v2.as.i32);         \
+        push_stack(                                                           \
+            &vm->stack,                                                       \
+            (vm_value_t){.type = VALUE_TYPE_BOOL,                             \
+                         .as.boolean = (v1.as.i32 $condition v2.as.i32)});    \
+        break;                                                                \
+      case VALUE_TYPE_FLOAT:                                                  \
+        DEBUG_LOG(#$op " %f" #$condition "%f", v1.as.f32, v2.as.f32);         \
+        push_stack(                                                           \
+            &vm->stack,                                                       \
+            (vm_value_t){.type = VALUE_TYPE_BOOL,                             \
+                         .as.boolean = (v1.as.f32 $condition v2.as.f32)});    \
+        break;                                                                \
+      default:                                                                \
+        assert("unsupported comparison type");                                \
+    }                                                                         \
     ++frame->pc;                                                              \
     break;                                                                    \
   }

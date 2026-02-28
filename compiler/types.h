@@ -45,7 +45,14 @@ struct PrimaryExpression {
   std::variant<StringLiteral, Identifier, int32_t, float, bool> value;
 };
 
-enum FunctionKind { Free, Extern, Anonymous, Method, Constructor };
+enum FunctionKind {
+  Free,
+  Extern,
+  Anonymous,
+  Method,
+  StaticMethod,
+  Constructor
+};
 
 struct ResolvedCall {
   CallIdx function_idx;
@@ -87,11 +94,6 @@ struct LogicExpression {
   std::unique_ptr<Expression> rhs;
 };
 
-struct NewExpression {
-  std::string struct_name;
-  std::vector<std::unique_ptr<Expression>> arguments;
-};
-
 struct Block {
   std::vector<std::unique_ptr<Statement>> statements;
 };
@@ -109,7 +111,7 @@ using ParsedType = std::variant<ParsedTypeName, ParsedUnionType>;
 
 struct ResolvedFunction {
   CallIdx call_idx;
-  bool is_void_return;
+  bool is_void_return = false;
 };
 
 struct FunctionDeclaration {
@@ -137,7 +139,6 @@ struct Expression {
                MemberAccessExpression,
                ArrayAccessExpression,
                LogicExpression,
-               NewExpression,
                ClosureExpression>
       as;
 

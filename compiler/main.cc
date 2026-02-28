@@ -74,6 +74,7 @@ void compile_call(const CallExpression& call, ProgramBuilder& builder) {
       case Free:
       case Extern:
       case Anonymous:
+      case StaticMethod:
         for (const auto& arg : call.arguments)
           compile_expr(arg, builder);
         builder.GetCurrentCode().Call(call.resolved->function_idx,
@@ -244,13 +245,6 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
 
             builder.GetCurrentCode().Label(end_label);
           },
-          [&](const NewExpression& new_expr) {
-            builder.GetCurrentCode().PushInt32(new_expr.arguments.size());
-            for (const auto& expr : new_expr.arguments) {
-              compile_expr(expr, builder);
-            }
-            builder.CallFunction("Array_init", new_expr.arguments.size() + 1);
-          },
           [&](const ClosureExpression& closure) {
             CHECK(closure.fn.resolved) << "Unresolved function!";
             builder.EnterFunctionScope(closure.fn.name, closure.fn.arguments);
@@ -370,7 +364,7 @@ int main(int argc, char* argv[]) {
                        std::istreambuf_iterator<char>()};
 
   ProgramBuilder builder;
-  Parser parser(contents, builder);
+  Parser parser(contents);
 
   Block root = parser.Parse();
   TypeChecker type_checker(contents);

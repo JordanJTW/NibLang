@@ -27,6 +27,63 @@ std::ostream& operator<<(std::ostream& os, const ParsedType& type) {
   return os;
 }
 
+static const char* ToString(FunctionKind kind) {
+  switch (kind) {
+    case Free:
+      return "Free";
+    case Extern:
+      return "Extern";
+    case Anonymous:
+      return "Anonymous";
+    case Method:
+      return "Method";
+    case StaticMethod:
+      return "StaticMethod";
+    case Constructor:
+      return "Constructor";
+  }
+}
+
+void print_resolved_call(const std::optional<ResolvedCall>& r, size_t indent) {
+  if (!r.has_value()) {
+    std::cout << std::string(indent, ' ') << "ResolvedCall: UNRESOLVED"
+              << std::endl;
+  } else {
+    std::cout << std::string(indent, ' ') << "ResolvedCall:" << std::endl;
+    std::cout << std::string(indent + 2, ' ')
+              << "function_idx: " << r->function_idx << std::endl;
+    std::cout << std::string(indent + 2, ' ')
+              << "function_kind: " << ToString(r->kind) << std::endl;
+  }
+}
+
+void print_resolved_access(const std::optional<ResolvedAccess>& r,
+                           size_t indent) {
+  if (!r.has_value()) {
+    std::cout << std::string(indent, ' ') << "ResolvedAccess: UNRESOLVED"
+              << std::endl;
+  } else {
+    std::cout << std::string(indent, ' ') << "ResolvedAccess:" << std::endl;
+    std::cout << std::string(indent + 2, ' ') << "member_index: " << r->index
+              << std::endl;
+  }
+}
+
+void print_resolved_function(const std::optional<ResolvedFunction>& r,
+                             size_t indent) {
+  if (!r.has_value()) {
+    std::cout << std::string(indent, ' ') << "ResolvedFunction: UNRESOLVED"
+              << std::endl;
+  } else {
+    std::cout << std::string(indent, ' ') << "ResolvedFunction:" << std::endl;
+    std::cout << std::string(indent + 2, ' ') << "call_idx: " << r->call_idx
+              << std::endl;
+    std::cout << std::string(indent + 2, ' ')
+              << "is_void_return: " << (r->is_void_return ? "YES" : "NO")
+              << std::endl;
+  }
+}
+
 static void print_primary(const PrimaryExpression& primary, size_t indent) {
   std::visit(Overloaded{
                  [&](const StringLiteral& str) {
@@ -55,16 +112,14 @@ static void print_primary(const PrimaryExpression& primary, size_t indent) {
 
 void print_function(const FunctionDeclaration& fn, size_t indent) {
   std::cout << std::string(indent, ' ') << "FunctionDeclaration: " << fn.name
-            << " ["
-            << (fn.resolved.has_value() ? std::to_string(fn.resolved->call_idx)
-                                        : "Unresolved")
-            << "]" << std::endl;
-
+            << std::endl;
   std::cout << std::string(indent + 2, ' ') << "Arguments:" << std::endl;
   for (const auto& arg : fn.arguments) {
     std::cout << std::string(indent + 4, ' ') << arg.first << ": " << arg.second
               << std::endl;
   }
+
+  print_resolved_function(fn.resolved, indent + 2);
 
   if (fn.body) {
     std::cout << std::string(indent + 2, ' ') << "Body:" << std::endl;
@@ -120,23 +175,15 @@ void print_expression(const std::unique_ptr<Expression>& expr, size_t indent) {
             for (const auto& arg : call.arguments)
               print_expression(arg, indent + 4);
 
-            std::cout << std::string(indent + 2, ' ') << "Call Idx: "
-                      << (call.resolved.has_value()
-                              ? std::to_string(call.resolved->function_idx)
-                              : "Unresolved")
-                      << std::endl;
+            print_resolved_call(call.resolved, indent + 2);
           },
           [&](const MemberAccessExpression& member_access) {
             std::cout << std::string(indent, ' ')
                       << "MemberAccessExpression: " << member_access.member_name
                       << " type: " << expr->type << std::endl;
-
             std::cout << std::string(indent + 2, ' ') << "Object:" << std::endl;
             print_expression(member_access.object, indent + 4);
-
-            std::cout << std::string(indent + 2, ' ') << "Resolved: "
-                      << (member_access.resolved.has_value() ? "YES" : "NO")
-                      << std::endl;
+            print_resolved_access(member_access.resolved, indent + 2);
           },
           [&](const ArrayAccessExpression& array_access) {
             std::cout << std::string(indent, ' ')
@@ -159,15 +206,6 @@ void print_expression(const std::unique_ptr<Expression>& expr, size_t indent) {
 
             std::cout << std::string(indent + 2, ' ') << "RHS:" << std::endl;
             print_expression(logic.rhs, indent + 4);
-          },
-          [&](const NewExpression& new_expr) {
-            std::cout << std::string(indent, ' ')
-                      << "NewExpression: " << new_expr.struct_name
-                      << " type: " << expr->type << std::endl;
-
-            for (const auto& expr : new_expr.arguments) {
-              print_expression(expr, indent + 2);
-            }
           },
           [&](const ClosureExpression& closure) {
             std::cout << std::string(indent, ' ')

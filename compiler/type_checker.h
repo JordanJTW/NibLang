@@ -64,7 +64,6 @@ class TypeChecker {
     std::map<std::string, MemberType> member_types;
     std::vector<TypeId> field_members;
     const StructDeclaration* parsed_struct;
-    std::optional<CallIdx> constructor_call_idx;
   };
 
   struct UnionType {

@@ -86,12 +86,6 @@ void TypeChecker::Check(Block& block) {
         }
       }
 
-      // External structs can be constructed with a provided native function.
-      if (struct_decl->is_extern) {
-        struct_type.constructor_call_idx =
-            GetCallIdxFor(struct_decl->name + "_new", CreateIfMissing::NO);
-      }
-
       Symbol symbol = scopes_.back().symbols[struct_decl->name];
       type_info_[symbol.type_id] = std::move(struct_type);
     }
@@ -277,13 +271,10 @@ TypeId TypeChecker::CheckExpression(std::unique_ptr<Expression>& expression) {
               return f.return_type;
             } else if (std::holds_alternative<StructType>(fn_type)) {
               const StructType& s = std::get<StructType>(fn_type);
-              if (s.parsed_struct->is_extern &&
-                  s.constructor_call_idx.has_value()) {
-                call.resolved =
-                    ResolvedCall{*s.constructor_call_idx, FunctionKind::Free};
-                // Constructor function signature should be stored and type
-                // checked but this requires refactoring out the above logic.
-                return callee_type;
+              if (s.parsed_struct->is_extern) {
+                LOG(ERROR)
+                    << "extern structs are opaque and have no constructor";
+                return LiteralType::Void;
               }
               call.resolved = ResolvedCall{0, FunctionKind::Constructor};
               if (s.field_members.size() != call.arguments.size()) {
@@ -347,46 +338,6 @@ TypeId TypeChecker::CheckExpression(std::unique_ptr<Expression>& expression) {
               LOG(ERROR) << "LHS and RHS must be the same type";
 
             return LiteralType::Bool;
-          },
-          [&](NewExpression& new_expr) -> TypeId {
-            std::optional<Symbol> symbol =
-                GetSymbolFor(new_expr.struct_name, expression->meta);
-
-            // Error is logged within GetSymbolFor
-            if (!symbol.has_value())
-              return LiteralType::Void;
-
-            if (symbol->kind != Symbol::Struct) {
-              LOG(ERROR) << "new only works with structs";
-              return LiteralType::Void;
-            }
-
-            auto& struct_type = type_info_[symbol->type_id];
-            if (!std::holds_alternative<StructType>(struct_type)) {
-              LOG(ERROR) << "new only works with structs";
-              return LiteralType::Void;
-            }
-
-            const StructType& s = std::get<StructType>(struct_type);
-            if (s.parsed_struct->is_extern) {
-              LOG(ERROR) << "extern structs can not be instantiated";
-              return LiteralType::Void;
-            }
-
-            if (s.field_members.size() != new_expr.arguments.size()) {
-              LOG(ERROR) << "Incorrect number of arguments to instantiate "
-                            "struct: expected("
-                         << s.field_members.size() << ") vs. provided("
-                         << new_expr.arguments.size() << ")";
-            } else {
-              for (size_t i = 0; i < new_expr.arguments.size(); ++i) {
-                TypeId type_id = CheckExpression(new_expr.arguments[i]);
-                if (!IsTypeSubsetOf(type_id, s.field_members[i])) {
-                  LOG(ERROR) << "Argument to new has incorrect type";
-                }
-              }
-            }
-            return symbol->type_id;
           },
           [&](ClosureExpression& closure) -> TypeId {
             if (std::optional<TypeId> type_id = DefineFunction(closure.fn)) {
@@ -476,27 +427,33 @@ std::optional<TypeId> TypeChecker::DefineFunction(
     return std::nullopt;
 
   std::string qualified_name = fn.name;
-  bool is_function_extern = false;
+  bool is_function_extern = fn.function_kind == FunctionKind::Extern;
   if (object) {
     qualified_name = object.value()->name + "_" + fn.name;
-    is_function_extern = object.value()->is_extern;
+    is_function_extern = object.value()->is_extern && !fn.body;
   }
 
-  // Ensure that extern (built-in) functions that do not exist print an error
-  // instead of blindly creating a new CallIdx for them :^)
-  std::optional<CallIdx> call_idx =
-      GetCallIdxFor(qualified_name, is_function_extern ? CreateIfMissing::NO
-                                                       : CreateIfMissing::YES);
-  if (!call_idx.has_value()) {
-    LOG(ERROR) << "Function " << qualified_name << " is not found";
-    return std::nullopt;
+  std::optional<CallIdx> call_idx;
+  if (is_function_extern) {
+    // Extern functions must already exist.
+    call_idx = GetCallIdxFor(qualified_name, CreateIfMissing::NO);
+    if (!call_idx) {
+      LOG(ERROR) << "extern function '" << qualified_name << "' is not found";
+      return std::nullopt;
+    }
+  } else {
+    if (!fn.body) {
+      LOG(ERROR) << "non-extern functions MUST have a body: " << fn.name;
+      return std::nullopt;
+    }
+
+    call_idx = GetCallIdxFor(qualified_name, CreateIfMissing::YES);
   }
 
   fn.resolved = ResolvedFunction{*call_idx, return_type == LiteralType::Void};
-  type_info_[type_id] = FunctionType{
-      typed_arguments, *return_type,
-      object.has_value() ? FunctionKind::Method : FunctionKind::Free,
-      call_idx.value(), fn.is_variadic};
+  type_info_[type_id] =
+      FunctionType{typed_arguments, *return_type, fn.function_kind,
+                   call_idx.value(), fn.is_variadic};
   return type_id;
 }
 
@@ -528,6 +485,8 @@ std::optional<CallIdx> TypeChecker::GetCallIdxFor(const std::string& name,
       {"Array_get", VM_BUILTIN_ARRAY_GET},
       {"Array_init", VM_BUILTIN_ARRAY_INIT},
       {"Array_new", VM_BUILTIN_ARRAY_NEW},
+      // Alias for the argument version of the native function.
+      {"Array_withSize", VM_BUILTIN_ARRAY_NEW},
       {"Array_push", VM_BUILTIN_ARRAY_PUSH},
       {"Array_set", VM_BUILTIN_ARRAY_SET},
       {"log", VM_BUILTIN_LOG},

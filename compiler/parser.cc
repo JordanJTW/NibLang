@@ -507,40 +507,6 @@ std::unique_ptr<Expression> Parser::ParsePrimary() {
       return expr;
     }
 
-    case TokenKind::kKwNew: {
-      current_token_ = tokenizer_.next();  // consume "new"
-
-      std::optional<Token> ident =
-          ExpectNextToken(TokenKind::kIdent, "struct name required");
-      if (!ident)
-        return nullptr;
-
-      if (!ExpectNextToken(TokenKind::kOpenParen, "missing '('"))
-        return nullptr;
-
-      NewExpression new_expr{ident->value};
-      if (current_token_.kind != TokenKind::kCloseParen) {
-        while (true) {
-          auto arg = ParseExpression();
-          if (!arg)
-            return nullptr;
-          new_expr.arguments.push_back(std::move(arg));
-
-          if (current_token_.kind == TokenKind::kCloseParen)
-            break;
-
-          if (current_token_.kind != TokenKind::kComma) {
-            HandleError("expected ',' or ')'");
-            return nullptr;
-          }
-
-          current_token_ = tokenizer_.next();
-        }
-      }
-      current_token_ = tokenizer_.next();  // consume ')'
-      return std::make_unique<Expression>(Expression{std::move(new_expr)});
-    }
-
     case TokenKind::kKwFn: {
       if (auto fn = ParseFunctionDeclaration(FunctionKind::Anonymous)) {
         return std::make_unique<Expression>(
@@ -641,12 +607,28 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
   current_token_ = tokenizer_.next();  // consume '{'
   while (current_token_.kind != TokenKind::kCloseBrace &&
          current_token_.kind != TokenKind::kEndOfFile) {
+    std::optional<Token> static_modifier_token;
+    if (current_token_.kind == TokenKind::kKwStatic) {
+      static_modifier_token = current_token_;
+      current_token_ = tokenizer_.next();
+    }
+
     if (current_token_.kind == TokenKind::kKwFn) {
-      auto method = ParseFunctionDeclaration(FunctionKind::Method);
+      auto method = ParseFunctionDeclaration(static_modifier_token.has_value()
+                                                 ? FunctionKind::StaticMethod
+                                                 : FunctionKind::Method);
       if (!method) {
         return std::nullopt;
       }
       struct_decl.methods.emplace_back(method->name, std::move(*method));
+      continue;
+    }
+
+    if (static_modifier_token) {
+      print_error(text_, static_modifier_token.value(),
+                  "'static' is only valid on method declarations");
+      // Purposefully do not attempt error recovery as we are already on a new
+      // token at this point and it is only a modifier for other keywords.
       continue;
     }
 

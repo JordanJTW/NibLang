@@ -123,7 +123,7 @@ Token Tokenizer::next() {
                        {"struct", TokenKind::kKwStruct},
                        {"extern", TokenKind::kKwExtern},
                        {"let", TokenKind::kKwLet},
-                       {"new", TokenKind::kKwNew}}};
+                       {"static", TokenKind::kKwStatic}}};
 
   char ch = data_[offset_];
 
@@ -247,7 +247,7 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kKwStruct);
     KIND_TO_NAME(kKwExtern);
     KIND_TO_NAME(kKwLet);
-    KIND_TO_NAME(kKwNew);
+    KIND_TO_NAME(kKwStatic);
     KIND_TO_NAME(kVariadic);
     KIND_TO_NAME(kOpenParen);
     KIND_TO_NAME(kCloseParen);

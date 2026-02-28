@@ -11,11 +11,8 @@
 
 class Parser {
  public:
-  explicit Parser(const std::string& text, ProgramBuilder& builder)
-      : text_(text),
-        tokenizer_(text_),
-        current_token_(tokenizer_.next()),
-        builder_(builder) {}
+  explicit Parser(const std::string& text)
+      : text_(text), tokenizer_(text_), current_token_(tokenizer_.next()) {}
 
   Block Parse();
 
@@ -48,5 +45,4 @@ class Parser {
   const std::string& text_;
   Tokenizer tokenizer_;
   Token current_token_;
-  ProgramBuilder& builder_;
 };

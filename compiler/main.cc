@@ -68,6 +68,8 @@ void compile(const Block& root,
 void compile_expr(const std::unique_ptr<Expression>& expr,
                   ProgramBuilder& builder);
 
+static size_t kUniqueBlockId = 0;
+
 void compile_call(const CallExpression& call, ProgramBuilder& builder) {
   if (call.resolved) {
     switch (call.resolved->kind) {
@@ -311,22 +313,18 @@ void compile(const Block& root,
                    },
                    [&](const IfStatement& if_stmt) {
                      compile_expr(if_stmt.condition, builder);
-                     builder.GetCurrentCode().JumpIfFalse(
-                         "else" + std::to_string(if_stmt.id));
+                     std::string id = std::to_string(kUniqueBlockId++);
+                     builder.GetCurrentCode().JumpIfFalse("else" + id);
                      compile(if_stmt.then_body, builder, loop_ctx);
-                     builder.GetCurrentCode().Jump("end_if" +
-                                                   std::to_string(if_stmt.id));
-                     builder.GetCurrentCode().Label("else" +
-                                                    std::to_string(if_stmt.id));
+                     builder.GetCurrentCode().Jump("end_if" + id);
+                     builder.GetCurrentCode().Label("else" + id);
                      compile(if_stmt.else_body, builder, loop_ctx);
-                     builder.GetCurrentCode().Label("end_if" +
-                                                    std::to_string(if_stmt.id));
+                     builder.GetCurrentCode().Label("end_if" + id);
                    },
                    [&](const WhileStatement& while_stmt) {
-                     std::string condition_label =
-                         "while_cond" + std::to_string(while_stmt.id);
-                     std::string end_label =
-                         "while_end" + std::to_string(while_stmt.id);
+                     std::string id = std::to_string(kUniqueBlockId++);
+                     std::string condition_label = "while_cond" + id;
+                     std::string end_label = "while_end" + id;
 
                      builder.GetCurrentCode().Label(condition_label);
                      compile_expr(while_stmt.condition, builder);

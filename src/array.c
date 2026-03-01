@@ -1,8 +1,8 @@
 #include "src/array.h"
 
 #include <assert.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "src/types.h"
 #include "src/vm.h"
@@ -61,6 +61,15 @@ vm_value_t vm_array_get(vm_value_t* argv, size_t argc, void* vm) {
   vm_value_t result = array->data[idx];
   vm_adopt_ref(result);
   return result;
+}
+
+vm_value_t vm_array_length(vm_value_t* argv, size_t argc, void* vm) {
+  assert(argc == 1 && (argv[0].type == VALUE_TYPE_ARRAY) &&
+         "incorrect number of args or arg types");
+
+  RC_AUTOFREE vm_value_t this = argv[0];
+
+  return (vm_value_t){.type = VALUE_TYPE_INT, .as.i32 = this.as.array->len};
 }
 
 vm_value_t vm_array_set(vm_value_t* argv, size_t argc, void* vm) {

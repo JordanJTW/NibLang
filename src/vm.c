@@ -29,7 +29,7 @@ static bool is_number_type(vm_value_t value) {
   return value.type == VALUE_TYPE_INT || value.type == VALUE_TYPE_FLOAT;
 }
 
-#define VM_BUILTIN_FUNCTION_COUNT 18
+#define VM_BUILTIN_FUNCTION_COUNT 19
 
 typedef struct vm_frame vm_frame_t;
 
@@ -893,6 +893,7 @@ static void install_builtins(vm_t* vm) {
   INSTALL(15, vm_array_init, 1);
   INSTALL(16, vm_array_push, 2);
   INSTALL(17, vm_map_get, 2);
+  INSTALL(18, vm_array_length, 1);
 }
 
 static void free_closure(void* self) {

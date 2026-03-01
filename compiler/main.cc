@@ -19,10 +19,10 @@ Overloaded(Ts...) -> Overloaded<Ts...>;
 
 void emit_op(const Token& op, ProgramBuilder& builder) {
   switch (op.kind) {
-    case TokenKind::kAdd:
+    case TokenKind::kPlus:
       builder.GetCurrentCode().Add();
       break;
-    case TokenKind::kSubtract:
+    case TokenKind::kMinus:
       builder.GetCurrentCode().Subtract();
       break;
     case TokenKind::kMultiply:
@@ -252,7 +252,34 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
             builder.ExitFunctionScope();
             builder.GetCurrentCode().Bind(closure.fn.resolved->call_idx,
                                           /*argc=*/0);
-          }},
+          },
+          [&](PrefixUnaryExpression& prefix) {
+            compile_expr(prefix.operand, builder);
+            switch (prefix.op) {
+              case TokenKind::kPlus:  // no-op
+                break;
+              case TokenKind::kMinus:
+                // TODO: Add OP_NEGATE?
+                builder.GetCurrentCode().PushInt32(-1);
+                builder.GetCurrentCode().Multiply();
+                break;
+              case TokenKind::kPlusPlus:
+              case TokenKind::kMinusMinus:
+                LOG(FATAL) << "Prefix ++/-- are not yet supported!";
+                break;
+              case TokenKind::kNot:
+                builder.GetCurrentCode().Not();
+                break;
+              default:
+                LOG(FATAL) << "Unsupported TokenKind op: " << prefix.op;
+                break;
+            }
+          },
+          [&](PostfixUnaryExpression& postfix) {
+            LOG(FATAL) << "PostFix are not yet supported!";
+          },
+          [&](TypeCastExpression& cast) { compile_expr(cast.expr, builder); },
+      },
       expr->as);
 }
 

@@ -43,11 +43,19 @@ void print_error(const std::string& file,
             << "^ " << message << std::endl;
 }
 
+bool IsCompatibleType(TypeId lhs, TypeId rhs) {
+  if (lhs == rhs)
+    return true;
+
+  return (lhs == LiteralType::i32 || lhs == LiteralType::f32) &&
+         (rhs == LiteralType::i32 || rhs == LiteralType::f32);
+}
+
 }  // namespace
 
 TypeChecker::TypeChecker(const std::string& file)
     : file_(file), next_type_id_(LiteralType::kCount) {
-  scopes_.emplace_back();
+  scopes_.push_back({.type = Scope::Function});
 
   // Add dummy entries for the built-in types to simplify logic.
   for (size_t i = 0; i < LiteralType::kCount; ++i)
@@ -113,22 +121,38 @@ void TypeChecker::CheckStatement(std::unique_ptr<Statement>& statement) {
           [&](ReturnStatement& ret) {
             TypeId return_type = CheckExpression(ret.value);
 
-            const auto& expected_return_type = scopes_.back().return_type;
-            if (expected_return_type.has_value() &&
-                !IsTypeSubsetOf(return_type, expected_return_type.value())) {
-              LOG(ERROR) << "Function return type is " << return_type
-                         << " but expected " << *expected_return_type;
+            for (auto it = scopes_.rbegin(); it != scopes_.rend(); ++it) {
+              if (it->type != Scope::Function)
+                continue;
+
+              const auto& expected_return_type = it->return_type;
+              if (expected_return_type.has_value() &&
+                  !IsTypeSubsetOf(return_type, expected_return_type.value())) {
+                LOG(ERROR) << "Function return type is " << return_type
+                           << " but expected " << *expected_return_type;
+              }
+              return;
             }
+            NOTREACHED() << "Unable to find ANY function scope!";
           },
           [&](ThrowStatement& thr) { CheckExpression(thr.value); },
           [&](IfStatement& if_stmt) {
             CheckExpression(if_stmt.condition);
+
+            scopes_.push_back({.type = Scope::StatementBody});
             Check(if_stmt.then_body);
+            scopes_.pop_back();
+
+            scopes_.push_back({.type = Scope::StatementBody});
             Check(if_stmt.else_body);
+            scopes_.pop_back();
           },
           [&](WhileStatement& while_stmt) {
             CheckExpression(while_stmt.condition);
+
+            scopes_.push_back({.type = Scope::StatementBody});
             Check(while_stmt.body);
+            scopes_.pop_back();
           },
           // `break` and `continue` are single word statements.
           [&](const BreakStatement&) {}, [&](const ContinueStatement&) {},
@@ -218,7 +242,7 @@ TypeId TypeChecker::CheckExpression(std::unique_ptr<Expression>& expression) {
           [&](BinaryExpression& binary) -> TypeId {
             TypeId lhs = CheckExpression(binary.lhs);
             TypeId rhs = CheckExpression(binary.rhs);
-            if (lhs != rhs)
+            if (!IsCompatibleType(lhs, rhs))
               LOG(ERROR) << "LHS and RHS must be the same type";
 
             // Comparison operators will always generate a boolean
@@ -300,7 +324,7 @@ TypeId TypeChecker::CheckExpression(std::unique_ptr<Expression>& expression) {
             TypeId lhs = CheckExpression(assign.lhs);
             TypeId rhs = CheckExpression(assign.rhs);
 
-            if (lhs != rhs)
+            if (!IsCompatibleType(lhs, rhs))
               print_error(file_, expression->meta, "Mismatched assignment");
 
             return lhs;
@@ -345,7 +369,32 @@ TypeId TypeChecker::CheckExpression(std::unique_ptr<Expression>& expression) {
               return *type_id;
             }
             return LiteralType::Void;
-          }},
+          },
+          [&](PrefixUnaryExpression& prefix) {
+            TypeId operand = CheckExpression(prefix.operand);
+            // TODO: Check that `op` is valid for `operand`.
+            return operand;
+          },
+          [&](PostfixUnaryExpression& postfix) {
+            TypeId operand = CheckExpression(postfix.operand);
+            // TODO: Check that `op` is valid for `operand`.
+            return operand;
+          },
+          [&](TypeCastExpression& cast) {
+            TypeId original_type = CheckExpression(cast.expr);
+            std::optional<TypeId> as_type = GetTypeIdFor(cast.as_type);
+            if (!as_type) {
+              LOG(ERROR) << "Unknown 'as' type";
+              return original_type;
+            }
+
+            if (IsTypeSubsetOf(as_type.value(), original_type))
+              return as_type.value();
+
+            LOG(ERROR) << "cast failed";
+            return original_type;
+          },
+      },
       expression->as);
 
   return expression->type;
@@ -462,6 +511,7 @@ void TypeChecker::CheckFunctionBody(const FunctionDeclaration& fn) {
     return;
 
   Scope& function_scope = scopes_.emplace_back();
+  function_scope.type = Scope::Function;
   function_scope.return_type = GetTypeIdFor(fn.return_type);
 
   for (const auto& [name, type] : fn.arguments) {
@@ -527,7 +577,8 @@ std::optional<TypeChecker::Symbol> TypeChecker::GetSymbolFor(
 }
 
 bool TypeChecker::IsTypeSubsetOf(TypeId sub_type_id, TypeId super_type_id) {
-  if (sub_type_id == super_type_id || super_type_id == LiteralType::Any)
+  if (IsCompatibleType(sub_type_id, super_type_id) ||
+      super_type_id == LiteralType::Any)
     return true;
 
   const Type& sub_type = type_info_.at(sub_type_id);

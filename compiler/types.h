@@ -25,6 +25,16 @@ struct BinaryExpression {
   std::unique_ptr<Expression> rhs;
 };
 
+struct PrefixUnaryExpression {
+  TokenKind op;
+  std::unique_ptr<Expression> operand;
+};
+
+struct PostfixUnaryExpression {
+  TokenKind op;
+  std::unique_ptr<Expression> operand;
+};
+
 struct StringLiteral {
   std::string value;
 };
@@ -109,6 +119,11 @@ struct ParsedUnionType {
 
 using ParsedType = std::variant<ParsedTypeName, ParsedUnionType>;
 
+struct TypeCastExpression {
+  std::unique_ptr<Expression> expr;
+  ParsedType as_type;
+};
+
 struct ResolvedFunction {
   CallIdx call_idx;
   bool is_void_return = false;
@@ -134,12 +149,15 @@ using TypeId = size_t;
 struct Expression {
   std::variant<PrimaryExpression,
                BinaryExpression,
+               PrefixUnaryExpression,
+               PostfixUnaryExpression,
                CallExpression,
                AssignmentExpression,
                MemberAccessExpression,
                ArrayAccessExpression,
                LogicExpression,
-               ClosureExpression>
+               ClosureExpression,
+               TypeCastExpression>
       as;
 
   Metadata meta;

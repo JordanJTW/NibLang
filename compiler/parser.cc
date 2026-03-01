@@ -67,12 +67,7 @@ void Parser::ParseBlock(Block& block) {
          current_token_.kind != TokenKind::kCloseBrace) {
     if (current_token_.kind == TokenKind::kUnknown) {
       HandleError("unknown token");
-      current_token_ = tokenizer_.next();
-      continue;
-    }
-
-    if (current_token_.kind == TokenKind::kComment) {
-      current_token_ = tokenizer_.next();
+      AdvanceToken();
       continue;
     }
 
@@ -81,7 +76,7 @@ void Parser::ParseBlock(Block& block) {
     bool is_extern = false;
     if (current_token_.kind == TokenKind::kKwExtern) {
       is_extern = true;
-      current_token_ = tokenizer_.next();
+      AdvanceToken();
     }
 
     // Function definition i.e. fn $name($args,...):
@@ -113,7 +108,7 @@ void Parser::ParseBlock(Block& block) {
 
     if (current_token_.kind == TokenKind::kKwWhile) {
       MetaInfo meta = current_token_.meta;
-      current_token_ = tokenizer_.next();
+      AdvanceToken();
 
       CONTINUE_IF_FALSE(ExpectNextToken(TokenKind::kOpenParen,
                                         "expected '(' before while condition"));
@@ -137,7 +132,7 @@ void Parser::ParseBlock(Block& block) {
 
     if (current_token_.kind == TokenKind::kKwIf) {
       MetaInfo meta = current_token_.meta;
-      current_token_ = tokenizer_.next();
+      AdvanceToken();
 
       CONTINUE_IF_FALSE(ExpectNextToken(TokenKind::kOpenParen,
                                         "expected '(' before if condition"));
@@ -156,7 +151,7 @@ void Parser::ParseBlock(Block& block) {
 
       // Optional else block
       if (current_token_.kind == TokenKind::kKwElse) {
-        current_token_ = tokenizer_.next();
+        AdvanceToken();
 
         CONTINUE_IF_FALSE(ExpectNextToken(TokenKind::kOpenBrace,
                                           "expected '{' before else body"));
@@ -170,7 +165,7 @@ void Parser::ParseBlock(Block& block) {
     }
 
     if (current_token_.kind == TokenKind::kKwReturn) {
-      current_token_ = tokenizer_.next();
+      AdvanceToken();
       if (auto expr = ParseExpression()) {
         CONTINUE_IF_FALSE(ExpectNextToken(TokenKind::kEndExpr,
                                           "expected ';' after return value"));
@@ -182,7 +177,7 @@ void Parser::ParseBlock(Block& block) {
     }
 
     if (current_token_.kind == TokenKind::kKwThrow) {
-      current_token_ = tokenizer_.next();
+      AdvanceToken();
       if (auto expr = ParseExpression()) {
         CONTINUE_IF_FALSE(ExpectNextToken(TokenKind::kEndExpr,
                                           "expected ';' after throw value"));
@@ -194,7 +189,7 @@ void Parser::ParseBlock(Block& block) {
     }
 
     if (current_token_.kind == TokenKind::kKwBreak) {
-      current_token_ = tokenizer_.next();
+      AdvanceToken();
       CONTINUE_IF_FALSE(
           ExpectNextToken(TokenKind::kEndExpr, "expected ';' after break"));
       block.statements.push_back(std::make_unique<Statement>(Statement{
@@ -203,7 +198,7 @@ void Parser::ParseBlock(Block& block) {
     }
 
     if (current_token_.kind == TokenKind::kKwContinue) {
-      current_token_ = tokenizer_.next();  // consume 'continue'
+      AdvanceToken();  // consume 'continue'
 
       CONTINUE_IF_FALSE(
           ExpectNextToken(TokenKind::kEndExpr, "expected ';' after continue"));
@@ -214,7 +209,7 @@ void Parser::ParseBlock(Block& block) {
     }
 
     if (current_token_.kind == TokenKind::kKwLet) {
-      current_token_ = tokenizer_.next();  // consume `let`
+      AdvanceToken();  // consume `let`
 
       ASSIGN_OR_CONTINUE(
           variable_name,
@@ -223,7 +218,7 @@ void Parser::ParseBlock(Block& block) {
       std::optional<ParsedType> var_type;
       // : <type> is optional, but if there is a ':' there must be a type.
       if (current_token_.kind == TokenKind::kColon) {
-        current_token_ = tokenizer_.next();  // after ':'
+        AdvanceToken();  // after ':'
 
         var_type = ParseType();
         if (!var_type.has_value()) {
@@ -253,16 +248,16 @@ void Parser::ParseBlock(Block& block) {
       } else {
         block.statements.push_back(std::make_unique<Statement>(Statement{
             std::move(expr), make_metadata(start_token, current_token_)}));
-        current_token_ = tokenizer_.next();  // consume ;
+        AdvanceToken();  // consume ;
       }
       continue;
     }
 
     HandleError("unexpected token");
-    current_token_ = tokenizer_.next();
+    AdvanceToken();
   }
 
-  current_token_ = tokenizer_.next();  // consume '}' or EOF
+  AdvanceToken();  // consume '}' or EOF
 }
 
 std::unique_ptr<Expression> Parser::ParseValue(const Token& value) {
@@ -300,14 +295,11 @@ std::unique_ptr<Expression> Parser::ParseExpression() {
 }
 
 std::unique_ptr<Expression> Parser::ParseAssignment() {
-  Token start_token = current_token_;
+  auto expr = ParseLogical();
 
-  auto expr = ParsePostFix();
-  if (!expr)
-    return nullptr;
-
-  if (current_token_.kind == TokenKind::kAssign) {
-    current_token_ = tokenizer_.next();  // consume '='
+  if (expr && current_token_.kind == TokenKind::kAssign) {
+    Token op = current_token_;
+    AdvanceToken();  // consume '='
 
     auto rhs = ParseExpression();
     if (!rhs)
@@ -315,11 +307,10 @@ std::unique_ptr<Expression> Parser::ParseAssignment() {
 
     return std::make_unique<Expression>(
         Expression{AssignmentExpression{std::move(expr), std::move(rhs)},
-                   make_metadata(start_token, current_token_)});
+                   make_metadata(op, current_token_)});
   }
 
-  current_token_ = tokenizer_.seekTo(start_token);
-  return ParseLogical();
+  return expr;
 }
 
 std::unique_ptr<Expression> Parser::ParseLogical() {
@@ -332,7 +323,7 @@ std::unique_ptr<Expression> Parser::ParseLogical() {
   while (current_token_.kind == TokenKind::kAndAnd ||
          current_token_.kind == TokenKind::kOrOr) {
     Token op = current_token_;
-    current_token_ = tokenizer_.next();
+    AdvanceToken();
 
     auto rhs = ParseComparison();
     if (!rhs)
@@ -361,7 +352,7 @@ std::unique_ptr<Expression> Parser::ParseComparison() {
          current_token_.kind == TokenKind::kCompareGt ||
          current_token_.kind == TokenKind::kCompareGe) {
     Token op = current_token_;
-    current_token_ = tokenizer_.next();
+    AdvanceToken();
 
     auto rhs = ParseAdditive();
     if (!rhs)
@@ -381,10 +372,10 @@ std::unique_ptr<Expression> Parser::ParseAdditive() {
   if (!lhs)
     return nullptr;
 
-  while (current_token_.kind == TokenKind::kAdd ||
-         current_token_.kind == TokenKind::kSubtract) {
+  while (current_token_.kind == TokenKind::kPlus ||
+         current_token_.kind == TokenKind::kMinus) {
     Token op = current_token_;
-    current_token_ = tokenizer_.next();
+    AdvanceToken();
 
     auto rhs = ParseMultiplicative();
     if (!rhs)
@@ -401,16 +392,16 @@ std::unique_ptr<Expression> Parser::ParseAdditive() {
 std::unique_ptr<Expression> Parser::ParseMultiplicative() {
   Token start_token = current_token_;
 
-  auto lhs = ParsePostFix();
+  auto lhs = ParseUnary();
   if (!lhs)
     return nullptr;
 
   while (current_token_.kind == TokenKind::kMultiply ||
          current_token_.kind == TokenKind::kDivide) {
     Token op = current_token_;
-    current_token_ = tokenizer_.next();
+    AdvanceToken();
 
-    auto rhs = ParsePostFix();
+    auto rhs = ParseUnary();
     if (!rhs)
       return nullptr;
 
@@ -420,6 +411,29 @@ std::unique_ptr<Expression> Parser::ParseMultiplicative() {
   }
 
   return lhs;
+}
+
+std::unique_ptr<Expression> Parser::ParseUnary() {
+  Token start_token = current_token_;
+
+  if (current_token_.kind == TokenKind::kPlus ||
+      current_token_.kind == TokenKind::kMinus ||
+      current_token_.kind == TokenKind::kPlusPlus ||
+      current_token_.kind == TokenKind::kMinusMinus ||
+      current_token_.kind == TokenKind::kNot) {
+    Token op = current_token_;
+    AdvanceToken();  // consume operator
+
+    auto operand = ParseUnary();
+    if (!operand)
+      return nullptr;
+
+    return std::make_unique<Expression>(
+        Expression{PrefixUnaryExpression{op.kind, std::move(operand)},
+                   make_metadata(start_token, current_token_)});
+  }
+
+  return ParsePostFix();
 }
 
 std::unique_ptr<Expression> Parser::ParsePostFix() {
@@ -438,15 +452,36 @@ std::unique_ptr<Expression> Parser::ParsePostFix() {
       continue;
     }
 
+    if (current_token_.kind == TokenKind::kPlusPlus ||
+        current_token_.kind == TokenKind::kMinusMinus) {
+      Token op = current_token_;
+      AdvanceToken();  // consume operator
+      expr = std::make_unique<Expression>(
+          Expression{PostfixUnaryExpression{op.kind, std::move(expr)}});
+      continue;
+    }
+
+    if (current_token_.kind == TokenKind::kKwAs) {
+      AdvanceToken();  // consume 'as'
+
+      std::optional<ParsedType> type = ParseType();
+      if (!type)
+        return nullptr;
+
+      expr = std::make_unique<Expression>(
+          Expression{TypeCastExpression{std::move(expr), type.value()}});
+      continue;
+    }
+
     if (current_token_.kind == TokenKind::kDot) {
-      current_token_ = tokenizer_.next();  // consume '.'
+      AdvanceToken();  // consume '.'
 
       if (current_token_.kind != TokenKind::kIdent) {
         HandleError("expected identifier after '.'");
         return nullptr;
       }
       Token ident = current_token_;
-      current_token_ = tokenizer_.next();  // consume identifier
+      AdvanceToken();  // consume identifier
 
       expr = std::make_unique<Expression>(
           Expression{MemberAccessExpression{std::move(expr), ident.value},
@@ -455,7 +490,7 @@ std::unique_ptr<Expression> Parser::ParsePostFix() {
     }
 
     if (current_token_.kind == TokenKind::kSquareOpen) {
-      current_token_ = tokenizer_.next();  // consume '['
+      AdvanceToken();  // consume '['
 
       auto index = ParseExpression();
       if (!index)
@@ -466,7 +501,7 @@ std::unique_ptr<Expression> Parser::ParsePostFix() {
         return nullptr;
       }
 
-      current_token_ = tokenizer_.next();  // consume ']'
+      AdvanceToken();  // consume ']'
 
       expr = std::make_unique<Expression>(
           Expression{ArrayAccessExpression{std::move(expr), std::move(index)},
@@ -487,12 +522,12 @@ std::unique_ptr<Expression> Parser::ParsePrimary() {
     case TokenKind::kKwTrue:
     case TokenKind::kKwFalse: {
       Token value = current_token_;
-      current_token_ = tokenizer_.next();
+      AdvanceToken();
       return ParseValue(value);
     }
 
     case TokenKind::kOpenParen: {
-      current_token_ = tokenizer_.next();  // consume '('
+      AdvanceToken();  // consume '('
 
       auto expr = ParseExpression();
       if (!expr)
@@ -503,7 +538,7 @@ std::unique_ptr<Expression> Parser::ParsePrimary() {
         return nullptr;
       }
 
-      current_token_ = tokenizer_.next();  // consume ')'
+      AdvanceToken();  // consume ')'
       return expr;
     }
 
@@ -524,7 +559,7 @@ std::unique_ptr<Expression> Parser::ParsePrimary() {
 std::unique_ptr<Expression> Parser::ParseCall(
     std::unique_ptr<Expression> callee) {
   Token start_token = current_token_;
-  current_token_ = tokenizer_.next();  // consume '('
+  AdvanceToken();  // consume '('
 
   std::vector<std::unique_ptr<Expression>> arguments;
   if (current_token_.kind != TokenKind::kCloseParen) {
@@ -542,11 +577,11 @@ std::unique_ptr<Expression> Parser::ParseCall(
         return nullptr;
       }
 
-      current_token_ = tokenizer_.next();
+      AdvanceToken();
     }
   }
 
-  current_token_ = tokenizer_.next();  // consume ')'
+  AdvanceToken();  // consume ')'
 
   return std::make_unique<Expression>(
       Expression{CallExpression{std::move(callee), std::move(arguments)},
@@ -561,10 +596,10 @@ std::optional<ParsedType> Parser::ParseType() {
   } else {
     type_names.push_back(ParsedTypeName{
         current_token_.value, make_metadata(current_token_, current_token_)});
-    current_token_ = tokenizer_.next();
+    AdvanceToken();
 
     while (current_token_.kind == TokenKind::kPipe) {
-      current_token_ = tokenizer_.next();  // consume '|'
+      AdvanceToken();  // consume '|'
 
       if (current_token_.kind != TokenKind::kIdent) {
         HandleError("expected type after '|'");
@@ -573,7 +608,7 @@ std::optional<ParsedType> Parser::ParseType() {
 
       type_names.push_back(ParsedTypeName{
           current_token_.value, make_metadata(current_token_, current_token_)});
-      current_token_ = tokenizer_.next();
+      AdvanceToken();
     }
   }
 
@@ -593,7 +628,7 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
   }
 
   Token struct_name = current_token_;
-  current_token_ = tokenizer_.next();  // consume struct name
+  AdvanceToken();  // consume struct name
 
   if (current_token_.kind != TokenKind::kOpenBrace) {
     HandleError("expected '{' after struct name");
@@ -604,13 +639,13 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
   struct_decl.name = struct_name.value;
   struct_decl.is_extern = is_extern == ExternStruct::YES;
 
-  current_token_ = tokenizer_.next();  // consume '{'
+  AdvanceToken();  // consume '{'
   while (current_token_.kind != TokenKind::kCloseBrace &&
          current_token_.kind != TokenKind::kEndOfFile) {
     std::optional<Token> static_modifier_token;
     if (current_token_.kind == TokenKind::kKwStatic) {
       static_modifier_token = current_token_;
-      current_token_ = tokenizer_.next();
+      AdvanceToken();
     }
 
     if (current_token_.kind == TokenKind::kKwFn) {
@@ -634,14 +669,14 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
 
     if (current_token_.kind == TokenKind::kIdent) {
       Token field_name = current_token_;
-      current_token_ = tokenizer_.next();  // consume <name>
+      AdvanceToken();  // consume <name>
 
       if (current_token_.kind != TokenKind::kColon) {
         HandleError("expected ':' after field name");
         return std::nullopt;
       }
 
-      current_token_ = tokenizer_.next();  // consume ':'
+      AdvanceToken();  // consume ':'
 
       std::optional<ParsedType> type = ParseType();
       if (!type.has_value()) {
@@ -655,12 +690,7 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
         HandleError("expected ';'");
         return std::nullopt;
       }
-      current_token_ = tokenizer_.next();
-      continue;
-    }
-
-    if (current_token_.kind == TokenKind::kComment) {
-      current_token_ = tokenizer_.next();
+      AdvanceToken();
       continue;
     }
 
@@ -670,7 +700,7 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
     HandleError("invalid struct member declaration");
     return std::nullopt;
   }
-  current_token_ = tokenizer_.next();  // consume '}'
+  AdvanceToken();  // consume '}'
   return struct_decl;
 }
 
@@ -684,7 +714,7 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
     if (current_token_.kind == TokenKind::kIdent) {
       print_error(text_, current_token_,
                   "Anonymous functions should not have a name");
-      current_token_ = tokenizer_.next();  // skip name
+      AdvanceToken();  // skip name
     }
   } else {
     Token name = current_token_;
@@ -693,14 +723,14 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
       return std::nullopt;
     }
     function_name = name.value;
-    current_token_ = tokenizer_.next();  // after function name
+    AdvanceToken();  // after function name
   }
 
   if (current_token_.kind != TokenKind::kOpenParen) {
     HandleError("expected (");
     return std::nullopt;
   }
-  current_token_ = tokenizer_.next();  // after '('
+  AdvanceToken();  // after '('
 
   bool is_variadic = false;
   std::vector<std::pair<std::string, ParsedType>> arguments;
@@ -715,7 +745,7 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
         }
 
         is_variadic = true;
-        current_token_ = tokenizer_.next();  // skip ...
+        AdvanceToken();  // skip ...
 
         if (current_token_.kind != TokenKind::kCloseParen) {
           print_error(text_, current_token_,
@@ -731,14 +761,14 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
       }
 
       std::string arg_name = current_token_.value;
-      current_token_ = tokenizer_.next();  // after parameter name
+      AdvanceToken();  // after parameter name
 
       if (current_token_.kind != TokenKind::kColon) {
         HandleError("expected ':' after parameter name");
         break;
       }
 
-      current_token_ = tokenizer_.next();  // after ':'
+      AdvanceToken();  // after ':'
 
       std::optional<ParsedType> arg_type = ParseType();
       if (!arg_type.has_value()) {
@@ -749,7 +779,7 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
       arguments.emplace_back(std::move(arg_name), std::move(arg_type.value()));
 
       if (current_token_.kind == TokenKind::kComma) {
-        current_token_ = tokenizer_.next();
+        AdvanceToken();
         continue;  // next parameter
       }
 
@@ -760,11 +790,11 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
       break;
     }
   }
-  current_token_ = tokenizer_.next();  // after ')'
+  AdvanceToken();  // after ')'
 
   std::optional<ParsedType> return_type;
   if (current_token_.kind == TokenKind::kSkinnyArrow) {
-    current_token_ = tokenizer_.next();  // consume '->'
+    AdvanceToken();  // consume '->'
 
     return_type = ParseType();
   }
@@ -775,7 +805,7 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
       is_variadic};
 
   if (current_token_.kind == TokenKind::kEndExpr) {
-    current_token_ = tokenizer_.next();  // consume ';'
+    AdvanceToken();  // consume ';'
     return std::move(fn);
   }
 
@@ -788,6 +818,13 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
   return std::move(fn);
 }
 
+void Parser::AdvanceToken() {
+  current_token_ = tokenizer_.next();
+  // Always skip comments when parsing the AST
+  while (current_token_.kind == TokenKind::kComment)
+    current_token_ = tokenizer_.next();
+}
+
 std::optional<Token> Parser::ExpectNextToken(TokenKind expected_kind,
                                              std::string_view error_message) {
   if (current_token_.kind != expected_kind) {
@@ -796,7 +833,7 @@ std::optional<Token> Parser::ExpectNextToken(TokenKind expected_kind,
   }
 
   Token expected_token = current_token_;
-  current_token_ = tokenizer_.next();
+  AdvanceToken();
   return expected_token;
 }
 
@@ -814,9 +851,9 @@ void Parser::HandleError(std::string_view message) {
   while (!is_start_of_statement(current_token_.kind) &&
          current_token_.kind != TokenKind::kEndExpr &&
          current_token_.kind != TokenKind::kEndOfFile)
-    current_token_ = tokenizer_.next();
+    AdvanceToken();
 
   // Sync past ';' as that does not start a statement
   if (current_token_.kind == TokenKind::kEndExpr)
-    current_token_ = tokenizer_.next();
+    AdvanceToken();
 }

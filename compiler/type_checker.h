@@ -35,6 +35,7 @@ class TypeChecker {
                                      Metadata metadata);
 
   struct Scope {
+    enum ScopeType { Function, StatementBody } type;
     std::map<std::string, Symbol> symbols;
     std::optional<TypeId> return_type;
   };

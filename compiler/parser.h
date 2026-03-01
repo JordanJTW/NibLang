@@ -25,6 +25,7 @@ class Parser {
   std::unique_ptr<Expression> ParseComparison();
   std::unique_ptr<Expression> ParseAdditive();
   std::unique_ptr<Expression> ParseMultiplicative();
+  std::unique_ptr<Expression> ParseUnary();
   std::unique_ptr<Expression> ParsePostFix();
   std::unique_ptr<Expression> ParsePrimary();
   std::unique_ptr<Expression> ParseValue(const Token& value);
@@ -40,6 +41,7 @@ class Parser {
 
   std::optional<Token> ExpectNextToken(TokenKind expected_kind,
                                        std::string_view error_message);
+  void AdvanceToken();
   void HandleError(std::string_view message);
 
   const std::string& text_;

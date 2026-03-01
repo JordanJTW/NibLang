@@ -27,6 +27,7 @@ enum class TokenKind {
   kKwExtern,        // extern
   kKwLet,           // let
   kKwStatic,        // static
+  kKwAs,            // as
   kVariadic,        // ...
   kOpenParen,       // (
   kCloseParen,      // )
@@ -39,10 +40,13 @@ enum class TokenKind {
   kComma,           // ,
   kColon,           // :
   kAssign,          // =
-  kAdd,             // +
-  kSubtract,        // -
+  kPlus,            // +
+  kMinus,           // -
   kMultiply,        // *
   kDivide,          // /
+  kNot,             // !
+  kPlusPlus,        // ++
+  kMinusMinus,      // --
   kCompareGt,       // >
   kCompareLt,       // <
   kCompareGe,       // >=

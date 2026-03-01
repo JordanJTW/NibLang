@@ -15,9 +15,9 @@ bool isnumber(char ch) {
 std::optional<TokenKind> get_single_char_token(char ch) {
   switch (ch) {
     case '+':
-      return TokenKind::kAdd;
+      return TokenKind::kPlus;
     case '-':
-      return TokenKind::kSubtract;
+      return TokenKind::kMinus;
     case '*':
       return TokenKind::kMultiply;
     case '/':
@@ -50,6 +50,8 @@ std::optional<TokenKind> get_single_char_token(char ch) {
       return TokenKind::kDot;
     case '|':
       return TokenKind::kPipe;
+    case '!':
+      return TokenKind::kNot;
     default:
       return std::nullopt;
   }
@@ -70,17 +72,16 @@ std::optional<TokenKind> get_double_char_token(std::string_view value) {
     return TokenKind::kAndAnd;
   if (value == "||")
     return TokenKind::kOrOr;
+  if (value == "++")
+    return TokenKind::kPlusPlus;
+  if (value == "--")
+    return TokenKind::kMinusMinus;
   return std::nullopt;
 }
 
 }  // namespace
 
 Tokenizer::Tokenizer(std::string data) : data_(data) {}
-
-Token Tokenizer::seekTo(const Token& token) {
-  offset_ = token.idx;
-  return next();
-}
 
 Token Tokenizer::next() {
   while (offset_ < data_.size() && std::isspace(data_[offset_])) {
@@ -105,7 +106,7 @@ Token Tokenizer::next() {
     return make_token(TokenKind::kEndOfFile);
 
   // Handle keywords
-  static constexpr std::array<std::pair<std::string_view, TokenKind>, 18>
+  static constexpr std::array<std::pair<std::string_view, TokenKind>, 19>
       kKeywordToToken{{{"label", TokenKind::kKwLabel},
                        {"goto", TokenKind::kKwGoto},
                        {"if", TokenKind::kKwIf},
@@ -123,7 +124,8 @@ Token Tokenizer::next() {
                        {"struct", TokenKind::kKwStruct},
                        {"extern", TokenKind::kKwExtern},
                        {"let", TokenKind::kKwLet},
-                       {"static", TokenKind::kKwStatic}}};
+                       {"static", TokenKind::kKwStatic},
+                       {"as", TokenKind::kKwAs}}};
 
   char ch = data_[offset_];
 
@@ -248,6 +250,7 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kKwExtern);
     KIND_TO_NAME(kKwLet);
     KIND_TO_NAME(kKwStatic);
+    KIND_TO_NAME(kKwAs);
     KIND_TO_NAME(kVariadic);
     KIND_TO_NAME(kOpenParen);
     KIND_TO_NAME(kCloseParen);
@@ -260,10 +263,13 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kComma);
     KIND_TO_NAME(kColon);
     KIND_TO_NAME(kAssign);
-    KIND_TO_NAME(kAdd);
-    KIND_TO_NAME(kSubtract);
+    KIND_TO_NAME(kPlus);
+    KIND_TO_NAME(kMinus);
     KIND_TO_NAME(kMultiply);
     KIND_TO_NAME(kDivide);
+    KIND_TO_NAME(kNot);
+    KIND_TO_NAME(kPlusPlus);
+    KIND_TO_NAME(kMinusMinus);
     KIND_TO_NAME(kCompareGt);
     KIND_TO_NAME(kCompareLt);
     KIND_TO_NAME(kCompareGe);

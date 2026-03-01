@@ -211,6 +211,24 @@ void print_expression(const std::unique_ptr<Expression>& expr, size_t indent) {
             std::cout << std::string(indent, ' ')
                       << "ClosureExpression: " << std::endl;
             print_function(closure.fn, indent + 2);
+          },
+          [&](const PrefixUnaryExpression& prefix) {
+            std::cout << std::string(indent, ' ')
+                      << "PrefixUnaryExpression (op=" << prefix.op
+                      << ") type: " << expr->type << std::endl;
+            print_expression(prefix.operand, indent + 2);
+          },
+          [&](const PostfixUnaryExpression& postfix) {
+            std::cout << std::string(indent, ' ')
+                      << "PostfixUnaryExpression (op=" << postfix.op
+                      << ") type: " << expr->type << std::endl;
+            print_expression(postfix.operand, indent + 2);
+          },
+          [&](const TypeCastExpression& cast) {
+            std::cout << std::string(indent, ' ')
+                      << "TypeCastExpression(type: " << expr->type
+                      << "): " << std::endl;
+            print_expression(cast.expr, indent + 2);
           }},
       expr->as);
 }

@@ -23,18 +23,18 @@ enum LiteralType : TypeId { Void = 0, i32, f32, Bool, Any, kCount };
 void print_error(const std::string& file,
                  Metadata metadata,
                  std::string_view message) {
-  size_t line_start = file.rfind('\n', metadata.text_range.start);
+  size_t line_start = file.rfind('\n', metadata.column_range.start);
   if (line_start == std::string_view::npos)
     line_start = 0;
   else
     ++line_start;
 
-  size_t line_end = file.find('\n', metadata.text_range.start);
+  size_t line_end = file.find('\n', metadata.column_range.start);
   if (line_end == std::string_view::npos)
     line_end = file.size();
 
   std::string line = file.substr(line_start, line_end - line_start);
-  size_t relative_offset = metadata.text_range.start - line_start;
+  size_t relative_offset = metadata.column_range.start - line_start;
 
   std::string kErrorPrefix =
       "Error: " + std::to_string(metadata.line_range.start) + ": ";
@@ -403,7 +403,7 @@ TypeId TypeChecker::CheckExpression(std::unique_ptr<Expression>& expression) {
 std::optional<TypeId> TypeChecker::GetTypeIdFor(ParsedType type) {
   return std::visit(
       Overloaded{
-          [&](const ParsedTypeName& type) -> std::optional<TypeId> {
+          [&](const std::string& type_name) -> std::optional<TypeId> {
             static const std::unordered_map<std::string, TypeId> kBuiltInTypes =
                 {
                     {"Void", LiteralType::Void}, {"i32", LiteralType::i32},
@@ -412,14 +412,14 @@ std::optional<TypeId> TypeChecker::GetTypeIdFor(ParsedType type) {
                 };
 
             // Fast path for built-in type names which are used frequently.
-            if (const auto& it = kBuiltInTypes.find(type.name);
+            if (const auto& it = kBuiltInTypes.find(type_name);
                 it != kBuiltInTypes.end()) {
               return it->second;
             }
 
             // Structure types are resolved nominally, while Functions would be
             // resolved structurally to allow for flexible callbacks, etc.
-            if (auto symbol = GetSymbolFor(type.name, type.metadata);
+            if (auto symbol = GetSymbolFor(type_name, type.metadata);
                 symbol.has_value() && symbol->kind == Symbol::Struct) {
               return symbol->type_id;
             }
@@ -455,7 +455,7 @@ std::optional<TypeId> TypeChecker::GetTypeIdFor(ParsedType type) {
             return type_id;
           },
       },
-      type);
+      type.type);
 }
 
 std::optional<TypeId> TypeChecker::DefineFunction(
@@ -512,6 +512,7 @@ void TypeChecker::CheckFunctionBody(const FunctionDeclaration& fn) {
 
   Scope& function_scope = scopes_.emplace_back();
   function_scope.type = Scope::Function;
+  function_scope.fn = &fn;
   function_scope.return_type = GetTypeIdFor(fn.return_type);
 
   for (const auto& [name, type] : fn.arguments) {
@@ -534,6 +535,7 @@ std::optional<CallIdx> TypeChecker::GetCallIdxFor(const std::string& name,
   static const std::map<std::string, CallIdx> kBuiltInCallIdx = {
       {"Array_get", VM_BUILTIN_ARRAY_GET},
       {"Array_init", VM_BUILTIN_ARRAY_INIT},
+      {"Array_length", VM_BUILTIN_ARRAY_LENGTH},
       {"Array_new", VM_BUILTIN_ARRAY_NEW},
       // Alias for the argument version of the native function.
       {"Array_withSize", VM_BUILTIN_ARRAY_NEW},

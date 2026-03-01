@@ -11,7 +11,7 @@ template <class... Ts>
 Overloaded(Ts...) -> Overloaded<Ts...>;
 
 std::ostream& operator<<(std::ostream& os, const ParsedType& type) {
-  std::visit(Overloaded{[&](const ParsedTypeName& type) { os << type.name; },
+  std::visit(Overloaded{[&](const std::string& type_name) { os << type_name; },
                         [&](const ParsedUnionType& type) {
                           for (const auto& name : type.names) {
                             for (size_t i = 0; i < type.names.size(); ++i) {
@@ -22,7 +22,7 @@ std::ostream& operator<<(std::ostream& os, const ParsedType& type) {
                             }
                           }
                         }},
-             type);
+             type.type);
 
   return os;
 }

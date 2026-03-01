@@ -61,15 +61,22 @@ enum class TokenKind {
   kEndOfFile,       // EOF
 };
 
-struct MetaInfo {
-  size_t line;
+struct TextRange {
+  size_t start, end;
+};
+
+struct Token;
+struct Metadata {
+  TextRange column_range;
+  TextRange line_range;
+
+  static Metadata fromTokens(const Token& start, const Token& end);
 };
 
 struct Token {
   TokenKind kind;
-  size_t idx, length;  // Where is the Token's text located
   std::string value;
-  MetaInfo meta;
+  Metadata meta;
 };
 
 class Tokenizer {
@@ -77,7 +84,6 @@ class Tokenizer {
   explicit Tokenizer(std::string data);
 
   Token next();
-  Token seekTo(const Token& token);
 
  private:
   std::string read_until(char endpoint);
@@ -90,3 +96,5 @@ class Tokenizer {
 
 std::ostream& operator<<(std::ostream& os, const Token& token);
 std::ostream& operator<<(std::ostream& os, const TokenKind& type);
+std::ostream& operator<<(std::ostream& os, const TextRange& range);
+std::ostream& operator<<(std::ostream& os, const Metadata& meta);

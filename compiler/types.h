@@ -10,15 +10,6 @@
 struct Expression;
 struct Statement;
 
-struct Range {
-  size_t start, end;
-};
-
-struct Metadata {
-  Range text_range;
-  Range line_range;
-};
-
 struct BinaryExpression {
   TokenKind op;
   std::unique_ptr<Expression> lhs;
@@ -108,16 +99,16 @@ struct Block {
   std::vector<std::unique_ptr<Statement>> statements;
 };
 
-struct ParsedTypeName {
-  std::string name;
-  Metadata metadata;
-};
+struct ParsedType;
 
 struct ParsedUnionType {
-  std::vector<ParsedTypeName> names;
+  std::vector<ParsedType> names;
 };
 
-using ParsedType = std::variant<ParsedTypeName, ParsedUnionType>;
+struct ParsedType {
+  std::variant<std::string, ParsedUnionType> type;
+  Metadata metadata;
+};
 
 struct TypeCastExpression {
   std::unique_ptr<Expression> expr;
@@ -173,14 +164,12 @@ struct ThrowStatement {
 };
 
 struct IfStatement {
-  size_t id;
   std::unique_ptr<Expression> condition;
   Block then_body;
   Block else_body;
 };
 
 struct WhileStatement {
-  size_t id;
   std::unique_ptr<Expression> condition;
   Block body;
 };

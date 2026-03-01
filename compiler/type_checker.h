@@ -38,6 +38,7 @@ class TypeChecker {
     enum ScopeType { Function, StatementBody } type;
     std::map<std::string, Symbol> symbols;
     std::optional<TypeId> return_type;
+    const FunctionDeclaration* fn;
   };
   std::vector<Scope> scopes_;
 

@@ -96,10 +96,8 @@ Token Tokenizer::next() {
     size_t length = offset_ - start_idx;
     return Token{
         .kind = kind,
-        .idx = start_idx,
-        .length = length,
-        .meta = {.line = line_},
-        .value = value.empty() ? data_.substr(start_idx, length) : value};
+        .value = value.empty() ? data_.substr(start_idx, length) : value,
+        Metadata{TextRange{start_idx, offset_}, TextRange{line_, line_ + 1}}};
   };
 
   if (offset_ >= data_.size())
@@ -285,7 +283,21 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
   }
 }
 
+// static
+Metadata Metadata::fromTokens(const Token& start, const Token& end) {
+  return Metadata{
+      TextRange{start.meta.column_range.start, end.meta.column_range.end},
+      TextRange{start.meta.line_range.start, end.meta.line_range.end}};
+}
+
+std::ostream& operator<<(std::ostream& os, const TextRange& range) {
+  return os << "[" << range.start << ", " << range.end << ")";
+}
+
+std::ostream& operator<<(std::ostream& os, const Metadata& meta) {
+  return os << "Column: " << meta.column_range << " Line: " << meta.line_range;
+}
+
 std::ostream& operator<<(std::ostream& os, const Token& token) {
-  return os << token.kind << " [" << token.idx << ", "
-            << token.idx + token.length << "): \"" << token.value << "\"";
+  return os << token.kind << "\"" << token.value << "\" " << token.meta;
 }

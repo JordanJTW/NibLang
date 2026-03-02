@@ -80,6 +80,8 @@ void TypeChecker::Check(Block& block) {
       StructType struct_type;
       struct_type.parsed_struct = struct_decl;
 
+      Symbol symbol = scopes_.back().symbols[struct_decl->name];
+
       MemberIdx next_member_idx = 0;
       for (const auto& [name, type] : struct_decl->fields) {
         if (auto type_id = GetTypeIdFor(type)) {
@@ -88,13 +90,12 @@ void TypeChecker::Check(Block& block) {
         }
       }
       for (auto& [name, fn] : struct_decl->methods) {
-        if (auto type_id = DefineFunction(fn, struct_decl)) {
+        if (auto type_id = DefineFunction(fn, struct_decl, symbol.type_id)) {
           // Methods are not stored within the struct memory so no index.
           struct_type.member_types[name] = {std::nullopt, type_id.value()};
         }
-      }
+      };
 
-      Symbol symbol = scopes_.back().symbols[struct_decl->name];
       type_info_[symbol.type_id] = std::move(struct_type);
     }
 
@@ -266,7 +267,8 @@ TypeId TypeChecker::CheckExpression(std::unique_ptr<Expression>& expression) {
               // Account for the implicit "self" argument for method calls
               size_t extra_argc = 0;
               if (f.kind == FunctionKind::Method) {
-                if (f.argument_types.size() == 0) {
+                if (f.argument_types.size() == 0 ||
+                    f.argument_types[0] != f.self_id.value()) {
                   LOG(ERROR) << "Methods must begin with a `self` argument";
                 }
                 extra_argc += 1;
@@ -460,7 +462,8 @@ std::optional<TypeId> TypeChecker::GetTypeIdFor(ParsedType type) {
 
 std::optional<TypeId> TypeChecker::DefineFunction(
     FunctionDeclaration& fn,
-    std::optional<StructDeclaration*> object) {
+    std::optional<StructDeclaration*> object,
+    std::optional<TypeId> self_id) {
   TypeId type_id = next_type_id_++;
 
   std::vector<TypeId> typed_arguments;
@@ -501,8 +504,8 @@ std::optional<TypeId> TypeChecker::DefineFunction(
 
   fn.resolved = ResolvedFunction{*call_idx, return_type == LiteralType::Void};
   type_info_[type_id] =
-      FunctionType{typed_arguments, *return_type, fn.function_kind,
-                   call_idx.value(), fn.is_variadic};
+      FunctionType{typed_arguments,  *return_type,   fn.function_kind,
+                   call_idx.value(), fn.is_variadic, std::move(self_id)};
   return type_id;
 }
 

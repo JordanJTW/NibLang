@@ -20,7 +20,8 @@ class TypeChecker {
 
   std::optional<TypeId> DefineFunction(
       FunctionDeclaration& decl,
-      std::optional<StructDeclaration*> object = std::nullopt);
+      std::optional<StructDeclaration*> object = std::nullopt,
+      std::optional<TypeId> self_id = std::nullopt);
   void CheckFunctionBody(const FunctionDeclaration& fn);
 
   enum class CreateIfMissing { YES, NO };
@@ -55,6 +56,7 @@ class TypeChecker {
     FunctionKind kind;
     CallIdx call_idx;
     bool is_variadic;
+    std::optional<TypeId> self_id;
   };
 
   struct MemberType {

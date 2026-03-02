@@ -11,8 +11,9 @@
 
 class Parser {
  public:
-  explicit Parser(const std::string& text)
-      : text_(text), tokenizer_(text_), current_token_(tokenizer_.next()) {}
+  explicit Parser(const std::string& text) : text_(text), tokenizer_(text_) {
+    AdvanceToken();
+  }
 
   Block Parse();
 

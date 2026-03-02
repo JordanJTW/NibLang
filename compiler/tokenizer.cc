@@ -104,17 +104,13 @@ Token Tokenizer::next() {
     return make_token(TokenKind::kEndOfFile);
 
   // Handle keywords
-  static constexpr std::array<std::pair<std::string_view, TokenKind>, 19>
-      kKeywordToToken{{{"label", TokenKind::kKwLabel},
-                       {"goto", TokenKind::kKwGoto},
-                       {"if", TokenKind::kKwIf},
+  static constexpr std::array<std::pair<std::string_view, TokenKind>, 15>
+      kKeywordToToken{{{"if", TokenKind::kKwIf},
                        {"else", TokenKind::kKwElse},
                        {"fn", TokenKind::kKwFn},
                        {"true", TokenKind::kKwTrue},
                        {"false", TokenKind::kKwFalse},
                        {"return", TokenKind::kKwReturn},
-                       {"try", TokenKind::kKwTry},
-                       {"catch", TokenKind::kKwCatch},
                        {"throw", TokenKind::kKwThrow},
                        {"while", TokenKind::kKwWhile},
                        {"break", TokenKind::kKwBreak},
@@ -230,16 +226,12 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kNumber);
     KIND_TO_NAME(kString);
     KIND_TO_NAME(kTemplateString);
-    KIND_TO_NAME(kKwLabel);
-    KIND_TO_NAME(kKwGoto);
     KIND_TO_NAME(kKwIf);
     KIND_TO_NAME(kKwElse);
     KIND_TO_NAME(kKwFn);
     KIND_TO_NAME(kKwTrue);
     KIND_TO_NAME(kKwFalse);
     KIND_TO_NAME(kKwReturn);
-    KIND_TO_NAME(kKwTry);
-    KIND_TO_NAME(kKwCatch);
     KIND_TO_NAME(kKwThrow);
     KIND_TO_NAME(kKwWhile);
     KIND_TO_NAME(kKwBreak);

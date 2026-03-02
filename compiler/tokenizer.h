@@ -9,16 +9,12 @@ enum class TokenKind {
   kNumber,          // 5, 5.0
   kString,          // "hello world"
   kTemplateString,  // `hello ${world}`
-  kKwLabel,         // label
-  kKwGoto,          // goto
   kKwIf,            // if
   kKwElse,          // else
   kKwFn,            // fn
   kKwTrue,          // true
   kKwFalse,         // false
   kKwReturn,        // return
-  kKwTry,           // try
-  kKwCatch,         // catch
   kKwThrow,         // throw
   kKwWhile,         // while
   kKwBreak,         // break

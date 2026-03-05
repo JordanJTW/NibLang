@@ -27,12 +27,11 @@ enum {
   VM_BUILTIN_ARRAY_NEW = VM_BUILTIN(10),
   VM_BUILTIN_ARRAY_GET = VM_BUILTIN(11),
   VM_BUILTIN_ARRAY_SET = VM_BUILTIN(12),
-  VM_BUILTIN_LOG = VM_BUILTIN(13),
-  VM_BUILTIN_STRING_LENGTH = VM_BUILTIN(14),
-  VM_BUILTIN_ARRAY_INIT = VM_BUILTIN(15),
-  VM_BUILTIN_ARRAY_PUSH = VM_BUILTIN(16),
-  VM_BUILTIN_MAP_GET = VM_BUILTIN(17),
-  VM_BUILTIN_ARRAY_LENGTH = VM_BUILTIN(18),
+  VM_BUILTIN_STRING_LENGTH = VM_BUILTIN(13),
+  VM_BUILTIN_ARRAY_INIT = VM_BUILTIN(14),
+  VM_BUILTIN_ARRAY_PUSH = VM_BUILTIN(15),
+  VM_BUILTIN_MAP_GET = VM_BUILTIN(16),
+  VM_BUILTIN_ARRAY_LENGTH = VM_BUILTIN(17),
 };
 
 typedef struct vm_function_t {
@@ -68,10 +67,13 @@ typedef struct vm_closure_t {
 } Closure;
 
 // Allocates a new VM.
-vm_t* init_vm(uint8_t* program, size_t program_size);
-vm_t* new_vm(vm_value_t* constants,
+vm_t* init_vm(const uint8_t* program,
+              size_t program_size,
+              const vm_function_t* native_functions,
+              size_t native_functions_count);
+vm_t* new_vm(const vm_value_t* constants,
              size_t constants_count,
-             vm_function_t* functions,
+             const vm_function_t* functions,
              size_t functions_count);
 void free_vm(vm_t* vm);
 

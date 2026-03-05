@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -6,41 +7,41 @@
 #include "src/types.h"
 #include "src/vm.h"
 
-void print_result(vm_value_t result, int indent) {
-  switch (result.type) {
+void print_result(vm_value_t* result, int indent) {
+  switch (result->type) {
     case VALUE_TYPE_BOOL:
-      printf("%s", result.as.boolean ? "true" : "false");
+      printf("%s", result->as.boolean ? "true" : "false");
       break;
     case VALUE_TYPE_FLOAT:
-      printf("%f", result.as.f32);
+      printf("%f", result->as.f32);
       break;
     case VALUE_TYPE_FUNCTION:
-      printf("fn %s", result.as.fn->fn->name);
+      printf("fn %s", result->as.fn->fn->name);
       break;
     case VALUE_TYPE_INT:
-      printf("%d", result.as.i32);
+      printf("%d", result->as.i32);
       break;
     case VALUE_TYPE_STR:
-      printf("\"%s\"", result.as.str->c_str);
+      printf("\"%s\"", result->as.str->c_str);
       break;
     case VALUE_TYPE_ARRAY:
       printf("[ ");
-      for (size_t i = 0; i < result.as.array->len; ++i) {
-        print_result(result.as.array->data[i], 0);
+      for (size_t i = 0; i < result->as.array->len; ++i) {
+        print_result(&result->as.array->data[i], 0);
         printf(", ");
       }
       printf("]");
       break;
     case VALUE_TYPE_MAP:
       printf("{\n");
-      for (size_t i = 0; i < result.as.map->bucket_count; ++i) {
-        for (MapNode* node = result.as.map->buckets[i]; node;
+      for (size_t i = 0; i < result->as.map->bucket_count; ++i) {
+        for (MapNode* node = result->as.map->buckets[i]; node;
              node = node->next) {
           printf("%*skey: ", indent + 2, "");
-          print_result(node->key, indent + 2);
+          print_result(&node->key, indent + 2);
 
           printf(" value: ");
-          print_result(node->value, indent + 2);
+          print_result(&node->value, indent + 2);
           printf("\n");
         }
       }
@@ -48,8 +49,8 @@ void print_result(vm_value_t result, int indent) {
       break;
     case VALUE_TYPE_PROMISE:
       printf("Promise {\n%*sstate: %d\n%*sresult: ", indent + 2, "",
-             result.as.promise->state, indent + 2, "");
-      print_result(result.as.promise->value, indent + 2);
+             result->as.promise->state, indent + 2, "");
+      print_result(&result->as.promise->value, indent + 2);
       printf("\n%*s}", indent, "");
       break;
     case VALUE_TYPE_NULL:
@@ -57,6 +58,42 @@ void print_result(vm_value_t result, int indent) {
       break;
   }
 }
+
+static vm_value_t vm_log(vm_value_t* argv, size_t argc, void* vm) {
+  for (size_t i = 0; i < argc; ++i) {
+    print_result(&argv[i], /*indent=*/0);
+    vm_free_ref(&argv[i]);
+  }
+  return (vm_value_t){.type = VALUE_TYPE_NULL};
+}
+
+static vm_value_t vm_fetch(vm_value_t* argv, size_t argc, void* vm) {
+  assert(argc == 1 && argv[0].type == VALUE_TYPE_STR && "expected a URL");
+
+  RC_AUTOFREE vm_value_t url = argv[0];
+
+  char* str = NULL;
+  size_t strl = vm_as_str(&url, &str);
+
+  vm_value_t json = allocate_str_from_c("{\"key\": {\"value\": 666}}");
+  vm_adopt_ref(json);
+
+  vm_value_t result = allocate_promise();
+  promise_resolve(vm_get_job_queue(vm), result, json, false);
+
+  return result;
+}
+
+static const vm_function_t kNativeFunctions[2] = {
+    {.type = VM_NATIVE_FUNC,
+     .argument_count = 0,
+     .name = "log",
+     .as.native = {.fn = vm_log, .userdata = NULL}},
+    {.type = VM_NATIVE_FUNC,
+     .argument_count = 1,
+     .name = "fetch",
+     .as.native = {.fn = vm_fetch, .userdata = NULL}},
+};
 
 int main(int argc, char* argv[]) {
   if (argc < 2) {
@@ -88,12 +125,13 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  vm_t* vm = init_vm(buffer, file_size);
+  vm_t* vm = init_vm(buffer, file_size, kNativeFunctions,
+                     sizeof(kNativeFunctions) / sizeof(vm_function_t));
   if (vm != NULL) {
     vm_value_t result = vm_run(vm, 0, true);
     run_promise_jobs(vm, vm_get_job_queue(vm));
     printf("Result: ");
-    print_result(result, 0);
+    print_result(&result, 0);
     printf("\n");
   }
 

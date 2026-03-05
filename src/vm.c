@@ -29,16 +29,17 @@ static bool is_number_type(vm_value_t value) {
   return value.type == VALUE_TYPE_INT || value.type == VALUE_TYPE_FLOAT;
 }
 
-#define VM_BUILTIN_FUNCTION_COUNT 19
+#define VM_BUILTIN_FUNCTION_COUNT 18
 
 typedef struct vm_frame vm_frame_t;
 
-static size_t patch_function_idx(size_t func_idx) {
+static size_t patch_function_idx(size_t func_idx,
+                                 size_t native_functions_count) {
   bool is_builtin_function = (func_idx & VM_BUILTIN_SELECT_BITMASK) != 0;
   size_t idx = (func_idx & ~VM_BUILTIN_SELECT_BITMASK);
-  assert((!is_builtin_function || idx < VM_BUILTIN_FUNCTION_COUNT) &&
+  assert((!is_builtin_function || idx < native_functions_count) &&
          "invoking built-in out of bounds");
-  return idx + (is_builtin_function ? 0 : VM_BUILTIN_FUNCTION_COUNT);
+  return idx + (is_builtin_function ? 0 : native_functions_count);
 }
 
 static void rc_increment(vm_value_t* value);
@@ -78,7 +79,8 @@ typedef struct vm_t {
   vm_frame_t* current_frame;
   vm_stack_t stack;
   vm_job_queue_t* job_queue;
-  size_t functions_count;
+  size_t total_functions_count;
+  size_t native_functions_count;
   vm_value_t exception;
   bool unhandled_exception;
   uint8_t* bytecode_data;
@@ -109,9 +111,9 @@ static uint32_t read_u32_arg(vm_frame_t* frame, size_t argi) {
 
 static void install_builtins(vm_t* vm);
 
-vm_t* new_vm(vm_value_t* constants,
+vm_t* new_vm(const vm_value_t* constants,
              size_t constants_count,
-             vm_function_t* functions,
+             const vm_function_t* functions,
              size_t functions_count) {
   size_t total_functions_count = VM_BUILTIN_FUNCTION_COUNT + functions_count;
   vm_t* const vm =
@@ -120,7 +122,8 @@ vm_t* new_vm(vm_value_t* constants,
   install_builtins(vm);
   memcpy(vm->functions + VM_BUILTIN_FUNCTION_COUNT, functions,
          functions_count * sizeof(vm_function_t));
-  vm->functions_count = total_functions_count;
+  vm->total_functions_count = total_functions_count;
+  vm->native_functions_count = VM_BUILTIN_FUNCTION_COUNT;
 
   vm->constants = calloc(constants_count, sizeof(vm_value_t));
   memcpy(vm->constants, constants, constants_count * sizeof(vm_value_t));
@@ -312,10 +315,10 @@ static void run_frame(vm_t* vm, const char* name) {
       case OP_CALL: {
         CHECK_BOUNDS(frame->pc + 8);
         uint32_t func_idx = read_u32_arg(frame, 0);
-        func_idx = patch_function_idx(func_idx);
+        func_idx = patch_function_idx(func_idx, vm->native_functions_count);
         uint32_t argc = read_u32_arg(frame, 1);
 
-        assert(vm->functions_count > func_idx && "invalid func idx");
+        assert(vm->total_functions_count > func_idx && "invalid func idx");
         vm_function_t* fn = &vm->functions[func_idx];
         DEBUG_LOG("OP_CALL idx: %d:%d (%s)", func_idx, fn->type, fn->name);
 
@@ -337,9 +340,8 @@ static void run_frame(vm_t* vm, const char* name) {
             break;
           }
           case VM_NATIVE_FUNC: {
-            vm_value_t result =
-                fn->as.native.fn(vm->stack.values + vm->stack.sp - argc, argc,
-                                 fn->as.native.userdata);
+            vm_value_t result = fn->as.native.fn(
+                vm->stack.values + vm->stack.sp - argc, argc, vm);
 
             vm->stack.sp -= argc;
             if (result.type != VALUE_TYPE_NULL)
@@ -469,8 +471,11 @@ static void run_frame(vm_t* vm, const char* name) {
         CHECK_BOUNDS(frame->pc + 8);
         uint32_t idx = read_u32_arg(frame, 0);
         uint32_t to_bind_argc = read_u32_arg(frame, 1);
-        DEBUG_LOG("OP_BIND idx: %d (%s) argc: %d", idx,
-                  vm->functions[patch_function_idx(idx)].name, to_bind_argc);
+        DEBUG_LOG(
+            "OP_BIND idx: %d (%s) argc: %d", idx,
+            vm->functions[patch_function_idx(idx, vm->native_functions_count)]
+                .name,
+            to_bind_argc);
         vm_value_t bound_fn = bind_to_function(
             vm, idx, vm->stack.values + vm->stack.sp - to_bind_argc,
             to_bind_argc);
@@ -601,8 +606,8 @@ static void run_frame(vm_t* vm, const char* name) {
 }
 
 vm_value_t vm_run(vm_t* vm, size_t entry_point_idx, bool pop_return) {
-  size_t idx = VM_BUILTIN_FUNCTION_COUNT + entry_point_idx;
-  assert(idx < vm->functions_count && "invalid entry point idx");
+  size_t idx = vm->native_functions_count + entry_point_idx;
+  assert(idx < vm->total_functions_count && "invalid entry point idx");
 
   vm_function_t* fn = &vm->functions[idx];
   assert(fn->type == VM_BYTECODE && "main() should be interpreted code");
@@ -778,92 +783,6 @@ static vm_value_t math_pow(vm_value_t* argv, size_t argc, void* vm) {
   return (vm_value_t){.type = VALUE_TYPE_FLOAT, .as.f32 = powf(base, exponent)};
 }
 
-struct buffer_t {
-  char* buffer;
-  size_t length;
-  size_t size;
-};
-
-static void append(struct buffer_t* buffer, const char* fmt, ...) {
-  va_list args;
-
-  while (1) {
-    va_start(args, fmt);
-
-    size_t available = buffer->size - buffer->length;
-    int written =
-        vsnprintf(buffer->buffer + buffer->length, available, fmt, args);
-
-    va_end(args);
-
-    if (written < 0) {
-      // formatting error
-      return;
-    }
-
-    if ((size_t)written < available) {
-      // success
-      buffer->length += (size_t)written;
-      return;
-    }
-
-    // Need more space: grow and retry
-    size_t new_size = buffer->size * 2;
-    if (new_size < buffer->size + (size_t)written + 1) {
-      new_size = buffer->size + (size_t)written + 1;
-    }
-
-    char* new_buf = realloc(buffer->buffer, new_size);
-    assert(new_buf && "out of memory");
-
-    buffer->buffer = new_buf;
-    buffer->size = new_size;
-  }
-}
-
-static void print_value(vm_value_t* value, struct buffer_t* buffer) {
-  switch (value->type) {
-    case VALUE_TYPE_ARRAY:
-      append(buffer, "[");
-      for (size_t i = 0; i < value->as.array->len; ++i) {
-        print_value(&value->as.array->data[i], buffer);
-        if (i + 1 < value->as.array->len) {
-          append(buffer, ", ");
-        }
-      }
-      append(buffer, "]");
-      break;
-    case VALUE_TYPE_BOOL:
-      append(buffer, value->as.boolean ? "true" : "false");
-      break;
-    case VALUE_TYPE_FLOAT:
-      append(buffer, "%.02f", value->as.f32);
-      break;
-    case VALUE_TYPE_INT:
-      append(buffer, "%d", value->as.i32);
-      break;
-    case VALUE_TYPE_STR:
-      append(buffer, "%.*s", (int)value->as.str->len, value->as.str->c_str);
-      break;
-    default:
-      assert(false && "not handled!");
-      break;
-  }
-}
-
-static vm_value_t vm_log(vm_value_t* argv, size_t argc, void* vm) {
-  struct buffer_t buffer = {.buffer = malloc(64), .length = 0, .size = 64};
-  for (size_t i = 0; i < argc; ++i) {
-    print_value(&argv[i], &buffer);
-    rc_decrement(&argv[i]);
-    append(&buffer, " ");
-  }
-
-  printf("> %.*s\n", (int)buffer.length, buffer.buffer);
-
-  return (vm_value_t){.type = VALUE_TYPE_NULL};
-}
-
 static void install_builtins(vm_t* vm) {
 #define INSTALL($idx, $fn, $argc)                                           \
   static_assert($idx < VM_BUILTIN_FUNCTION_COUNT, "unable to install idx"); \
@@ -888,12 +807,11 @@ static void install_builtins(vm_t* vm) {
   INSTALL(10, vm_array_new, 0);
   INSTALL(11, vm_array_get, 2);
   INSTALL(12, vm_array_set, 3);
-  INSTALL(13, vm_log, 1);
-  INSTALL(14, vm_string_length, 1);
-  INSTALL(15, vm_array_init, 1);
-  INSTALL(16, vm_array_push, 2);
-  INSTALL(17, vm_map_get, 2);
-  INSTALL(18, vm_array_length, 1);
+  INSTALL(13, vm_string_length, 1);
+  INSTALL(14, vm_array_init, 1);
+  INSTALL(15, vm_array_push, 2);
+  INSTALL(16, vm_map_get, 2);
+  INSTALL(17, vm_array_length, 1);
 }
 
 static void free_closure(void* self) {
@@ -908,7 +826,8 @@ vm_value_t bind_to_function(vm_t* vm,
                             size_t idx,
                             vm_value_t* argv,
                             size_t argc) {
-  vm_function_t* const fn = &vm->functions[patch_function_idx(idx)];
+  vm_function_t* const fn =
+      &vm->functions[patch_function_idx(idx, vm->native_functions_count)];
   assert(argc <= fn->argument_count && "more arguments than required");
 
   size_t storage_size = argc > 0 ? fn->argument_count : 0;
@@ -974,7 +893,10 @@ typedef struct vm_section_t {
 } vm_section_t;
 #pragma pack(pop)
 
-vm_t* init_vm(uint8_t* program, size_t program_size) {
+vm_t* init_vm(const uint8_t* program,
+              size_t program_size,
+              const vm_function_t* native_functions,
+              size_t native_functions_count) {
   if (sizeof(vm_prog_header_t) > program_size) {
     fprintf(stderr, "too small\n");
     return NULL;
@@ -989,13 +911,18 @@ vm_t* init_vm(uint8_t* program, size_t program_size) {
     return NULL;
   }
 
-  size_t total_function_count =
-      VM_BUILTIN_FUNCTION_COUNT + header.function_count;
+  size_t total_function_count = VM_BUILTIN_FUNCTION_COUNT +
+                                header.function_count + native_functions_count;
   vm_t* const vm =
       calloc(1, sizeof(vm_t) + sizeof(vm_function_t) * total_function_count);
 
   install_builtins(vm);
-  vm->functions_count = total_function_count;
+  memcpy(vm->functions + VM_BUILTIN_FUNCTION_COUNT, native_functions,
+         native_functions_count * sizeof(vm_function_t));
+
+  vm->total_functions_count = total_function_count;
+  vm->native_functions_count =
+      VM_BUILTIN_FUNCTION_COUNT + native_functions_count;
 
   vm->constants = calloc(header.constant_count, sizeof(vm_value_t));
   vm->constants_count = header.constant_count;
@@ -1025,7 +952,7 @@ vm_t* init_vm(uint8_t* program, size_t program_size) {
         break;
       case FUNCTION: {
         vm_function_t* const fn =
-            &vm->functions[VM_BUILTIN_FUNCTION_COUNT + (parsed_functions++)];
+            &vm->functions[vm->native_functions_count + (parsed_functions++)];
         fn->type = VM_BYTECODE;
 
         fn->argument_count = section.as.fn.argument_count;

@@ -544,7 +544,6 @@ std::optional<CallIdx> TypeChecker::GetCallIdxFor(const std::string& name,
       {"Array_withSize", VM_BUILTIN_ARRAY_NEW},
       {"Array_push", VM_BUILTIN_ARRAY_PUSH},
       {"Array_set", VM_BUILTIN_ARRAY_SET},
-      {"log", VM_BUILTIN_LOG},
       {"Map_new", VM_BUILTIN_MAP_NEW},
       {"Map_get", VM_BUILTIN_MAP_GET},
       {"Map_set", VM_BUILTIN_MAP_SET},
@@ -557,6 +556,8 @@ std::optional<CallIdx> TypeChecker::GetCallIdxFor(const std::string& name,
       {"String_length", VM_BUILTIN_STRING_LENGTH},
       {"String_startsWith", VM_BUILTIN_STRINGS_STARTWITH},
       {"String_substr", VM_BUILTIN_STRINGS_SUBSTRING},
+      {"log", VM_BUILTIN(18)},
+      {"fetch", VM_BUILTIN(19)},
   };
 
   if (auto it = kBuiltInCallIdx.find(name); it != kBuiltInCallIdx.end())

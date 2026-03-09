@@ -965,7 +965,7 @@ vm_t* init_vm(const uint8_t* program,
         fn->as.bytecode.local_count = section.as.fn.local_count;
         fn->as.bytecode.data = vm->bytecode_data + bytecode_offset;
         fn->as.bytecode.data_len = section.size;
-        fn->name = vm->bytecode_data + header.bytecode_size +
+        fn->name = ((const char*)vm->bytecode_data) + header.bytecode_size +
                    section.as.fn.name_offset;
         memcpy(vm->bytecode_data + bytecode_offset, program + offset,
                section.size);

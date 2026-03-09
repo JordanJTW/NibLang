@@ -646,4 +646,5 @@ TypeChecker::Scope& TypeChecker::GetCurrentFunctionScope(size_t& depth) {
     depth -= 1;
   }
   NOTREACHED() << "There must ALWAYS be a function scope";
+  __builtin_unreachable();
 }

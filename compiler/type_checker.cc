@@ -246,6 +246,10 @@ TypeId TypeChecker::CheckExpression(std::unique_ptr<Expression>& expression) {
             if (!IsCompatibleType(lhs, rhs))
               LOG(ERROR) << "LHS and RHS must be the same type";
 
+            if (lhs == GetTypeIdFor(ParsedType{"String"})) {
+              binary.is_string = true;
+            }
+
             // Comparison operators will always generate a boolean
             if (binary.op == TokenKind::kCompareGt ||
                 binary.op == TokenKind::kCompareLt ||

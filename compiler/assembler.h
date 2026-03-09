@@ -30,6 +30,7 @@ class Assembler {
   Assembler& Or();
   Assembler& Not();
   Assembler& Increment(uint32_t idx);
+  Assembler& Concat();
   Assembler& Return();
   Assembler& StoreLocal(uint32_t idx);
   Assembler& Compare(op_t operation);

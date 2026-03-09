@@ -461,6 +461,30 @@ static void run_frame(vm_t* vm, const char* name) {
         frame->pc += 5;
         break;
       }
+      case OP_CONCAT: {
+        vm_value_t arg2 = pop_stack(&vm->stack);
+        vm_value_t arg1 = pop_stack(&vm->stack);
+        DEBUG_LOG("OP_CONCAT");
+
+        assert(arg1.type == VALUE_TYPE_STR && arg2.type == VALUE_TYPE_STR &&
+               "OP_CONCAT only works with strings");
+
+        size_t total_length = arg1.as.str->len + arg2.as.str->len;
+
+        String* string = calloc(1, sizeof(String) + total_length + 1);
+        string->len = total_length;
+        memcpy(string->c_str, arg1.as.str->c_str, arg1.as.str->len);
+        memcpy(string->c_str + arg1.as.str->len, arg2.as.str->c_str,
+               arg2.as.str->len);
+
+        string->c_str[total_length] = '\0';  // Add in the \0 terminator
+        string->rc.deleter = &free;
+
+        push_stack(&vm->stack,
+                   (vm_value_t){.type = VALUE_TYPE_STR, .as.str = string});
+        ++frame->pc;
+        break;
+      }
       case OP_STORE_LOCAL: {
         CHECK_BOUNDS(frame->pc + 4);
         uint32_t local_idx = read_u32_arg(frame, 0);

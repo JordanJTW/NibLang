@@ -14,6 +14,7 @@ struct BinaryExpression {
   TokenKind op;
   std::unique_ptr<Expression> lhs;
   std::unique_ptr<Expression> rhs;
+  bool is_string = false;
 };
 
 struct PrefixUnaryExpression {

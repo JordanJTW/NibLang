@@ -17,10 +17,13 @@ struct Overloaded : Ts... {
 template <class... Ts>
 Overloaded(Ts...) -> Overloaded<Ts...>;
 
-void emit_op(const Token& op, ProgramBuilder& builder) {
+void emit_op(const Token& op, bool is_string, ProgramBuilder& builder) {
   switch (op.kind) {
     case TokenKind::kPlus:
-      builder.GetCurrentCode().Add();
+      if (is_string)
+        builder.GetCurrentCode().Concat();
+      else
+        builder.GetCurrentCode().Add();
       break;
     case TokenKind::kMinus:
       builder.GetCurrentCode().Subtract();
@@ -155,7 +158,7 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
           [&](const BinaryExpression& binary) {
             compile_expr(binary.lhs, builder);
             compile_expr(binary.rhs, builder);
-            emit_op(Token{.kind = binary.op}, builder);
+            emit_op(Token{.kind = binary.op}, binary.is_string, builder);
           },
           [&](const CallExpression& call) { compile_call(call, builder); },
           [&](const AssignmentExpression& assign) {

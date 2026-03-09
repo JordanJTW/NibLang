@@ -97,16 +97,18 @@ typedef struct vm_prog_header_t {
   uint16_t function_count;
   uint16_t constant_count;
   uint32_t bytecode_size;
+  uint32_t debug_size;
 } vm_prog_header_t;
 
 typedef struct vm_prog_function_t {
   uint16_t argument_count;
   uint16_t local_count;
+  uint16_t name_offset;
   uint8_t bytecode[];
 } vm_prog_function_t;
 
 typedef struct vm_section_t {
-  enum : uint8_t { CONST_STR, FUNCTION } type;
+  enum : uint8_t { CONST_STR, FUNCTION, DEBUG } type;
   uint32_t size;
   union {
     vm_prog_function_t fn;
@@ -129,6 +131,32 @@ std::vector<uint8_t> ProgramBuilder::GenerateImage() {
             [](const Function& a, const Function& b) {
               return a.call_idx < b.call_idx;
             });
+
+  std::vector<uint8_t> debug_info;
+  std::vector<size_t> debug_offset;
+  for (Function fn : functions_) {
+    debug_offset.push_back(debug_info.size());
+
+    if (fn.name.empty()) {
+      debug_info.push_back('\0');
+      continue;
+    }
+
+    debug_info.resize(debug_info.size() + fn.name.size() + sizeof(char) /*\0*/);
+    memcpy(debug_info.data() + debug_offset.back(), fn.name.data(),
+           fn.name.size());
+    debug_info[debug_offset.back() + fn.name.size()] = '\0';
+  }
+
+  program_image.resize(offset + sizeof(vm_section_t) + debug_info.size());
+  vm_section_t section = {.type = vm_section_t::DEBUG,
+                          .size = static_cast<uint16_t>(debug_info.size())};
+
+  memcpy(program_image.data() + offset, &section, sizeof(vm_section_t));
+  memcpy(program_image.data() + offset + sizeof(vm_section_t),
+         debug_info.data(), debug_info.size());
+  offset = program_image.size();
+
   size_t bytecode_size = 0;
   for (Function fn : functions_) {
     std::vector<uint8_t> fn_bytecode = fn.code.Build();
@@ -148,10 +176,12 @@ std::vector<uint8_t> ProgramBuilder::GenerateImage() {
 
     program_image.resize(offset + sizeof(vm_section_t) + fn_bytecode.size());
 
-    vm_section_t section = {
-        .type = vm_section_t::FUNCTION,
-        .size = static_cast<uint32_t>(fn_bytecode.size()),
-        .as.fn = {.argument_count = fn.argc, .local_count = fn.next_id}};
+    vm_section_t section = {.type = vm_section_t::FUNCTION,
+                            .size = static_cast<uint32_t>(fn_bytecode.size()),
+                            .as.fn = {.argument_count = fn.argc,
+                                      .local_count = fn.next_id,
+                                      .name_offset = static_cast<uint16_t>(
+                                          debug_offset[fn.call_idx])}};
 
     memcpy(program_image.data() + offset, &section, sizeof(vm_section_t));
     memcpy(program_image.data() + offset + sizeof(vm_section_t),
@@ -161,6 +191,7 @@ std::vector<uint8_t> ProgramBuilder::GenerateImage() {
   }
 
   header.bytecode_size = bytecode_size;
+  header.debug_size = debug_info.size();
   memcpy(program_image.data(), &header, sizeof(vm_prog_header_t));
 
   std::vector<std::string_view> constants_by_id(const_ids_.size());

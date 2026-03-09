@@ -877,6 +877,7 @@ typedef struct vm_prog_header_t {
   uint16_t function_count;
   uint16_t constant_count;
   uint32_t bytecode_size;
+  uint32_t debug_size;
 } vm_prog_header_t;
 
 static const size_t o = sizeof(vm_prog_header_t);
@@ -884,11 +885,12 @@ static const size_t o = sizeof(vm_prog_header_t);
 typedef struct vm_prog_function_t {
   uint16_t argument_count;
   uint16_t local_count;
+  uint16_t name_offset;
   uint8_t bytecode[];
 } vm_prog_function_t;
 
 typedef struct vm_section_t {
-  enum : uint8_t { CONST_STR, FUNCTION } type;
+  enum : uint8_t { CONST_STR, FUNCTION, DEBUG } type;
   uint32_t size;
   union {
     vm_prog_function_t fn;
@@ -931,7 +933,7 @@ vm_t* init_vm(const uint8_t* program,
   vm->constants = calloc(header.constant_count, sizeof(vm_value_t));
   vm->constants_count = header.constant_count;
 
-  vm->bytecode_data = calloc(1, header.bytecode_size);
+  vm->bytecode_data = calloc(1, header.bytecode_size + header.debug_size);
 
   size_t offset = sizeof(vm_prog_header_t);
 
@@ -963,9 +965,16 @@ vm_t* init_vm(const uint8_t* program,
         fn->as.bytecode.local_count = section.as.fn.local_count;
         fn->as.bytecode.data = vm->bytecode_data + bytecode_offset;
         fn->as.bytecode.data_len = section.size;
+        fn->name = vm->bytecode_data + header.bytecode_size +
+                   section.as.fn.name_offset;
         memcpy(vm->bytecode_data + bytecode_offset, program + offset,
                section.size);
         bytecode_offset += section.size;
+        break;
+      }
+      case DEBUG: {
+        memcpy(vm->bytecode_data + header.bytecode_size, program + offset,
+               section.size);
         break;
       }
     }

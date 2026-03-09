@@ -245,6 +245,27 @@ static bool handle_exception(vm_t* vm) {
   return handle_exception(vm);
 }
 
+static void vm_invoke_closure(vm_t* vm,
+                              Closure* closure,
+                              vm_value_t* argv,
+                              size_t argc) {
+  if (closure->bound_argc == 0) {
+    vm_invoke(vm, closure->fn, argv, argc);
+  } else {
+    size_t to_bind_argc = closure->fn->argument_count - closure->bound_argc;
+    to_bind_argc = to_bind_argc > argc ? to_bind_argc : argc;
+    memcpy(closure->argument_storage + closure->bound_argc, argv,
+           to_bind_argc * sizeof(vm_value_t));
+    // The function will consume its arguments (ownership is transferred
+    // in function calls) BUT the closure must retain its copy for reuse
+    for (size_t i = 0; i < closure->bound_argc; ++i)
+      rc_increment(&closure->argument_storage[i]);
+
+    vm_invoke(vm, closure->fn, closure->argument_storage,
+              closure->bound_argc + to_bind_argc);
+  }
+}
+
 static void run_frame(vm_t* vm, const char* name) {
 #define CHECK_BOUNDS($pc)                             \
   if ($pc >= frame->code->data_len) {                 \
@@ -297,7 +318,6 @@ static void run_frame(vm_t* vm, const char* name) {
         break;
       }
       case OP_PUSH_TRUE: {
-        CHECK_BOUNDS(frame->pc);
         DEBUG_LOG("OP_PUSH_TRUE");
         push_stack(&vm->stack,
                    (vm_value_t){.type = VALUE_TYPE_BOOL, .as.boolean = true});
@@ -305,50 +325,41 @@ static void run_frame(vm_t* vm, const char* name) {
         break;
       }
       case OP_PUSH_FALSE: {
-        CHECK_BOUNDS(frame->pc);
         DEBUG_LOG("OP_PUSH_FALSE");
         push_stack(&vm->stack,
                    (vm_value_t){.type = VALUE_TYPE_BOOL, .as.boolean = false});
         ++frame->pc;
         break;
       }
+      case OP_DYNAMIC_CALL: {
+        CHECK_BOUNDS(frame->pc + 4);
+        uint32_t argc = read_u32_arg(frame, 0);
+        assert(vm->stack.sp >= argc && "stack overflow");
+
+        DEBUG_LOG("OP_DYNAMIC_CALL argc: %d", argc);
+
+        vm_value_t fn = pop_stack(&vm->stack);
+        assert(fn.type == VALUE_TYPE_FUNCTION &&
+               "call invoked on non-function");
+
+        vm->stack.sp -= argc;
+        vm_invoke_closure(vm, fn.as.fn, vm->stack.values + vm->stack.sp, argc);
+        frame->pc += 5;
+        break;
+      }
       case OP_CALL: {
         CHECK_BOUNDS(frame->pc + 8);
         uint32_t func_idx = read_u32_arg(frame, 0);
         func_idx = patch_function_idx(func_idx, vm->native_functions_count);
-        uint32_t argc = read_u32_arg(frame, 1);
-
         assert(vm->total_functions_count > func_idx && "invalid func idx");
+
         vm_function_t* fn = &vm->functions[func_idx];
         DEBUG_LOG("OP_CALL idx: %d:%d (%s)", func_idx, fn->type, fn->name);
 
-        assert(argc >= fn->argument_count && "not enough args");
+        uint32_t argc = read_u32_arg(frame, 1);
         assert(vm->stack.sp >= argc && "stack overflow");
-        switch (fn->type) {
-          case VM_BYTECODE: {
-            vm_frame_t* new_frame =
-                calloc(1, sizeof(vm_frame_t) +
-                              sizeof(vm_value_t) * fn->as.bytecode.local_count);
-
-            new_frame->code = &fn->as.bytecode;
-            memcpy(&new_frame->locals, vm->stack.values + vm->stack.sp - argc,
-                   argc * sizeof(vm_value_t));
-            vm->stack.sp -= argc;
-
-            new_frame->next = vm->current_frame;
-            vm->current_frame = new_frame;
-            break;
-          }
-          case VM_NATIVE_FUNC: {
-            vm_value_t result = fn->as.native.fn(
-                vm->stack.values + vm->stack.sp - argc, argc, vm);
-
-            vm->stack.sp -= argc;
-            if (result.type != VALUE_TYPE_NULL)
-              push_stack(&vm->stack, result);
-            break;
-          }
-        }
+        vm->stack.sp -= argc;
+        vm_invoke(vm, fn, vm->stack.values + vm->stack.sp, argc);
         frame->pc += 9;
         break;
       }
@@ -731,43 +742,12 @@ vm_value_t vm_call_function(vm_t* vm,
                             Closure* closure,
                             vm_value_t* argv,
                             size_t argc) {
-  vm_function_t* fn = closure->fn;
-  switch (fn->type) {
-    case VM_BYTECODE: {
-      vm_frame_t* new_frame =
-          calloc(1, sizeof(vm_frame_t) +
-                        sizeof(vm_value_t) * fn->as.bytecode.local_count);
-
-      new_frame->code = &fn->as.bytecode;
-      for (size_t i = 0; i < argc; ++i) {
-        new_frame->locals[i] = argv[i];
-        rc_increment(&new_frame->locals[i]);
-      }
-
-      new_frame->next = vm->current_frame;
-      vm->current_frame = new_frame;
-      run_frame(vm, fn->name);
-      if (vm->stack.sp > 0) {
-        return pop_stack(&vm->stack);
-      } else {
-        return (vm_value_t){.type = VALUE_TYPE_NULL};
-      }
-    }
-    case VM_NATIVE_FUNC:
-      if (closure->bound_argc == 0) {
-        return fn->as.native.fn(argv, argc, fn->as.native.userdata);
-      } else {
-        size_t to_bind_argc = fn->argument_count - closure->bound_argc;
-        to_bind_argc = to_bind_argc > argc ? to_bind_argc : argc;
-        memcpy(closure->argument_storage + closure->bound_argc, argv,
-               to_bind_argc * sizeof(vm_value_t));
-        // The function will consume its arguments (ownership is transferred in
-        // function calls) BUT the closure must retain its copy incase of reuse
-        for (size_t i = 0; i < closure->bound_argc; ++i)
-          rc_increment(&closure->argument_storage[i]);
-        return fn->as.native.fn(closure->argument_storage, fn->argument_count,
-                                fn->as.native.userdata);
-      }
+  vm_invoke_closure(vm, closure, argv, argc);
+  run_frame(vm, closure->fn->name);
+  if (vm->stack.sp > 0) {
+    return pop_stack(&vm->stack);
+  } else {
+    return (vm_value_t){.type = VALUE_TYPE_NULL};
   }
 }
 
@@ -982,4 +962,28 @@ vm_t* init_vm(const uint8_t* program,
   vm->stack.values = calloc(vm->stack.capacity, sizeof(vm_value_t));
   vm->job_queue = init_job_queue();
   return vm;
+}
+
+void vm_invoke(vm_t* vm, vm_function_t* fn, vm_value_t* argv, size_t argc) {
+  assert(argc >= fn->argument_count && "not enough args");
+  switch (fn->type) {
+    case VM_BYTECODE: {
+      vm_frame_t* new_frame =
+          calloc(1, sizeof(vm_frame_t) +
+                        sizeof(vm_value_t) * fn->as.bytecode.local_count);
+
+      new_frame->code = &fn->as.bytecode;
+      memcpy(&new_frame->locals, argv, argc * sizeof(vm_value_t));
+
+      new_frame->next = vm->current_frame;
+      vm->current_frame = new_frame;
+      break;
+    }
+    case VM_NATIVE_FUNC: {
+      vm_value_t result = fn->as.native.fn(argv, argc, fn->as.native.userdata);
+      if (result.type != VALUE_TYPE_NULL)
+        push_stack(&vm->stack, result);
+      break;
+    }
+  }
 }

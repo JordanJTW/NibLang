@@ -19,6 +19,7 @@ typedef enum : uint8_t {
   OP_STORE_LOCAL,
   // Functions
   OP_CALL,
+  OP_DYNAMIC_CALL,
   OP_RETURN,
   OP_BIND,
   // Operators

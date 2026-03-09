@@ -128,6 +128,8 @@ vm_value_t bind_to_function(vm_t* vm,
                             vm_value_t* argv,
                             size_t argc);
 
+void vm_invoke(vm_t* vm, vm_function_t* fn, vm_value_t* argv, size_t argc);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

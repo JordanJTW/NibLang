@@ -28,6 +28,10 @@ Assembler& Assembler::Call(uint32_t idx, uint32_t argc) {
   PushOpAndArgs(OP_CALL, {idx, argc});
   return *this;
 }
+Assembler& Assembler::CallDynamic(uint32_t argc) {
+  PushOpAndArgs(OP_DYNAMIC_CALL, {argc});
+  return *this;
+}
 Assembler& Assembler::Bind(uint32_t idx, uint32_t argc) {
   PushOpAndArgs(OP_BIND, {idx, argc});
   return *this;
@@ -211,6 +215,7 @@ std::string GetOpName(op_t op) {
     CASE_OP_NAME(OP_PUSH_FALSE);
     CASE_OP_NAME(OP_STORE_LOCAL);
     CASE_OP_NAME(OP_CALL);
+    CASE_OP_NAME(OP_DYNAMIC_CALL);
     CASE_OP_NAME(OP_RETURN);
     CASE_OP_NAME(OP_BIND);
     CASE_OP_NAME(OP_ADD);
@@ -235,6 +240,26 @@ std::string GetOpName(op_t op) {
     CASE_OP_NAME(OP_DEBUG);
 #undef CASE_OP_NAME
   }
+}
+
+void PrintTwoArgumentOp(const std::vector<uint8_t>& bytecode,
+                        size_t& pc,
+                        std::string_view arg1_name,
+                        std::string_view arg2_name) {
+  op_t op = static_cast<op_t>(bytecode[pc]);
+  uint32_t arg1 = bytecode[pc + 1] | (bytecode[pc + 2] << 8) |
+                  (bytecode[pc + 3] << 16) | (bytecode[pc + 4] << 24);
+  uint32_t arg2 = bytecode[pc + 5] | (bytecode[pc + 6] << 8) |
+                  (bytecode[pc + 7] << 16) | (bytecode[pc + 8] << 24);
+  printf(
+      "0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x,"
+      " // %04zx: %s %s: %d %s: %d\n"
+      "      0x%02x, 0x%02x, 0x%02x, 0x%02x\n",
+      bytecode[pc], bytecode[pc + 1], bytecode[pc + 2], bytecode[pc + 3],
+      bytecode[pc + 4], pc, GetOpName(op).c_str(), arg1_name.data(), arg1,
+      arg2_name.data(), arg2, bytecode[pc + 5], bytecode[pc + 6],
+      bytecode[pc + 7], bytecode[pc + 8]);
+  pc += 8;
 }
 
 void DumpByteCode(const std::vector<uint8_t>& bytecode) {
@@ -279,36 +304,20 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
         pc += 4;
         break;
       }
-      case OP_CALL: {
-        uint32_t idx = bytecode[pc + 1] | (bytecode[pc + 2] << 8) |
-                       (bytecode[pc + 3] << 16) | (bytecode[pc + 4] << 24);
-        uint32_t argc = bytecode[pc + 5] | (bytecode[pc + 6] << 8) |
-                        (bytecode[pc + 7] << 16) | (bytecode[pc + 8] << 24);
+      case OP_DYNAMIC_CALL: {
+        uint32_t argc = bytecode[pc + 1] | (bytecode[pc + 2] << 8) |
+                        (bytecode[pc + 3] << 16) | (bytecode[pc + 4] << 24);
         printf(
             "0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x,"
-            " // %04zx: %s idx: %d argc: %d\n"
-            "      0x%02x, 0x%02x, 0x%02x, 0x%02x\n",
+            " // %04zx: %s argc: %d \n",
             bytecode[pc], bytecode[pc + 1], bytecode[pc + 2], bytecode[pc + 3],
-            bytecode[pc + 4], pc, GetOpName(op).c_str(), idx, argc,
-            bytecode[pc + 5], bytecode[pc + 6], bytecode[pc + 7],
-            bytecode[pc + 8]);
-        pc += 8;
+            bytecode[pc + 4], pc, GetOpName(op).c_str(), argc);
+        pc += 4;
         break;
       }
-      case OP_BIND: {
-        uint32_t idx = bytecode[pc + 1] | (bytecode[pc + 2] << 8) |
-                       (bytecode[pc + 3] << 16) | (bytecode[pc + 4] << 24);
-        uint32_t argc = bytecode[pc + 5] | (bytecode[pc + 6] << 8) |
-                        (bytecode[pc + 7] << 16) | (bytecode[pc + 8] << 24);
-        printf(
-            "0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x,"
-            " // %04zx: %s idx: %d argc: %d\n"
-            "      0x%02x, 0x%02x, 0x%02x, 0x%02x\n",
-            bytecode[pc], bytecode[pc + 1], bytecode[pc + 2], bytecode[pc + 3],
-            bytecode[pc + 4], pc, GetOpName(op).c_str(), idx, argc,
-            bytecode[pc + 5], bytecode[pc + 6], bytecode[pc + 7],
-            bytecode[pc + 8]);
-        pc += 8;
+      case OP_BIND:
+      case OP_CALL: {
+        PrintTwoArgumentOp(bytecode, pc, "idx", "argc");
         break;
       }
       case OP_TRY_PUSH: {

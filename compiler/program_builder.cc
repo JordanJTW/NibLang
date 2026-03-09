@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "compiler/logging.h"
 #include "src/vm.h"
 
 ProgramBuilder::ProgramBuilder() {

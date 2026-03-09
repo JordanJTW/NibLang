@@ -51,7 +51,7 @@ void emit_op(const Token& op, ProgramBuilder& builder) {
       builder.GetCurrentCode().Compare(OP_LESS_OR_EQ);
       break;
     default:
-      std::cerr << "unsupported binary operator: " << op.kind << std::endl;
+      LOG(ERROR) << "unsupported binary operator: " << op.kind;
       return;
   }
 }
@@ -106,7 +106,7 @@ void compile_call(const CallExpression& call, ProgramBuilder& builder) {
 void compile_expr(const std::unique_ptr<Expression>& expr,
                   ProgramBuilder& builder) {
   if (expr == nullptr) {
-    std::cerr << "Failed to compile null expression" << std::endl;
+    LOG(ERROR) << "Failed to compile null expression";
     return;
   }
 
@@ -134,8 +134,8 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
                           if (id.has_value()) {
                             builder.GetCurrentCode().PushLocal(*id);
                           } else {
-                            std::cerr << "undefined identifier: " << ident.name
-                                      << std::endl;
+                            LOG(ERROR)
+                                << "undefined identifier: " << ident.name;
                           }
                           break;
                         }
@@ -171,7 +171,7 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
               std::optional<uint32_t> id = builder.GetIdFor(
                   var_name, ProgramBuilder::CreateIfMissing::No);
               if (!id.has_value()) {
-                std::cerr << "undefined identifier: " << var_name << std::endl;
+                LOG(ERROR) << "undefined identifier: " << var_name;
               }
               builder.GetCurrentCode().StoreLocal(*id);
             } else if (std::holds_alternative<ArrayAccessExpression>(
@@ -187,9 +187,8 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
                            std::get_if<MemberAccessExpression>(
                                &assign.lhs->as)) {
               if (!member_access->resolved) {
-                std::cerr << "Member was never resolved "
-                             "during type checking!"
-                          << std::endl;
+                LOG(ERROR) << "Member was never resolved "
+                              "during type checking";
                 return;
               }
 
@@ -199,8 +198,7 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
               compile_expr(assign.rhs, builder);
               builder.CallFunction("Array_set", 3);
             } else {
-              std::cerr << "unsupported LHS in assignment expression"
-                        << std::endl;
+              LOG(ERROR) << "unsupported LHS in assignment expression";
             }
           },
           [&](const MemberAccessExpression& member_access) {
@@ -336,16 +334,14 @@ void compile(const Block& root,
                    },
                    [&](const BreakStatement&) {
                      if (!loop_ctx) {
-                       std::cerr << "break statement not within a loop"
-                                 << std::endl;
+                       LOG(ERROR) << "break statement not within a loop";
                        return;
                      }
                      builder.GetCurrentCode().Jump(loop_ctx->break_label);
                    },
                    [&](const ContinueStatement&) {
                      if (!loop_ctx) {
-                       std::cerr << "continue statement not within a loop"
-                                 << std::endl;
+                       LOG(ERROR) << "continue statement not within a loop";
                        return;
                      }
                      builder.GetCurrentCode().Jump(loop_ctx->continue_label);

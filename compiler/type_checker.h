@@ -22,15 +22,16 @@ class TypeChecker {
       FunctionDeclaration& decl,
       std::optional<StructDeclaration*> object = std::nullopt,
       std::optional<TypeId> self_id = std::nullopt);
-  void CheckFunctionBody(const FunctionDeclaration& fn);
+  void CheckFunctionBody(FunctionDeclaration& fn);
 
   enum class CreateIfMissing { YES, NO };
   std::optional<CallIdx> GetCallIdxFor(const std::string& name,
                                        CreateIfMissing create);
 
   struct Symbol {
-    enum Kind { Function, Struct, Variable } kind;
+    enum Kind { Function, Struct, Variable, Capture } kind;
     TypeId type_id;
+    size_t declared_depth;
   };
   std::optional<Symbol> GetSymbolFor(const std::string& ident,
                                      Metadata metadata);
@@ -39,9 +40,10 @@ class TypeChecker {
     enum ScopeType { Function, StatementBody } type;
     std::map<std::string, Symbol> symbols;
     std::optional<TypeId> return_type;
-    const FunctionDeclaration* fn;
+    FunctionDeclaration* fn;
   };
   std::vector<Scope> scopes_;
+  Scope& GetCurrentFunctionScope(size_t& depth);
 
   TypeId next_type_id_;
 

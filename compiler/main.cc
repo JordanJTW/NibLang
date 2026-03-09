@@ -78,12 +78,18 @@ void compile_call(const CallExpression& call, ProgramBuilder& builder) {
     switch (call.resolved->kind) {
       case Free:
       case Extern:
-      case Anonymous:
       case StaticMethod:
         for (const auto& arg : call.arguments)
           compile_expr(arg, builder);
         builder.GetCurrentCode().Call(call.resolved->function_idx,
                                       call.arguments.size());
+
+        break;
+      case Anonymous:
+        compile_expr(call.callee, builder);
+        for (const auto& arg : call.arguments)
+          compile_expr(arg, builder);
+        builder.GetCurrentCode().CallDynamic(call.arguments.size());
         break;
       case Method:
         if (const auto* const member_access =
@@ -250,11 +256,22 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
           },
           [&](const ClosureExpression& closure) {
             CHECK(closure.fn.resolved) << "Unresolved function!";
-            builder.EnterFunctionScope(closure.fn.name, closure.fn.arguments);
+            builder.EnterFunctionScope(
+                closure.fn.name, closure.fn.resolved->call_idx,
+                closure.fn.arguments, closure.fn.resolved->captures);
             compile(*closure.fn.body, builder);
             builder.ExitFunctionScope();
-            builder.GetCurrentCode().Bind(closure.fn.resolved->call_idx,
-                                          /*argc=*/0);
+
+            for (const auto& capture : closure.fn.resolved->captures) {
+              std::optional<uint32_t> id = builder.GetIdFor(
+                  capture, ProgramBuilder::CreateIfMissing::No);
+              CHECK(id) << "Missing capture in outer scope variable: "
+                        << capture;
+              builder.GetCurrentCode().PushLocal(*id);
+            }
+            builder.GetCurrentCode().Bind(
+                closure.fn.resolved->call_idx,
+                /*argc=*/closure.fn.resolved->captures.size());
           },
           [&](PrefixUnaryExpression& prefix) {
             compile_expr(prefix.operand, builder);
@@ -296,7 +313,11 @@ void compile(const Block& root,
                    },
                    [&](const FunctionDeclaration& fn) {
                      if (fn.body) {
-                       builder.EnterFunctionScope(fn.name, fn.arguments);
+                       CHECK(fn.resolved->captures.empty())
+                           << "Captures found for function.";
+
+                       builder.EnterFunctionScope(
+                           fn.name, fn.resolved->call_idx, fn.arguments, {});
                        compile(*fn.body, builder);
                        // Insert an return; to unwind the stack
                        if (fn.resolved->is_void_return)
@@ -361,9 +382,13 @@ void compile(const Block& root,
                        if (!method.second.body)
                          continue;
 
+                       CHECK(method.second.resolved->captures.empty())
+                           << "Captures found for method.";
+
                        builder.EnterFunctionScope(
                            struct_decl.name + "_" + method.first,
-                           method.second.arguments);
+                           method.second.resolved->call_idx,
+                           method.second.arguments, {});
                        compile(*method.second.body, builder);
                        builder.ExitFunctionScope();
                      }

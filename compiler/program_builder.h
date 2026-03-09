@@ -16,7 +16,9 @@ class ProgramBuilder {
 
   void EnterFunctionScope(
       const std::string& name,
-      std::vector<std::pair<std::string, ParsedType>> arguments);
+      size_t call_idx,
+      std::vector<std::pair<std::string, ParsedType>> arguments,
+      std::vector<std::string> captures);
   void ExitFunctionScope();
 
   enum class CreateIfMissing { No, Yes };
@@ -26,11 +28,12 @@ class ProgramBuilder {
 
   Assembler& GetCurrentCode();
   void CallFunction(const std::string& name, size_t argc);
-  std::vector<uint8_t> GenerateImage() const;
+  std::vector<uint8_t> GenerateImage();
 
  private:
   struct Function {
     std::string name;
+    size_t call_idx;
     std::map<std::string, int> var_to_id;
     uint16_t next_id{0};
     uint16_t argc{0};

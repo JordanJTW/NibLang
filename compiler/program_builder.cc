@@ -25,19 +25,25 @@ ProgramBuilder::ProgramBuilder() {
   func_ids_["Array_get"] = VM_BUILTIN_ARRAY_GET;
   func_ids_["Array_set"] = VM_BUILTIN_ARRAY_SET;
 
-  EnterFunctionScope("main", {});
+  EnterFunctionScope("main", 0, {}, {});
 }
 
 void ProgramBuilder::EnterFunctionScope(
     const std::string& name,
-    std::vector<std::pair<std::string, ParsedType>> arguments) {
+    size_t call_idx,
+    std::vector<std::pair<std::string, ParsedType>> arguments,
+    std::vector<std::string> captures) {
   size_t fn_id = next_func_id_++;
   function_decl_stack_.push(fn_id);
-  if (!name.empty())
-    func_ids_[name] = fn_id;
 
   Function& function = functions_.emplace_back();
   function.name = name;
+  function.call_idx = call_idx;
+  for (const auto& capture : captures) {
+    function.var_to_id[capture] = function.next_id++;
+    ++function.argc;
+  }
+
   for (const auto& arg : arguments) {
     function.var_to_id[arg.first] = function.next_id++;
     ++function.argc;
@@ -109,7 +115,7 @@ typedef struct vm_section_t {
 } vm_section_t;
 #pragma pack(pop)
 
-std::vector<uint8_t> ProgramBuilder::GenerateImage() const {
+std::vector<uint8_t> ProgramBuilder::GenerateImage() {
   vm_prog_header_t header = {
       .version = 0,
       .function_count = static_cast<uint16_t>(functions_.size()),
@@ -119,6 +125,10 @@ std::vector<uint8_t> ProgramBuilder::GenerateImage() const {
   size_t offset = sizeof(vm_prog_header_t);
   std::vector<uint8_t> program_image(offset);
 
+  std::sort(functions_.begin(), functions_.end(),
+            [](const Function& a, const Function& b) {
+              return a.call_idx < b.call_idx;
+            });
   size_t bytecode_size = 0;
   for (Function fn : functions_) {
     std::vector<uint8_t> fn_bytecode = fn.code.Build();

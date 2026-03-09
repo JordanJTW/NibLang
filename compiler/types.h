@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -53,7 +54,7 @@ enum FunctionKind {
   Anonymous,
   Method,
   StaticMethod,
-  Constructor
+  Constructor,
 };
 
 struct ResolvedCall {
@@ -119,6 +120,7 @@ struct TypeCastExpression {
 struct ResolvedFunction {
   CallIdx call_idx;
   bool is_void_return = false;
+  std::vector<std::string> captures;
 };
 
 struct FunctionDeclaration {

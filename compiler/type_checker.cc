@@ -70,6 +70,7 @@ void TypeChecker::Check(Block& block) {
       scopes_.back().symbols[struct_decl->name] = Symbol{
           .kind = Symbol::Struct,
           .type_id = type_id,
+          .declared_depth = scopes_.size(),
       };
     }
   }
@@ -104,6 +105,7 @@ void TypeChecker::Check(Block& block) {
         scopes_.back().symbols[fn_decl->name] = Symbol{
             .kind = Symbol::Function,
             .type_id = type_id.value(),
+            .declared_depth = scopes_.size(),
         };
       }
     }
@@ -118,7 +120,7 @@ void TypeChecker::CheckStatement(std::unique_ptr<Statement>& statement) {
   std::visit(
       Overloaded{
           [&](std::unique_ptr<Expression>& expr) { CheckExpression(expr); },
-          [&](const FunctionDeclaration& fn) { CheckFunctionBody(fn); },
+          [&](FunctionDeclaration& fn) { CheckFunctionBody(fn); },
           [&](ReturnStatement& ret) {
             TypeId return_type = CheckExpression(ret.value);
 
@@ -186,11 +188,12 @@ void TypeChecker::CheckStatement(std::unique_ptr<Statement>& statement) {
             scopes_.back().symbols[assign.name] = {
                 .kind = Symbol::Variable,
                 .type_id = type_id,
+                .declared_depth = scopes_.size(),
             };
           },
-          [&](const StructDeclaration& struct_decl) {
+          [&](StructDeclaration& struct_decl) {
             Symbol symbol = scopes_.back().symbols[struct_decl.name];
-            for (const auto& [name, fn] : struct_decl.methods) {
+            for (auto& [name, fn] : struct_decl.methods) {
               CheckFunctionBody(fn);
             }
           }},
@@ -221,10 +224,23 @@ TypeId TypeChecker::CheckExpression(std::unique_ptr<Expression>& expression) {
                                 ResolvedIdentifier::Function, fn_type.call_idx};
                             break;
                           }
-                          case Symbol::Kind::Variable:
+                          case Symbol::Kind::Capture:
+                          case Symbol::Kind::Variable: {
                             ident.resolved =
                                 ResolvedIdentifier{ResolvedIdentifier::Value};
+
+                            size_t depth = 0;
+                            Scope& fn = GetCurrentFunctionScope(depth);
+                            if (symbol->declared_depth < depth) {
+                              fn.fn->resolved->captures.push_back(ident.name);
+                              fn.symbols[ident.name] = {
+                                  .type_id = symbol->type_id,
+                                  .kind = Symbol::Capture,
+                                  .declared_depth = scopes_.size(),
+                              };
+                            }
                             break;
+                          }
                           case Symbol::Kind::Struct:
                             ident.resolved = ResolvedIdentifier{
                                 ResolvedIdentifier::TypeName};
@@ -513,7 +529,7 @@ std::optional<TypeId> TypeChecker::DefineFunction(
   return type_id;
 }
 
-void TypeChecker::CheckFunctionBody(const FunctionDeclaration& fn) {
+void TypeChecker::CheckFunctionBody(FunctionDeclaration& fn) {
   if (!fn.body)
     return;
 
@@ -530,6 +546,7 @@ void TypeChecker::CheckFunctionBody(const FunctionDeclaration& fn) {
     function_scope.symbols[name] = {
         .kind = Symbol::Variable,
         .type_id = *type_id,
+        .declared_depth = scopes_.size(),
     };
   }
 
@@ -618,4 +635,15 @@ bool TypeChecker::IsTypeSubsetOf(TypeId sub_type_id, TypeId super_type_id) {
 
   // Neither type is a union so they must be different concrete types.
   return false;
+}
+
+TypeChecker::Scope& TypeChecker::GetCurrentFunctionScope(size_t& depth) {
+  depth = scopes_.size();
+  for (auto it = scopes_.rbegin(); it != scopes_.rend(); ++it) {
+    if (it->type == Scope::Function) {
+      return *it;
+    }
+    depth -= 1;
+  }
+  NOTREACHED() << "There must ALWAYS be a function scope";
 }

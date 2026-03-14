@@ -468,9 +468,9 @@ std::unique_ptr<Expression> Parser::ParsePostFix() {
       if (!type)
         return nullptr;
 
-      expr = std::make_unique<Expression>(
-          Expression{TypeCastExpression{std::move(expr), type.value()},
-                     Metadata::fromTokens(start_token, current_token_)});
+      expr = std::make_unique<Expression>(Expression{
+          TypeCastExpression{std::move(expr), std::move(type.value())},
+          Metadata::fromTokens(start_token, current_token_)});
       continue;
     }
 
@@ -598,34 +598,79 @@ std::optional<ParsedType> Parser::ParseUnionType() {
 
   std::vector<ParsedType> types;
 
-  if (auto type = ParsePrimaryType()) {
-    types.push_back(type.value());
-  } else {
+  auto type = ParsePrimaryType();
+  if (!type)
     return std::nullopt;
-  }
+
+  types.push_back(std::move(type.value()));
 
   while (current_token_.kind == TokenKind::kPipe) {
     AdvanceToken();  // consume '|'
 
-    if (auto type = ParsePrimaryType()) {
-      types.push_back(type.value());
-    } else {
+    auto next = ParsePrimaryType();
+    if (!next)
       return std::nullopt;
-    }
+
+    types.push_back(std::move(next.value()));
   }
 
-  if (types.size() == 1) {
-    return types[0];
-  }
-  return ParsedType{ParsedUnionType{types},
+  if (types.size() == 1)
+    return types.front();
+
+  return ParsedType{ParsedUnionType{std::move(types)},
                     Metadata::fromTokens(start_token, current_token_)};
 }
 
+std::optional<ParsedType> Parser::ParseFunctionType() {
+  Token start_token = current_token_;
+  AdvanceToken();  // consume 'fn'
+
+  ExpectNextToken(TokenKind::kOpenParen, "expected '('");
+
+  std::vector<ParsedType> arg_types;
+  if (current_token_.kind != TokenKind::kCloseParen) {
+    while (true) {
+      auto arg_type = ParseType();
+      if (!arg_type)
+        return std::nullopt;
+
+      arg_types.push_back(std::move(arg_type.value()));
+
+      if (current_token_.kind != TokenKind::kComma)
+        break;
+
+      AdvanceToken();  // consume ','
+    }
+  }
+
+  ExpectNextToken(TokenKind::kCloseParen, "expected ')'");
+
+  std::shared_ptr<ParsedType> return_type;
+  if (current_token_.kind == TokenKind::kSkinnyArrow) {
+    AdvanceToken();  // consume '->'
+
+    auto parsed_return = ParseType();
+    if (!parsed_return)
+      return std::nullopt;
+
+    return_type =
+        std::make_shared<ParsedType>(std::move(parsed_return.value()));
+  }
+
+  return ParsedType{
+      ParsedFunctionType{std::move(arg_types), std::move(return_type)},
+      Metadata::fromTokens(start_token, current_token_)};
+}
+
 std::optional<ParsedType> Parser::ParsePrimaryType() {
+  if (current_token_.kind == TokenKind::kKwFn) {
+    return ParseFunctionType();
+  }
+
   if (current_token_.kind == TokenKind::kIdent) {
     Token type_token = current_token_;
     AdvanceToken();
-    return ParsedType{type_token.value, current_token_.meta};
+    return ParsedType{type_token.value, type_token.meta};
   }
 
   HandleError("expected type");
@@ -748,6 +793,7 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
 
   bool is_variadic = false;
   std::vector<std::pair<std::string, ParsedType>> arguments;
+  Token start_of_arguments_token = current_token_;
   if (current_token_.kind != TokenKind::kCloseParen) {
     while (true) {
       // extern functions support passing raw variadic arguments to the runtime.
@@ -804,6 +850,7 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
       break;
     }
   }
+  Token missing_return_type_token = current_token_;
   AdvanceToken();  // after ')'
 
   std::optional<ParsedType> return_type;
@@ -811,11 +858,24 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
     AdvanceToken();  // consume '->'
 
     return_type = ParseType();
+
+    // Failed to parse the return type so the function parse is invalid
+    if (!return_type.has_value())
+      return std::nullopt;
+
+  } else {
+    // Using the debug metadata for the last parentheses in the expression
+    // ensures that errors with deduced "Void" point to the absence of a return.
+    return_type = ParsedType{"Void", missing_return_type_token.meta};
   }
 
-  FunctionDeclaration fn{function_name, std::move(arguments),
-                         std::move(return_type.value_or(ParsedType{"Void"})),
-                         function_kind, is_variadic};
+  FunctionDeclaration fn{function_name,
+                         std::move(arguments),
+                         std::move(return_type.value()),
+                         function_kind,
+                         is_variadic,
+                         Metadata::fromTokens(start_of_arguments_token,
+                                              missing_return_type_token)};
 
   if (current_token_.kind == TokenKind::kEndExpr) {
     AdvanceToken();  // consume ';'

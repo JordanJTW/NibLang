@@ -14,31 +14,29 @@ class ProgramBuilder {
  public:
   explicit ProgramBuilder();
 
-  void EnterFunctionScope(
-      const std::string& name,
-      size_t call_idx,
-      std::vector<std::pair<std::string, ParsedType>> arguments,
-      std::vector<std::string> captures);
+  void EnterFunctionScope(const std::string& name,
+                          size_t call_idx,
+                          std::vector<Symbol> arguments,
+                          std::vector<Symbol> capture_arguments);
   void ExitFunctionScope();
 
-  enum class CreateIfMissing { No, Yes };
-  std::optional<uint32_t> GetIdFor(const std::string& name,
-                                   CreateIfMissing create);
   uint32_t GetIdForConstant(const std::string& value);
-
+  void PushSymbol(Symbol symbol);
+  void StoreSymbol(Symbol symbol);
   Assembler& GetCurrentCode();
-  void CallFunction(const std::string& name, size_t argc);
+
   std::vector<uint8_t> GenerateImage();
 
  private:
+  uint32_t GetIdFor(Symbol lookup);
+
   struct Function {
     std::string name;
     size_t call_idx;
-    std::map<std::string, int> var_to_id;
+    std::unordered_map<Symbol::Idx, size_t> symbol_to_local_idx;
     uint16_t next_id{0};
     uint16_t argc{0};
     Assembler code;
-    std::map<size_t, std::string> unresolved_calls;
   };
   std::vector<Function> functions_;
   std::map<std::string, int> func_ids_;

@@ -204,7 +204,7 @@ vm_value_t vm_promise_fulfill(vm_value_t* argv, size_t argc, void* userdata) {
   RC_AUTOFREE vm_value_t this = argv[0];
   promise_resolve(vm_get_job_queue(userdata), this, argv[1] /*takes ownership*/,
                   /*rejected=*/false);
-  return (vm_value_t){.type = VALUE_TYPE_NULL};
+  return (vm_value_t){.type = VALUE_TYPE_VOID};
 }
 vm_value_t vm_promise_reject(vm_value_t* argv, size_t argc, void* userdata) {
   assert(argc == 2 && is_promise(argv[0]) &&
@@ -213,7 +213,7 @@ vm_value_t vm_promise_reject(vm_value_t* argv, size_t argc, void* userdata) {
   RC_AUTOFREE vm_value_t this = argv[0];
   promise_resolve(vm_get_job_queue(userdata), this, argv[1] /*takes ownership*/,
                   /*rejected=*/true);
-  return (vm_value_t){.type = VALUE_TYPE_NULL};
+  return (vm_value_t){.type = VALUE_TYPE_VOID};
 }
 vm_value_t vm_promise_then(vm_value_t* argv, size_t argc, void* userdata) {
   assert(argc == 3 && is_promise(argv[0]) &&

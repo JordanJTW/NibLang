@@ -78,6 +78,7 @@ typedef struct vm_map_t {
 
 typedef struct vm_value {
   enum {
+    VALUE_TYPE_VOID,  // Special return value for functions
     VALUE_TYPE_NULL,
     VALUE_TYPE_BOOL,
     VALUE_TYPE_INT,

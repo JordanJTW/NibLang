@@ -8,6 +8,23 @@
 
 #include "compiler/tokenizer.h"
 
+using TypeId = size_t;
+
+struct Symbol {
+  using Idx = size_t;
+
+  enum Kind { Function, Struct, Field, Variable, Capture } kind;
+  TypeId type_id;
+  // Used for function table resolution, struct field ordering, etc.
+  std::optional<Idx> idx;
+
+  inline bool operator==(const Symbol& other) const {
+    return kind == other.kind && type_id == other.type_id && idx == other.idx;
+  }
+};
+
+std::ostream& operator<<(std::ostream& os, const Symbol& symbol);
+
 struct Expression;
 struct Statement;
 
@@ -35,8 +52,7 @@ struct StringLiteral {
 using CallIdx = size_t;
 
 struct ResolvedIdentifier {
-  enum { TypeName, Function, Value } kind;
-  CallIdx function_idx;
+  Symbol symbol;
 };
 
 struct Identifier {
@@ -107,10 +123,17 @@ struct ParsedUnionType {
   std::vector<ParsedType> names;
 };
 
+struct ParsedFunctionType {
+  std::vector<ParsedType> arguments;
+  std::shared_ptr<ParsedType> return_value;
+};
+
 struct ParsedType {
-  std::variant<std::string, ParsedUnionType> type;
+  std::variant<std::string, ParsedUnionType, ParsedFunctionType> type;
   Metadata metadata;
 };
+
+std::ostream& operator<<(std::ostream& os, const ParsedType& type);
 
 struct TypeCastExpression {
   std::unique_ptr<Expression> expr;
@@ -118,9 +141,11 @@ struct TypeCastExpression {
 };
 
 struct ResolvedFunction {
-  CallIdx call_idx;
-  bool is_void_return = false;
-  std::vector<std::string> captures;
+  Symbol function_symbol;
+  std::vector<Symbol> variables_to_capture;
+
+  std::vector<Symbol> arguments;
+  std::vector<Symbol> capture_arguments;
 };
 
 struct FunctionDeclaration {
@@ -130,15 +155,17 @@ struct FunctionDeclaration {
   ParsedType return_type;
   FunctionKind function_kind;
   bool is_variadic = false;
+
+  Metadata argument_range;
+
   std::unique_ptr<Block> body;
   std::optional<ResolvedFunction> resolved;
+  size_t local_count = 0;
 };
 
 struct ClosureExpression {
   FunctionDeclaration fn;
 };
-
-using TypeId = size_t;
 
 struct Expression {
   std::variant<PrimaryExpression,
@@ -191,6 +218,7 @@ struct AssignStatement {
   std::string name;
   std::optional<ParsedType> type;
   std::unique_ptr<Expression> value;
+  std::optional<ResolvedIdentifier> resolved;
 };
 
 struct Statement {
@@ -208,7 +236,3 @@ struct Statement {
       as;
   Metadata meta;
 };
-
-void print_statement(const Statement& stmt, size_t indent = 0);
-void print_expression(const std::unique_ptr<Expression>& expr,
-                      size_t indent = 0);

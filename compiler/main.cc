@@ -5,9 +5,12 @@
 #include "compiler/assembler.h"
 #include "compiler/logging.h"
 #include "compiler/parser.h"
+#include "compiler/printer.h"
 #include "compiler/program_builder.h"
+#include "compiler/semantic_analyzer.h"
 #include "compiler/tokenizer.h"
-#include "compiler/type_checker.h"
+#include "compiler/type_context.h"
+#include "src/prog_types.h"
 #include "src/vm.h"
 
 template <class... Ts>
@@ -66,58 +69,85 @@ struct LoopContext {
 
 void compile(const Block& root,
              ProgramBuilder& builder,
+             TypeContext& type_context,
              std::optional<LoopContext> loop_ctx = std::nullopt);
 
 void compile_expr(const std::unique_ptr<Expression>& expr,
-                  ProgramBuilder& builder);
+                  ProgramBuilder& builder,
+                  TypeContext& type_context);
 
 static size_t kUniqueBlockId = 0;
 
-void compile_call(const CallExpression& call, ProgramBuilder& builder) {
+void compile_call(const CallExpression& call,
+                  ProgramBuilder& builder,
+                  TypeContext& type_context) {
   if (call.resolved) {
     switch (call.resolved->kind) {
       case Free:
       case Extern:
       case StaticMethod:
         for (const auto& arg : call.arguments)
-          compile_expr(arg, builder);
+          compile_expr(arg, builder, type_context);
         builder.GetCurrentCode().Call(call.resolved->function_idx,
                                       call.arguments.size());
 
         break;
       case Anonymous:
-        compile_expr(call.callee, builder);
         for (const auto& arg : call.arguments)
-          compile_expr(arg, builder);
+          compile_expr(arg, builder, type_context);
+        compile_expr(call.callee, builder, type_context);
         builder.GetCurrentCode().CallDynamic(call.arguments.size());
         break;
       case Method:
         if (const auto* const member_access =
                 std::get_if<MemberAccessExpression>(&call.callee->as)) {
-          compile_expr(member_access->object, builder);
+          compile_expr(member_access->object, builder, type_context);
           for (const auto& arg : call.arguments)
-            compile_expr(arg, builder);
+            compile_expr(arg, builder, type_context);
 
           builder.GetCurrentCode().Call(call.resolved->function_idx,
                                         call.arguments.size() + 1);
         }
         break;
       case Constructor:
-        builder.GetCurrentCode().PushInt32(call.arguments.size());
         for (const auto& arg : call.arguments)
-          compile_expr(arg, builder);
-        builder.CallFunction("Array_init", call.arguments.size() + 1);
+          compile_expr(arg, builder, type_context);
+        builder.GetCurrentCode().Call(VM_BUILTIN_ARRAY_INIT,
+                                      call.arguments.size());
         break;
     }
   }
 }
 
+void compile_fn(const FunctionDeclaration& fn,
+                ProgramBuilder& builder,
+                TypeContext& type_context,
+                std::optional<std::string> override_name = std::nullopt) {
+  builder.EnterFunctionScope(
+      override_name.value_or(fn.name), fn.resolved->function_symbol.idx.value(),
+      fn.resolved->arguments, fn.resolved->capture_arguments);
+  compile(*fn.body, builder, type_context);
+
+  const auto& type = type_context.GetTypeInfo<FunctionType>(
+      fn.resolved->function_symbol.type_id);
+
+  // Insert an return; to unwind the stack
+  if (type->return_type == TypeContext::LiteralType::Void)
+    builder.GetCurrentCode().Return();
+  builder.ExitFunctionScope();
+}
+
 void compile_expr(const std::unique_ptr<Expression>& expr,
-                  ProgramBuilder& builder) {
+                  ProgramBuilder& builder,
+                  TypeContext& type_context) {
   if (expr == nullptr) {
     LOG(ERROR) << "Failed to compile null expression";
     return;
   }
+
+  // builder.GetCurrentCode().DebugString(
+  //     std::to_string(expr->meta.line_range.start) + " -> " +
+  //     std::to_string(expr->meta.line_range.end));
 
   std::visit(
       Overloaded{
@@ -132,24 +162,23 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
                       CHECK(ident.resolved)
                           << "Unresolved identifier: " << ident.name;
 
-                      switch (ident.resolved->kind) {
-                        case ResolvedIdentifier::Function:
+                      switch (ident.resolved->symbol.kind) {
+                        case Symbol::Function:
+                          CHECK(ident.resolved->symbol.idx.has_value())
+                              << "Function symbol missing index: "
+                              << ident.name;
                           builder.GetCurrentCode().Bind(
-                              ident.resolved->function_idx, /*argc=*/0);
+                              ident.resolved->symbol.idx.value(),
+                              /*argc=*/0);
                           break;
-                        case ResolvedIdentifier::Value: {
-                          std::optional<uint32_t> id = builder.GetIdFor(
-                              ident.name, ProgramBuilder::CreateIfMissing::No);
-                          if (id.has_value()) {
-                            builder.GetCurrentCode().PushLocal(*id);
-                          } else {
-                            LOG(ERROR)
-                                << "undefined identifier: " << ident.name;
-                          }
+                        case Symbol::Variable:
+                        case Symbol::Capture: {
+                          builder.PushSymbol(ident.resolved->symbol);
                           break;
                         }
-                        case ResolvedIdentifier::TypeName:
-                          LOG(ERROR) << "type names are not valid identifiers";
+                        default:
+                          LOG(ERROR) << "Unsupported identifier kind: "
+                                     << ident.resolved->symbol.kind;
                           break;
                       }
                     },
@@ -162,36 +191,34 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
                 primary.value);
           },
           [&](const BinaryExpression& binary) {
-            compile_expr(binary.lhs, builder);
-            compile_expr(binary.rhs, builder);
+            compile_expr(binary.lhs, builder, type_context);
+            compile_expr(binary.rhs, builder, type_context);
             emit_op(Token{.kind = binary.op}, binary.is_string, builder);
           },
-          [&](const CallExpression& call) { compile_call(call, builder); },
+          [&](const CallExpression& call) {
+            compile_call(call, builder, type_context);
+          },
           [&](const AssignmentExpression& assign) {
             if (std::holds_alternative<PrimaryExpression>(assign.lhs->as) &&
                 std::holds_alternative<Identifier>(
                     std::get<PrimaryExpression>(assign.lhs->as).value)) {
-              compile_expr(assign.rhs, builder);
+              compile_expr(assign.rhs, builder, type_context);
 
-              std::string var_name =
-                  std::get<Identifier>(
-                      std::get<PrimaryExpression>(assign.lhs->as).value)
-                      .name;
-              std::optional<uint32_t> id = builder.GetIdFor(
-                  var_name, ProgramBuilder::CreateIfMissing::No);
-              if (!id.has_value()) {
-                LOG(ERROR) << "undefined identifier: " << var_name;
-              }
-              builder.GetCurrentCode().StoreLocal(*id);
+              const auto& ident = std::get<Identifier>(
+                  std::get<PrimaryExpression>(assign.lhs->as).value);
+              const auto& resolved = ident.resolved;
+              CHECK(resolved) << "Unresolved identifier on LHS of assignment: "
+                              << ident.name;
+              builder.StoreSymbol(resolved->symbol);
             } else if (std::holds_alternative<ArrayAccessExpression>(
                            assign.lhs->as)) {
               const auto& array_access =
                   std::get<ArrayAccessExpression>(assign.lhs->as);
-              compile_expr(array_access.array, builder);
-              compile_expr(array_access.index, builder);
-              compile_expr(assign.rhs, builder);
+              compile_expr(array_access.array, builder, type_context);
+              compile_expr(array_access.index, builder, type_context);
+              compile_expr(assign.rhs, builder, type_context);
 
-              builder.CallFunction("Array_set", 3);
+              builder.GetCurrentCode().Call(VM_BUILTIN_ARRAY_SET, 3);
             } else if (auto* const member_access =
                            std::get_if<MemberAccessExpression>(
                                &assign.lhs->as)) {
@@ -201,20 +228,20 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
                 return;
               }
 
-              compile_expr(member_access->object, builder);
+              compile_expr(member_access->object, builder, type_context);
               builder.GetCurrentCode().PushInt32(
                   member_access->resolved->index);
-              compile_expr(assign.rhs, builder);
-              builder.CallFunction("Array_set", 3);
+              compile_expr(assign.rhs, builder, type_context);
+              builder.GetCurrentCode().Call(VM_BUILTIN_ARRAY_SET, 3);
             } else {
               LOG(ERROR) << "unsupported LHS in assignment expression";
             }
           },
           [&](const MemberAccessExpression& member_access) {
             if (const auto& resolved = member_access.resolved) {
-              compile_expr(member_access.object, builder);
+              compile_expr(member_access.object, builder, type_context);
               builder.GetCurrentCode().PushInt32(resolved->index);
-              builder.CallFunction("Array_get", 2);
+              builder.GetCurrentCode().Call(VM_BUILTIN_ARRAY_GET, 2);
             } else {
               LOG(FATAL) << "Unresolved member access: "
                          << member_access.member_name
@@ -222,12 +249,12 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
             }
           },
           [&](const ArrayAccessExpression& array_access) {
-            compile_expr(array_access.array, builder);
-            compile_expr(array_access.index, builder);
-            builder.CallFunction("Array_get", 2);
+            compile_expr(array_access.array, builder, type_context);
+            compile_expr(array_access.index, builder, type_context);
+            builder.GetCurrentCode().Call(VM_BUILTIN_ARRAY_GET, 2);
           },
           [&](const LogicExpression& logic) {
-            compile_expr(logic.lhs, builder);
+            compile_expr(logic.lhs, builder, type_context);
 
             static size_t id = 0;
             std::string lhs_label = "logic_lhs_" + std::to_string(id++);
@@ -240,7 +267,7 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
               builder.GetCurrentCode().JumpIfTrue(lhs_label);
             }
 
-            compile_expr(logic.rhs, builder);
+            compile_expr(logic.rhs, builder, type_context);
             builder.GetCurrentCode().Jump(end_label);
 
             // Short-circuiting consumes the LHS value on the stack, so we need
@@ -256,25 +283,18 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
           },
           [&](const ClosureExpression& closure) {
             CHECK(closure.fn.resolved) << "Unresolved function!";
-            builder.EnterFunctionScope(
-                closure.fn.name, closure.fn.resolved->call_idx,
-                closure.fn.arguments, closure.fn.resolved->captures);
-            compile(*closure.fn.body, builder);
-            builder.ExitFunctionScope();
+            compile_fn(closure.fn, builder, type_context);
 
-            for (const auto& capture : closure.fn.resolved->captures) {
-              std::optional<uint32_t> id = builder.GetIdFor(
-                  capture, ProgramBuilder::CreateIfMissing::No);
-              CHECK(id) << "Missing capture in outer scope variable: "
-                        << capture;
-              builder.GetCurrentCode().PushLocal(*id);
+            for (const auto& capture :
+                 closure.fn.resolved->variables_to_capture) {
+              builder.PushSymbol(capture);
             }
             builder.GetCurrentCode().Bind(
-                closure.fn.resolved->call_idx,
-                /*argc=*/closure.fn.resolved->captures.size());
+                closure.fn.resolved->function_symbol.idx.value(),
+                /*argc=*/closure.fn.resolved->variables_to_capture.size());
           },
           [&](PrefixUnaryExpression& prefix) {
-            compile_expr(prefix.operand, builder);
+            compile_expr(prefix.operand, builder, type_context);
             switch (prefix.op) {
               case TokenKind::kPlus:  // no-op
                 break;
@@ -298,114 +318,244 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
           [&](PostfixUnaryExpression& postfix) {
             LOG(FATAL) << "PostFix are not yet supported!";
           },
-          [&](TypeCastExpression& cast) { compile_expr(cast.expr, builder); },
+          [&](TypeCastExpression& cast) {
+            compile_expr(cast.expr, builder, type_context);
+          },
       },
       expr->as);
 }
 
 void compile(const Block& root,
              ProgramBuilder& builder,
+             TypeContext& type_context,
              std::optional<LoopContext> loop_ctx) {
   for (const auto& stmt : root.statements) {
     std::visit(
-        Overloaded{[&](const std::unique_ptr<Expression>& expr) {
-                     compile_expr(expr, builder);
-                   },
-                   [&](const FunctionDeclaration& fn) {
-                     if (fn.body) {
-                       CHECK(fn.resolved->captures.empty())
-                           << "Captures found for function.";
+        Overloaded{
+            [&](const std::unique_ptr<Expression>& expr) {
+              compile_expr(expr, builder, type_context);
+            },
+            [&](const FunctionDeclaration& fn) {
+              if (fn.body) {
+                CHECK(fn.resolved->variables_to_capture.empty())
+                    << "Captures found for function.";
 
-                       builder.EnterFunctionScope(
-                           fn.name, fn.resolved->call_idx, fn.arguments, {});
-                       compile(*fn.body, builder);
-                       // Insert an return; to unwind the stack
-                       if (fn.resolved->is_void_return)
-                         builder.GetCurrentCode().Return();
-                       builder.ExitFunctionScope();
-                     }
-                   },
-                   [&](const ReturnStatement& ret) {
-                     compile_expr(ret.value, builder);
-                     builder.GetCurrentCode().Return();
-                   },
-                   [&](const ThrowStatement& thr) {
-                     compile_expr(thr.value, builder);
-                     builder.GetCurrentCode().Throw();
-                   },
-                   [&](const IfStatement& if_stmt) {
-                     compile_expr(if_stmt.condition, builder);
-                     std::string id = std::to_string(kUniqueBlockId++);
-                     builder.GetCurrentCode().JumpIfFalse("else" + id);
-                     compile(if_stmt.then_body, builder, loop_ctx);
-                     builder.GetCurrentCode().Jump("end_if" + id);
-                     builder.GetCurrentCode().Label("else" + id);
-                     compile(if_stmt.else_body, builder, loop_ctx);
-                     builder.GetCurrentCode().Label("end_if" + id);
-                   },
-                   [&](const WhileStatement& while_stmt) {
-                     std::string id = std::to_string(kUniqueBlockId++);
-                     std::string condition_label = "while_cond" + id;
-                     std::string end_label = "while_end" + id;
+                compile_fn(fn, builder, type_context);
+              }
+            },
+            [&](const ReturnStatement& ret) {
+              compile_expr(ret.value, builder, type_context);
+              builder.GetCurrentCode().Return();
+            },
+            [&](const ThrowStatement& thr) {
+              compile_expr(thr.value, builder, type_context);
+              builder.GetCurrentCode().Throw();
+            },
+            [&](const IfStatement& if_stmt) {
+              compile_expr(if_stmt.condition, builder, type_context);
+              std::string id = std::to_string(kUniqueBlockId++);
+              builder.GetCurrentCode().JumpIfFalse("else" + id);
+              compile(if_stmt.then_body, builder, type_context, loop_ctx);
+              builder.GetCurrentCode().Jump("end_if" + id);
+              builder.GetCurrentCode().Label("else" + id);
+              compile(if_stmt.else_body, builder, type_context, loop_ctx);
+              builder.GetCurrentCode().Label("end_if" + id);
+            },
+            [&](const WhileStatement& while_stmt) {
+              std::string id = std::to_string(kUniqueBlockId++);
+              std::string condition_label = "while_cond" + id;
+              std::string end_label = "while_end" + id;
 
-                     builder.GetCurrentCode().Label(condition_label);
-                     compile_expr(while_stmt.condition, builder);
-                     builder.GetCurrentCode().JumpIfFalse(end_label);
-                     compile(while_stmt.body, builder,
-                             LoopContext{end_label, condition_label});
-                     builder.GetCurrentCode().Jump(condition_label);
-                     builder.GetCurrentCode().Label(end_label);
-                   },
-                   [&](const BreakStatement&) {
-                     if (!loop_ctx) {
-                       LOG(ERROR) << "break statement not within a loop";
-                       return;
-                     }
-                     builder.GetCurrentCode().Jump(loop_ctx->break_label);
-                   },
-                   [&](const ContinueStatement&) {
-                     if (!loop_ctx) {
-                       LOG(ERROR) << "continue statement not within a loop";
-                       return;
-                     }
-                     builder.GetCurrentCode().Jump(loop_ctx->continue_label);
-                   },
-                   [&](const AssignStatement& assign) {
-                     compile_expr(assign.value, builder);
+              builder.GetCurrentCode().Label(condition_label);
+              compile_expr(while_stmt.condition, builder, type_context);
+              builder.GetCurrentCode().JumpIfFalse(end_label);
+              compile(while_stmt.body, builder, type_context,
+                      LoopContext{end_label, condition_label});
+              builder.GetCurrentCode().Jump(condition_label);
+              builder.GetCurrentCode().Label(end_label);
+            },
+            [&](const BreakStatement&) {
+              if (!loop_ctx) {
+                LOG(ERROR) << "break statement not within a loop";
+                return;
+              }
+              builder.GetCurrentCode().Jump(loop_ctx->break_label);
+            },
+            [&](const ContinueStatement&) {
+              if (!loop_ctx) {
+                LOG(ERROR) << "continue statement not within a loop";
+                return;
+              }
+              builder.GetCurrentCode().Jump(loop_ctx->continue_label);
+            },
+            [&](const AssignStatement& assign) {
+              compile_expr(assign.value, builder, type_context);
+              CHECK(assign.resolved)
+                  << "Unresolved variable in assignment: " << assign.name;
 
-                     std::optional<uint32_t> id = builder.GetIdFor(
-                         assign.name, ProgramBuilder::CreateIfMissing::Yes);
-                     builder.GetCurrentCode().StoreLocal(*id);
-                   },
-                   [&](const StructDeclaration& struct_decl) {
-                     for (const auto& method : struct_decl.methods) {
-                       if (!method.second.body)
-                         continue;
+              builder.StoreSymbol(assign.resolved->symbol);
+            },
+            [&](const StructDeclaration& struct_decl) {
+              for (const auto& method : struct_decl.methods) {
+                if (!method.second.body)
+                  continue;
 
-                       CHECK(method.second.resolved->captures.empty())
-                           << "Captures found for method.";
+                CHECK(method.second.resolved)
+                    << "Unresolved method: " << method.first;
+                CHECK(method.second.resolved->variables_to_capture.empty())
+                    << "Captures found for method: " << method.first;
 
-                       builder.EnterFunctionScope(
-                           struct_decl.name + "_" + method.first,
-                           method.second.resolved->call_idx,
-                           method.second.arguments, {});
-                       compile(*method.second.body, builder);
-                       builder.ExitFunctionScope();
-                     }
-                   }},
+                compile_fn(method.second, builder, type_context,
+                           struct_decl.name + "_" + method.first);
+              }
+            }},
         stmt->as);
   }
 }
 
-int main(int argc, char* argv[]) {
-  if (argc < 2) {
-    fprintf(stderr, "%s <path>\n", argv[0]);
-    return 1;
+int DumpImage(const uint8_t* program, size_t program_size) {
+  if (sizeof(vm_prog_header_t) > program_size) {
+    LOG(ERROR) << "Program too small to contain header";
+    return -1;
   }
 
-  std::ifstream file(argv[1]);
+  vm_prog_header_t header;
+  memcpy(&header, program, sizeof(vm_prog_header_t));
+
+  if (header.magic[0] != 'I' || header.magic[1] != 'N' ||
+      header.magic[2] != 'K' || header.magic[3] != '!') {
+    LOG(ERROR) << "Invalid magic";
+    return -1;
+  }
+
+  LOG(INFO) << "Program version: " << header.version;
+  LOG(INFO) << "Constants: " << header.constant_count;
+  LOG(INFO) << "Functions: " << header.function_count;
+  LOG(INFO) << "Bytecode Size: " << header.bytecode_size;
+  LOG(INFO) << "Debug Size: " << header.debug_size;
+
+  size_t offset = sizeof(vm_prog_header_t);
+
+  size_t parsed_constants = 0;
+  size_t parsed_functions = 0;
+  std::vector<uint8_t> debug_data;
+
+  struct FunctionInfo {
+    uint32_t arg_count;
+    uint32_t local_count;
+    uint32_t name_offset;
+    std::vector<uint8_t> bytecode;
+  };
+  std::vector<FunctionInfo> functions;
+
+  while (offset + sizeof(vm_section_t) < program_size) {
+    vm_section_t section;
+    memcpy(&section, program + offset, sizeof(vm_section_t));
+    offset += sizeof(vm_section_t);
+
+    if (offset + section.size > program_size) {
+      LOG(ERROR) << "Section size exceeds program size";
+      return -1;
+    }
+
+    switch (section.type) {
+      case vm_section_t::CONST_STR: {
+        const char* str = reinterpret_cast<const char*>(program + offset);
+        LOG(INFO) << "Constant " << parsed_constants++ << ": \""
+                  << std::string(str, section.size) << "\"";
+        break;
+      }
+
+      case vm_section_t::FUNCTION: {
+        FunctionInfo fn;
+        fn.arg_count = section.as.fn.argument_count;
+        fn.local_count = section.as.fn.local_count;
+        fn.name_offset = section.as.fn.name_offset;
+        fn.bytecode.assign(program + offset, program + offset + section.size);
+        functions.push_back(std::move(fn));
+        parsed_functions++;
+        break;
+      }
+
+      case vm_section_t::DEBUG: {
+        debug_data.assign(program + offset, program + offset + section.size);
+        break;
+      }
+
+      default:
+        LOG(ERROR) << "Unknown section type: "
+                   << static_cast<int>(section.type);
+        return -1;
+    }
+    offset += section.size;
+  }
+
+  for (size_t i = 0; i < functions.size(); i++) {
+    const auto& fn = functions[i];
+
+    const char* name = "<unknown>";
+
+    if (!debug_data.empty() && fn.name_offset < debug_data.size()) {
+      name = reinterpret_cast<const char*>(debug_data.data() + fn.name_offset);
+    }
+
+    LOG(INFO) << "Function " << i << ": " << name << " (args: " << fn.arg_count
+              << ", locals: " << fn.local_count
+              << ", bytecode size: " << fn.bytecode.size() << ")";
+    DumpByteCode(fn.bytecode);
+    printf("\n");
+  }
+
+  if (parsed_constants != header.constant_count ||
+      parsed_functions != header.function_count) {
+    LOG(WARNING) << "counts mismatch";
+    LOG(WARNING) << "Constants: " << parsed_constants << " / "
+                 << header.constant_count;
+    LOG(WARNING) << "Functions: " << parsed_functions << " / "
+                 << header.function_count;
+  }
+  return 0;
+}
+
+enum class OutputMode { Ast, DumpImage, Image };
+
+struct Options {
+  OutputMode mode = OutputMode::Image;
+  std::string input_path;
+  std::string output_path;
+};
+
+Options ParseArgs(int argc, char* argv[]) {
+  Options opts;
+
+  for (int i = 1; i < argc; i++) {
+    std::string arg = argv[i];
+
+    if (arg == "--ast") {
+      opts.mode = OutputMode::Ast;
+    } else if (arg == "--dump") {
+      opts.mode = OutputMode::DumpImage;
+    } else if (arg == "--output" && i + 1 < argc) {
+      opts.output_path = argv[++i];
+    } else {
+      opts.input_path = arg;
+    }
+  }
+
+  if (opts.input_path.empty()) {
+    fprintf(stderr, "Usage: %s [--ast|--dump] <file>\n", argv[0]);
+    exit(1);
+  }
+
+  return opts;
+}
+
+int main(int argc, char* argv[]) {
+  Options opts = ParseArgs(argc, argv);
+
+  std::ifstream file(opts.input_path);
   if (!file) {
-    fprintf(stderr, "Error opening: %s\n", argv[1]);
+    fprintf(stderr, "Error opening: %s\n", opts.input_path.c_str());
     return 1;
   }
 
@@ -416,23 +566,42 @@ int main(int argc, char* argv[]) {
   Parser parser(contents);
 
   Block root = parser.Parse();
-  TypeChecker type_checker(contents);
-  type_checker.Check(root);
 
-  std::cout << "Finished parsing. Printing AST:\n";
-  for (const auto& stmt : root.statements) {
-    print_statement(*stmt);
+  auto error_collector = DefaultErrorCollector(contents);
+
+  TypeContext type_context(*error_collector);
+  SemanticAnalyzer analyzer(type_context, *error_collector);
+  analyzer.Check(root);
+
+  if (error_collector->HasErrors()) {
+    error_collector->PrintAllErrors();
+    return 1;
   }
 
-  compile(root, builder);
+  if (opts.mode == OutputMode::Ast) {
+    Printer(&type_context).Print(root);
+    return 0;
+  }
+
+  compile(root, builder, type_context);
 
   std::vector<uint8_t> program_image = builder.GenerateImage();
-  std::ofstream out("/tmp/prog.ink", std::ios::binary);
 
-  if (out.is_open()) {
-    out.write(reinterpret_cast<const char*>(program_image.data()),
-              program_image.size());
-    out.close();
+  if (opts.mode == OutputMode::DumpImage) {
+    return DumpImage(program_image.data(), program_image.size());
+  }
+
+  if (opts.output_path.empty()) {
+    std::cout.write(reinterpret_cast<const char*>(program_image.data()),
+                    program_image.size());
+    std::cout.flush();
+  } else {
+    std::ofstream out(opts.output_path, std::ios::binary);
+    if (out.is_open()) {
+      out.write(reinterpret_cast<const char*>(program_image.data()),
+                program_image.size());
+      out.close();
+    }
   }
   return 0;
 }

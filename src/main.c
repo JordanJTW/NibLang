@@ -56,6 +56,9 @@ void print_result(vm_value_t* result, int indent) {
     case VALUE_TYPE_NULL:
       printf("(null)\n");
       break;
+    case VALUE_TYPE_VOID:
+      printf("<none!?>");
+      break;
   }
 }
 
@@ -64,7 +67,7 @@ static vm_value_t vm_log(vm_value_t* argv, size_t argc, void* vm) {
     print_result(&argv[i], /*indent=*/0);
     vm_free_ref(&argv[i]);
   }
-  return (vm_value_t){.type = VALUE_TYPE_NULL};
+  return (vm_value_t){.type = VALUE_TYPE_VOID};
 }
 
 static vm_value_t vm_fetch(vm_value_t* argv, size_t argc, void* vm) {

@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "src/types.h"
 #include "src/vm.h"
@@ -34,13 +35,9 @@ vm_value_t vm_array_new(vm_value_t* argv, size_t argc, void* vm) {
 }
 
 vm_value_t vm_array_init(vm_value_t* argv, size_t argc, void* vm) {
-  int length = argc >= 1 ? argv[0].as.i32 : 0;
-  assert((argc == length + 1) && "length and argc must match");
-  Array* array = allocate_array(length);
+  Array* array = allocate_array(argc);
 
-  for (int i = 1; i <= length; ++i) {
-    array->data[i - 1] = argv[i];
-  }
+  memcpy(array->data, argv, argc * sizeof(vm_value_t));
   return (vm_value_t){.type = VALUE_TYPE_ARRAY, .as.array = array};
 }
 
@@ -89,7 +86,7 @@ vm_value_t vm_array_set(vm_value_t* argv, size_t argc, void* vm) {
   vm_free_ref(&array->data[idx]);  // Free whatever is currently there
 
   array->data[idx] = argv[2];
-  return (vm_value_t){.type = VALUE_TYPE_NULL};
+  return (vm_value_t){.type = VALUE_TYPE_VOID};
 }
 
 vm_value_t vm_array_push(vm_value_t* argv, size_t argc, void* vm) {
@@ -116,5 +113,5 @@ vm_value_t vm_array_push(vm_value_t* argv, size_t argc, void* vm) {
   }
 
   array->data[array->len++] = argv[1];
-  return (vm_value_t){.type = VALUE_TYPE_NULL};
+  return (vm_value_t){.type = VALUE_TYPE_VOID};
 }

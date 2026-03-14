@@ -31,6 +31,10 @@ std::string_view GetFileName(std::string_view filepath) {
   return filepath.substr(filepath.rfind('/') + 1);
 }
 
+[[noreturn]] inline void ImmediateCrash() {
+  __builtin_trap();
+}
+
 }  // namespace
 
 LogMessage::LogMessage(const char* filename,
@@ -44,7 +48,7 @@ LogMessage::LogMessage(const char* filename,
 LogMessage::~LogMessage() {
   fprintf(stderr, "%s\n", stream_.str().c_str());
   if (severity_ == FATAL) {
-    abort();
+    ImmediateCrash();
   }
 }
 

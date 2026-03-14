@@ -41,6 +41,7 @@ class Parser {
 
   std::optional<ParsedType> ParseType();
   std::optional<ParsedType> ParseUnionType();
+  std::optional<ParsedType> ParseFunctionType();
   std::optional<ParsedType> ParsePrimaryType();
 
   std::optional<Token> ExpectNextToken(TokenKind expected_kind,

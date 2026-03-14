@@ -12,6 +12,7 @@
 
 #include "src/array.h"
 #include "src/map.h"
+#include "src/prog_types.h"
 #include "src/promise.h"
 #include "src/strings.h"
 #include "src/types.h"
@@ -47,6 +48,8 @@ static void rc_decrement(vm_value_t* value);
 
 static bool value_to_bool(vm_value_t value) {
   switch (value.type) {
+    case VALUE_TYPE_VOID:
+      assert(false && "VALUE_TYPE_VOID should never appear on stack");
     case VALUE_TYPE_NULL:
       return false;
     case VALUE_TYPE_BOOL:
@@ -155,6 +158,7 @@ void free_vm(vm_t* vm) {
 
 static void rc_increment(vm_value_t* value) {
   switch (value->type) {
+    case VALUE_TYPE_VOID:
     case VALUE_TYPE_NULL:
     case VALUE_TYPE_BOOL:
     case VALUE_TYPE_INT:
@@ -174,6 +178,7 @@ static void rc_increment(vm_value_t* value) {
 
 static void rc_decrement(vm_value_t* value) {
   switch (value->type) {
+    case VALUE_TYPE_VOID:
     case VALUE_TYPE_NULL:
     case VALUE_TYPE_BOOL:
     case VALUE_TYPE_INT:
@@ -841,6 +846,7 @@ vm_value_t bind_to_function(vm_t* vm,
   func->bound_argc = argc;
   func->ref_count.deleter = &free_closure;
   memcpy(func->argument_storage, argv, argc * sizeof(vm_value_t));
+
   for (size_t i = 0; i < argc; ++i)
     rc_increment(&func->argument_storage[i]);
   return (vm_value_t){.type = VALUE_TYPE_FUNCTION, .as.fn = func};
@@ -869,35 +875,6 @@ vm_value_t vm_throw_exception(vm_t* vm, vm_value_t exception) {
   vm->unhandled_exception = true;
   return (vm_value_t){.type = VALUE_TYPE_NULL};
 }
-
-#pragma pack(push, 1)
-typedef struct vm_prog_header_t {
-  uint32_t version;
-  char magic[4];
-  uint16_t function_count;
-  uint16_t constant_count;
-  uint32_t bytecode_size;
-  uint32_t debug_size;
-} vm_prog_header_t;
-
-static const size_t o = sizeof(vm_prog_header_t);
-
-typedef struct vm_prog_function_t {
-  uint16_t argument_count;
-  uint16_t local_count;
-  uint16_t name_offset;
-  uint8_t bytecode[];
-} vm_prog_function_t;
-
-typedef struct vm_section_t {
-  enum : uint8_t { CONST_STR, FUNCTION, DEBUG } type;
-  uint32_t size;
-  union {
-    vm_prog_function_t fn;
-    char str[];
-  } as;
-} vm_section_t;
-#pragma pack(pop)
 
 vm_t* init_vm(const uint8_t* program,
               size_t program_size,
@@ -1014,7 +991,7 @@ void vm_invoke(vm_t* vm, vm_function_t* fn, vm_value_t* argv, size_t argc) {
     }
     case VM_NATIVE_FUNC: {
       vm_value_t result = fn->as.native.fn(argv, argc, fn->as.native.userdata);
-      if (result.type != VALUE_TYPE_NULL)
+      if (result.type != VALUE_TYPE_VOID)
         push_stack(&vm->stack, result);
       break;
     }

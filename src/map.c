@@ -62,6 +62,8 @@ static int compare(vm_value_t v1, vm_value_t v2) {
     return v1.type - v2.type;
 
   switch (v1.type) {
+    case VALUE_TYPE_VOID:
+      assert(false && "VALUE_TYPE_VOID should never appear on the stack");
     case VALUE_TYPE_NULL:
     case VALUE_TYPE_BOOL:
     case VALUE_TYPE_FLOAT:
@@ -169,5 +171,5 @@ vm_value_t vm_map_set(vm_value_t* argv, size_t argc, void* vm) {
 
   RC_AUTOFREE vm_value_t this = argv[0];
   map_insert(this.as.map, argv[1], argv[2]);
-  return (vm_value_t){.type = VALUE_TYPE_NULL};
+  return (vm_value_t){.type = VALUE_TYPE_VOID};
 }

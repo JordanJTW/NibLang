@@ -11,46 +11,56 @@
 #include <vector>
 
 #include "compiler/logging.h"
+#include "src/prog_types.h"
 #include "src/vm.h"
 
 ProgramBuilder::ProgramBuilder() {
-  func_ids_["String_charAt"] = VM_BUILTIN_STRINGS_GET;
-  func_ids_["String_substr"] = VM_BUILTIN_STRINGS_SUBSTRING;
-  func_ids_["String_startsWith"] = VM_BUILTIN_STRINGS_STARTWITH;
-  func_ids_["String_length"] = VM_BUILTIN_STRING_LENGTH;
-  func_ids_["Map_new"] = VM_BUILTIN_MAP_NEW;
-  func_ids_["Map_set"] = VM_BUILTIN_MAP_SET;
-  func_ids_["Array_new"] = VM_BUILTIN_ARRAY_NEW;
-  func_ids_["Array_init"] = VM_BUILTIN_ARRAY_INIT;
-  func_ids_["Array_get"] = VM_BUILTIN_ARRAY_GET;
-  func_ids_["Array_set"] = VM_BUILTIN_ARRAY_SET;
-
   EnterFunctionScope("main", 0, {}, {});
 }
 
-void ProgramBuilder::EnterFunctionScope(
-    const std::string& name,
-    size_t call_idx,
-    std::vector<std::pair<std::string, ParsedType>> arguments,
-    std::vector<std::string> captures) {
+void ProgramBuilder::EnterFunctionScope(const std::string& name,
+                                        size_t call_idx,
+                                        std::vector<Symbol> arguments,
+                                        std::vector<Symbol> capture_arguments) {
   size_t fn_id = next_func_id_++;
   function_decl_stack_.push(fn_id);
 
   Function& function = functions_.emplace_back();
   function.name = name;
   function.call_idx = call_idx;
-  for (const auto& capture : captures) {
-    function.var_to_id[capture] = function.next_id++;
-    ++function.argc;
+  function.argc = capture_arguments.size() + arguments.size();
+
+  for (const auto& capture : capture_arguments) {
+    function.symbol_to_local_idx[capture.idx.value()] = function.next_id++;
   }
 
   for (const auto& arg : arguments) {
-    function.var_to_id[arg.first] = function.next_id++;
-    ++function.argc;
+    function.symbol_to_local_idx[arg.idx.value()] = function.next_id++;
   }
 }
 void ProgramBuilder::ExitFunctionScope() {
   function_decl_stack_.pop();
+}
+
+void ProgramBuilder::PushSymbol(Symbol symbol) {
+  uint32_t local_idx = GetIdFor(symbol);
+  GetCurrentCode().PushLocal(local_idx);
+}
+
+void ProgramBuilder::StoreSymbol(Symbol symbol) {
+  uint32_t local_idx = GetIdFor(symbol);
+  GetCurrentCode().StoreLocal(local_idx);
+}
+
+uint32_t ProgramBuilder::GetIdFor(Symbol lookup) {
+  auto& current_scope_symbols = GetCurrentScope().symbol_to_local_idx;
+  if (auto it = current_scope_symbols.find(lookup.idx.value());
+      it != current_scope_symbols.end())
+    return it->second;
+
+  uint32_t id = GetCurrentScope().next_id++;
+  current_scope_symbols[lookup.idx.value()] = id;
+  return id;
 }
 
 uint32_t ProgramBuilder::GetIdForConstant(const std::string& value) {
@@ -61,61 +71,9 @@ uint32_t ProgramBuilder::GetIdForConstant(const std::string& value) {
   return next_const_id_++;
 }
 
-std::optional<uint32_t> ProgramBuilder::GetIdFor(const std::string& name,
-                                                 CreateIfMissing create) {
-  Function& fn = GetCurrentScope();
-  if (auto it = fn.var_to_id.find(name); it != fn.var_to_id.cend())
-    return it->second;
-
-  if (create == CreateIfMissing::No)
-    return std::nullopt;
-
-  fn.var_to_id[name] = fn.next_id;
-  return fn.next_id++;
-}
-
 Assembler& ProgramBuilder::GetCurrentCode() {
   return GetCurrentScope().code;
 }
-
-void ProgramBuilder::CallFunction(const std::string& name, size_t argc) {
-  auto it = func_ids_.find(name);
-  if (it == func_ids_.end()) {
-    functions_.at(function_decl_stack_.top())
-        .unresolved_calls[GetCurrentCode().offset()] = name;
-    GetCurrentCode().Call(UINT32_MAX, argc);
-    return;
-  }
-
-  GetCurrentCode().Call(it->second, argc);
-}
-
-#pragma pack(push, 1)
-typedef struct vm_prog_header_t {
-  uint32_t version;
-  char magic[4];
-  uint16_t function_count;
-  uint16_t constant_count;
-  uint32_t bytecode_size;
-  uint32_t debug_size;
-} vm_prog_header_t;
-
-typedef struct vm_prog_function_t {
-  uint16_t argument_count;
-  uint16_t local_count;
-  uint16_t name_offset;
-  uint8_t bytecode[];
-} vm_prog_function_t;
-
-typedef struct vm_section_t {
-  enum : uint8_t { CONST_STR, FUNCTION, DEBUG } type;
-  uint32_t size;
-  union {
-    vm_prog_function_t fn;
-    char str[];
-  } as;
-} vm_section_t;
-#pragma pack(pop)
 
 std::vector<uint8_t> ProgramBuilder::GenerateImage() {
   vm_prog_header_t header = {
@@ -160,20 +118,6 @@ std::vector<uint8_t> ProgramBuilder::GenerateImage() {
   size_t bytecode_size = 0;
   for (Function fn : functions_) {
     std::vector<uint8_t> fn_bytecode = fn.code.Build();
-    // std::cout << "Bytecode for function '" << fn.name << "':\n";
-    // DumpByteCode(fn_bytecode);
-
-    for (const auto& [offset, fn] : fn.unresolved_calls) {
-      assert(fn_bytecode[offset] == OP_CALL && "expceted OP_CALL");
-
-      auto it = func_ids_.find(fn);
-      assert(it != func_ids_.end() && "unknown function");
-      fn_bytecode[offset + 1] = uint8_t(it->second & 0xFF);
-      fn_bytecode[offset + 2] = uint8_t((it->second >> 8) & 0xFF);
-      fn_bytecode[offset + 3] = uint8_t((it->second >> 16) & 0xFF);
-      fn_bytecode[offset + 4] = uint8_t((it->second >> 24) & 0xFF);
-    }
-
     program_image.resize(offset + sizeof(vm_section_t) + fn_bytecode.size());
 
     vm_section_t section = {.type = vm_section_t::FUNCTION,

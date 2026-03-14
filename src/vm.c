@@ -817,7 +817,7 @@ static void install_builtins(vm_t* vm) {
   INSTALL(11, vm_array_get, 2);
   INSTALL(12, vm_array_set, 3);
   INSTALL(13, vm_string_length, 1);
-  INSTALL(14, vm_array_init, 1);
+  INSTALL(14, vm_array_init, 0);
   INSTALL(15, vm_array_push, 2);
   INSTALL(16, vm_map_get, 2);
   INSTALL(17, vm_array_length, 1);

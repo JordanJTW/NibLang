@@ -185,15 +185,22 @@ Symbol TypeContext::InsertSymbol(std::string_view name,
 
 std::optional<Symbol> TypeContext::GetSymbolFor(std::string_view name,
                                                 ScopeToCheck scope) const {
+  bool encountered_first_function_scope = false;
   for (auto it = scopes_.rbegin(); it != scopes_.rend(); ++it) {
     if (auto found = it->symbols.find(name.data());
         found != it->symbols.end()) {
       return found->second;
     }
 
-    if (scope == ScopeToCheck::Function &&
-        it->scope_type == ScopeType::FunctionScope)
-      break;
+    if (it->scope_type == ScopeType::FunctionScope) {
+      if (scope == ScopeToCheck::Function)
+        break;
+      
+      if (scope == ScopeToCheck::Closure && encountered_first_function_scope)
+        break;
+
+      encountered_first_function_scope = true;
+    }
 
     if (scope == ScopeToCheck::Current)
       break;

@@ -194,8 +194,9 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                         return ExpressionResult{symbol->type_id, *symbol};
                       }
 
-                      // Fallback search to all parent scopes.
-                      symbol = type_context_.GetSymbolFor(ident.name);
+                      // Fallback search to the parent function scope.
+                      symbol = type_context_.GetSymbolFor(
+                          ident.name, TypeContext::ScopeToCheck::Closure);
                       if (symbol) {
                         // Any value symbols found now must be captured.
                         if (symbol->kind == Symbol::Variable ||
@@ -209,6 +210,15 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                           fn.resolved->capture_arguments.push_back(*symbol);
                         }
 
+                        ident.resolved = ResolvedIdentifier{*symbol};
+                        return ExpressionResult{symbol->type_id, *symbol};
+                      }
+
+                      // Fallback seatch to ALL scopes for functions/structs.
+                      symbol = type_context_.GetSymbolFor(
+                          ident.name, TypeContext::ScopeToCheck::All);
+                      if (symbol && (symbol->kind == Symbol::Function ||
+                                     symbol->kind == Symbol::Struct)) {
                         ident.resolved = ResolvedIdentifier{*symbol};
                         return ExpressionResult{symbol->type_id, *symbol};
                       }

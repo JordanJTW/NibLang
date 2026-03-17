@@ -90,7 +90,7 @@ class TypeContext {
   // current scope and all parent scopes. If `scope` is Function, it will search
   // all parent scopes up to the nearest FunctionScope. If `scope` is Current,
   // it will only search the current scope.
-  enum ScopeToCheck { Current, Function, All };
+  enum ScopeToCheck { Current, Function, Closure, All };
   std::optional<Symbol> GetSymbolFor(std::string_view name,
                                      ScopeToCheck scope = All) const;
 

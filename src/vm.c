@@ -336,6 +336,20 @@ static void run_frame(vm_t* vm, const char* name) {
         ++frame->pc;
         break;
       }
+      case OP_STACK_DUP: {
+        DEBUG_LOG("OP_STACK_DUP");
+        assert(vm->stack.sp >= 1 && "stack underflow");
+        push_stack(&vm->stack, vm->stack.values[vm->stack.sp - 1]);
+        ++frame->pc;
+        break;
+      }
+      case OP_STACK_DEL: {
+        DEBUG_LOG("OP_STACK_DEL");
+        vm_value_t deleted = pop_stack(&vm->stack);
+        rc_decrement(&deleted);
+        ++frame->pc;
+        break;
+      }
       case OP_DYNAMIC_CALL: {
         CHECK_BOUNDS(frame->pc + 4);
         uint32_t argc = read_u32_arg(frame, 0);

@@ -18,6 +18,8 @@ class Assembler {
   Assembler& PushInt32(int32_t value);
   Assembler& PushFloat(float value);
   Assembler& PushBool(bool value);
+  Assembler& StackDup();
+  Assembler& StackDel();
   Assembler& Call(uint32_t idx, uint32_t argc);
   Assembler& CallDynamic(uint32_t argc);
   Assembler& Bind(uint32_t idx, uint32_t argc);

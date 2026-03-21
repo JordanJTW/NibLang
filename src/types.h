@@ -17,6 +17,8 @@ typedef enum : uint8_t {
   OP_PUSH_FALSE,
   OP_PUSH_LOCAL,
   OP_STORE_LOCAL,
+  OP_STACK_DUP,
+  OP_STACK_DEL,
   // Functions
   OP_CALL,
   OP_DYNAMIC_CALL,

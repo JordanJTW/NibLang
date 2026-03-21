@@ -74,7 +74,8 @@ void compile(const Block& root,
 
 void compile_expr(const std::unique_ptr<Expression>& expr,
                   ProgramBuilder& builder,
-                  TypeContext& type_context);
+                  TypeContext& type_context,
+                  bool wants_result = true);
 
 static size_t kUniqueBlockId = 0;
 
@@ -139,7 +140,8 @@ void compile_fn(const FunctionDeclaration& fn,
 
 void compile_expr(const std::unique_ptr<Expression>& expr,
                   ProgramBuilder& builder,
-                  TypeContext& type_context) {
+                  TypeContext& type_context,
+                  bool wants_result) {
   if (expr == nullptr) {
     LOG(ERROR) << "Failed to compile null expression";
     return;
@@ -203,6 +205,7 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
                 std::holds_alternative<Identifier>(
                     std::get<PrimaryExpression>(assign.lhs->as).value)) {
               compile_expr(assign.rhs, builder, type_context);
+              builder.GetCurrentCode().StackDup();
 
               const auto& ident = std::get<Identifier>(
                   std::get<PrimaryExpression>(assign.lhs->as).value);
@@ -229,6 +232,7 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
               }
 
               compile_expr(member_access->object, builder, type_context);
+              builder.GetCurrentCode().StackDup();
               builder.GetCurrentCode().PushInt32(
                   member_access->resolved->index);
               compile_expr(assign.rhs, builder, type_context);
@@ -323,6 +327,10 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
           },
       },
       expr->as);
+
+  if (!wants_result && expr->type != TypeContext::LiteralType::Void) {
+    builder.GetCurrentCode().StackDel();
+  }
 }
 
 void compile(const Block& root,
@@ -333,7 +341,7 @@ void compile(const Block& root,
     std::visit(
         Overloaded{
             [&](const std::unique_ptr<Expression>& expr) {
-              compile_expr(expr, builder, type_context);
+              compile_expr(expr, builder, type_context, /*wants_result=*/false);
             },
             [&](const FunctionDeclaration& fn) {
               if (fn.body) {

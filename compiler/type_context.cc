@@ -31,9 +31,9 @@ TypeContext::TypeContext(ErrorCollector& error_collector)
     type_lookup_[i] = BuiltInType{};
 
   static FunctionDeclaration main_fn{
-      .name = "main",
+      .name = "<<main>>",
       .arguments = {},
-      .return_type = ParsedType{"Void"},
+      .return_type = ParsedType{"any"},
       .function_kind = FunctionKind::Free,
       // Technically all top-level statements are in <main> but TypeContext
       // only cares if a function _has_ a body or not for type checking.

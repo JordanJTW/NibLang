@@ -619,6 +619,7 @@ int main(int argc, char* argv[]) {
   }
 
   compile(root, builder, type_context);
+  builder.GetCurrentCode().Return();
 
   std::vector<uint8_t> program_image = builder.GenerateImage();
 

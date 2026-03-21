@@ -15,7 +15,7 @@
 #include "src/vm.h"
 
 ProgramBuilder::ProgramBuilder() {
-  EnterFunctionScope("main", 0, {}, {});
+  EnterFunctionScope("<<main>>", 0, {}, {});
 }
 
 void ProgramBuilder::EnterFunctionScope(const std::string& name,

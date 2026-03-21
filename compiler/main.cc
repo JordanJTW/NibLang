@@ -189,13 +189,40 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
                     },
                     [&](float f32) { builder.GetCurrentCode().PushFloat(f32); },
                     [&](bool b) { builder.GetCurrentCode().PushBool(b); },
-                },
+                    [&](Nil) { builder.GetCurrentCode().PushNil(); }},
                 primary.value);
           },
           [&](const BinaryExpression& binary) {
-            compile_expr(binary.lhs, builder, type_context);
-            compile_expr(binary.rhs, builder, type_context);
-            emit_op(Token{.kind = binary.op}, binary.is_string, builder);
+            CHECK(binary.resolved) << "Unresolved binary expression";
+
+            if (binary.resolved->specialization ==
+                ResolvedBinary::Specialization::Nil) {
+              const std::unique_ptr<Expression>& target =
+                  binary.lhs->type == TypeContext::LiteralType::Nil
+                      ? binary.rhs
+                      : binary.lhs;
+              compile_expr(target, builder, type_context);
+              switch (binary.op) {
+                case TokenKind::kCompareEq:
+                  builder.GetCurrentCode().Is(vm_value_t::VALUE_TYPE_NULL);
+                  break;
+                case TokenKind::kCompareNe:
+                  builder.GetCurrentCode().Is(vm_value_t::VALUE_TYPE_NULL);
+                  builder.GetCurrentCode().Not();
+                  break;
+                default:
+                  NOTREACHED()
+                      << "only equality comparisons allowed against Nil";
+                  break;
+              }
+            } else {
+              compile_expr(binary.lhs, builder, type_context);
+              compile_expr(binary.rhs, builder, type_context);
+              emit_op(Token{.kind = binary.op},
+                      binary.resolved->specialization ==
+                          ResolvedBinary::Specialization::String,
+                      builder);
+            }
           },
           [&](const CallExpression& call) {
             compile_call(call, builder, type_context);

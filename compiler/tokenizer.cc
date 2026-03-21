@@ -104,7 +104,7 @@ Token Tokenizer::next() {
     return make_token(TokenKind::kEndOfFile);
 
   // Handle keywords
-  static constexpr std::array<std::pair<std::string_view, TokenKind>, 15>
+  static constexpr std::array<std::pair<std::string_view, TokenKind>, 16>
       kKeywordToToken{{{"if", TokenKind::kKwIf},
                        {"else", TokenKind::kKwElse},
                        {"fn", TokenKind::kKwFn},
@@ -119,7 +119,8 @@ Token Tokenizer::next() {
                        {"extern", TokenKind::kKwExtern},
                        {"let", TokenKind::kKwLet},
                        {"static", TokenKind::kKwStatic},
-                       {"as", TokenKind::kKwAs}}};
+                       {"as", TokenKind::kKwAs},
+                       {"Nil", TokenKind::kKwNil}}};
 
   char ch = data_[offset_];
 
@@ -241,6 +242,7 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kKwLet);
     KIND_TO_NAME(kKwStatic);
     KIND_TO_NAME(kKwAs);
+    KIND_TO_NAME(kKwNil);
     KIND_TO_NAME(kVariadic);
     KIND_TO_NAME(kOpenParen);
     KIND_TO_NAME(kCloseParen);

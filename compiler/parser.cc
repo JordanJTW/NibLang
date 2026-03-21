@@ -282,6 +282,9 @@ std::unique_ptr<Expression> Parser::ParseValue(const Token& value) {
     case TokenKind::kKwFalse: {
       return make_primary_expression(false, value);
     }
+    case TokenKind::kKwNil: {
+      return make_primary_expression(Nil{}, value);
+    }
     default:
       print_error(text_, value.meta, "unknown literal type");
       return nullptr;
@@ -521,7 +524,8 @@ std::unique_ptr<Expression> Parser::ParsePrimary() {
     case TokenKind::kString:
     case TokenKind::kIdent:
     case TokenKind::kKwTrue:
-    case TokenKind::kKwFalse: {
+    case TokenKind::kKwFalse:
+    case TokenKind::kKwNil: {
       Token value = current_token_;
       AdvanceToken();
       return ParseValue(value);
@@ -667,7 +671,8 @@ std::optional<ParsedType> Parser::ParsePrimaryType() {
     return ParseFunctionType();
   }
 
-  if (current_token_.kind == TokenKind::kIdent) {
+  if (current_token_.kind == TokenKind::kIdent ||
+      current_token_.kind == TokenKind::kKwNil) {
     Token type_token = current_token_;
     AdvanceToken();
     return ParsedType{type_token.value, type_token.meta};

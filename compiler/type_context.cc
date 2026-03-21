@@ -216,7 +216,7 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
                 {
                     {"Void", LiteralType::Void}, {"i32", LiteralType::i32},
                     {"f32", LiteralType::f32},   {"bool", LiteralType::Bool},
-                    {"any", LiteralType::Any},
+                    {"any", LiteralType::Any}, {"Nil", LiteralType::Nil},
                 };
 
             // Fast path for built-in type names which are used frequently.
@@ -459,7 +459,7 @@ std::string TypeContext::GetNameFromTypeId(TypeId type_id) const {
                 kBuiltInTypeNames = {
                     {LiteralType::Void, "Void"}, {LiteralType::i32, "i32"},
                     {LiteralType::f32, "f32"},   {LiteralType::Bool, "bool"},
-                    {LiteralType::Any, "any"},
+                    {LiteralType::Any, "any"}, {LiteralType::Nil, "Nil"},
                 };
             return kBuiltInTypeNames.at(type_id);
           },

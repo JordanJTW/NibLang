@@ -45,7 +45,7 @@ struct UnionType {
 // Lowers identifiers to Symbols with unique indexes per SymbolKind.
 class TypeContext {
  public:
-  enum LiteralType : TypeId { Void = 0, i32, f32, Bool, Any, kCount };
+  enum LiteralType : TypeId { Void = 0, i32, f32, Bool, Any, Nil, kCount };
 
   explicit TypeContext(ErrorCollector& error_collector);
 

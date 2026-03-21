@@ -15,6 +15,7 @@ typedef enum : uint8_t {
   OP_PUSH_F32,
   OP_PUSH_TRUE,
   OP_PUSH_FALSE,
+  OP_PUSH_NULL,
   OP_PUSH_LOCAL,
   OP_STORE_LOCAL,
   OP_STACK_DUP,
@@ -40,6 +41,7 @@ typedef enum : uint8_t {
   OP_EQUAL,
   OP_GREAT_OR_EQ,
   OP_GREATER_THAN,
+  OP_IS,
   // Control Flow
   OP_JUMP_IF_TRUE,
   OP_JUMP_IF_FALSE,

@@ -24,6 +24,10 @@ Assembler& Assembler::PushBool(bool value) {
   data_.push_back(value ? OP_PUSH_TRUE : OP_PUSH_FALSE);
   return *this;
 }
+Assembler& Assembler::PushNil() {
+  data_.push_back(OP_PUSH_NULL);
+  return *this;
+}
 Assembler& Assembler::StackDup() {
   data_.push_back(OP_STACK_DUP);
   return *this;
@@ -98,6 +102,12 @@ Assembler& Assembler::Compare(op_t operation) {
   data_.push_back(operation);
   return *this;
 }
+Assembler& Assembler::Is(vm_value_t::type_t type) {
+  data_.push_back(OP_IS);
+  data_.push_back(type);
+  return *this;
+}
+
 Assembler& Assembler::JumpIfTrue(uint32_t pc) {
   PushOpAndArgs(OP_JUMP_IF_TRUE, {pc});
   return *this;
@@ -225,6 +235,7 @@ std::string GetOpName(op_t op) {
     CASE_OP_NAME(OP_PUSH_LOCAL);
     CASE_OP_NAME(OP_PUSH_TRUE);
     CASE_OP_NAME(OP_PUSH_FALSE);
+    CASE_OP_NAME(OP_PUSH_NULL);
     CASE_OP_NAME(OP_STORE_LOCAL);
     CASE_OP_NAME(OP_STACK_DUP);
     CASE_OP_NAME(OP_STACK_DEL);
@@ -246,6 +257,7 @@ std::string GetOpName(op_t op) {
     CASE_OP_NAME(OP_EQUAL);
     CASE_OP_NAME(OP_GREAT_OR_EQ);
     CASE_OP_NAME(OP_GREATER_THAN);
+    CASE_OP_NAME(OP_IS);
     CASE_OP_NAME(OP_JUMP_IF_TRUE);
     CASE_OP_NAME(OP_JUMP_IF_FALSE);
     CASE_OP_NAME(OP_JUMP);
@@ -361,6 +373,12 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
         pc += 1 + strlen;
         break;
       }
+      case OP_IS: {
+        printf("0x%02x 0x%02x, // %04zx: %s %u\n", bytecode[pc],
+               bytecode[pc + 1], pc, GetOpName(op).c_str(), bytecode[pc + 1]);
+        pc += 1;
+        break;
+      }
       case OP_ADD:
       case OP_RETURN:
       case OP_LESS_THAN:
@@ -378,6 +396,7 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
       case OP_CONCAT:
       case OP_PUSH_TRUE:
       case OP_PUSH_FALSE:
+      case OP_PUSH_NULL:
       case OP_STACK_DUP:
       case OP_STACK_DEL:
       case OP_TRY_POP:

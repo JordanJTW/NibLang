@@ -18,6 +18,7 @@ class Assembler {
   Assembler& PushInt32(int32_t value);
   Assembler& PushFloat(float value);
   Assembler& PushBool(bool value);
+  Assembler& PushNil();
   Assembler& StackDup();
   Assembler& StackDel();
   Assembler& Call(uint32_t idx, uint32_t argc);
@@ -36,6 +37,7 @@ class Assembler {
   Assembler& Return();
   Assembler& StoreLocal(uint32_t idx);
   Assembler& Compare(op_t operation);
+  Assembler& Is(vm_value_t::type_t type);
   Assembler& JumpIfTrue(uint32_t pc);
   Assembler& JumpIfFalse(uint32_t pc);
   Assembler& Jump(uint32_t pc);

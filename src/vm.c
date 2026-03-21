@@ -336,6 +336,12 @@ static void run_frame(vm_t* vm, const char* name) {
         ++frame->pc;
         break;
       }
+      case OP_PUSH_NULL: {
+        DEBUG_LOG("OP_PUSH_NULL");
+        push_stack(&vm->stack, (vm_value_t){.type = VALUE_TYPE_NULL});
+        ++frame->pc;
+        break;
+      }
       case OP_STACK_DUP: {
         DEBUG_LOG("OP_STACK_DUP");
         assert(vm->stack.sp >= 1 && "stack underflow");
@@ -582,6 +588,20 @@ static void run_frame(vm_t* vm, const char* name) {
         EQUALITY_CASE(OP_GREATER_THAN, >)
 
 #undef EQUALITY_CASE
+
+      case OP_IS: {
+        CHECK_BOUNDS(frame->pc + 1);
+        uint8_t type = frame->code->data[frame->pc + 1];
+        DEBUG_LOG("OP_IS 0x%x", type);
+        vm_value_t target = pop_stack(&vm->stack);
+
+        push_stack(&vm->stack,
+                   (vm_value_t){.type = VALUE_TYPE_BOOL,
+                                .as.boolean = (target.type == type)});
+        vm_free_ref(&target);
+        frame->pc += 2;
+        break;
+      }
 
       case OP_JUMP_IF_TRUE:
       case OP_JUMP_IF_FALSE: {

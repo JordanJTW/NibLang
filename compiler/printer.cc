@@ -30,6 +30,20 @@ static const char* ToString(FunctionKind kind) {
   }
 }
 
+std::ostream& operator<<(std::ostream& os,
+                         const ResolvedBinary::Specialization& specialization) {
+#define CASE($name)                           \
+  case ResolvedBinary::Specialization::$name: \
+    return os << #$name
+
+  switch (specialization) {
+    CASE(String);
+    CASE(Number);
+    CASE(Nil);
+  }
+#undef CASE
+}
+
 void print_resolved_call(const std::optional<ResolvedCall>& r, size_t indent) {
   if (!r.has_value()) {
     std::cout << std::string(indent, ' ') << "ResolvedCall: UNRESOLVED"
@@ -52,6 +66,18 @@ void print_resolved_access(const std::optional<ResolvedAccess>& r,
     std::cout << std::string(indent, ' ') << "ResolvedAccess:" << std::endl;
     std::cout << std::string(indent + 2, ' ') << "member_index: " << r->index
               << std::endl;
+  }
+}
+
+void print_resolved_binary(const std::optional<ResolvedBinary>& r,
+                           size_t indent) {
+  if (!r.has_value()) {
+    std::cout << std::string(indent, ' ') << "ResolvedBinary: UNRESOLVED"
+              << std::endl;
+  } else {
+    std::cout << std::string(indent, ' ') << "ResolvedBinary:" << std::endl;
+    std::cout << std::string(indent + 2, ' ')
+              << "specialization: " << r->specialization << std::endl;
   }
 }
 
@@ -79,8 +105,8 @@ void print_resolved_identifier(const std::optional<ResolvedIdentifier>& r,
 }
 
 static void print_primary(const PrimaryExpression& primary, size_t indent) {
-  std::visit(Overloaded{
-                 [&](const StringLiteral& str) {
+  std::visit(
+      Overloaded{[&](const StringLiteral& str) {
                    std::cout << std::string(indent, ' ') << "StringLiteral: \""
                              << str.value << "\"" << std::endl;
                  },
@@ -101,8 +127,10 @@ static void print_primary(const PrimaryExpression& primary, size_t indent) {
                    std::cout << std::string(indent, ' ')
                              << "Bool: " << (b ? "true" : "false") << std::endl;
                  },
-             },
-             primary.value);
+                 [&](Nil) {
+                   std::cout << std::string(indent, ' ') << "Nil" << std::endl;
+                 }},
+      primary.value);
 }
 
 }  // namespace
@@ -215,6 +243,7 @@ void Printer::Print(const Expression& expr, size_t indent) {
                       << ")" << std::endl;
             std::cout << std::string(indent + 2, ' ')
                       << "Type: " << GetTypeName(expr.type) << std::endl;
+            print_resolved_binary(binary.resolved, indent + 2);
 
             std::cout << std::string(indent + 2, ' ') << "LHS:" << std::endl;
             Print(*binary.lhs, indent + 4);

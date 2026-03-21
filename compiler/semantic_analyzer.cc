@@ -236,7 +236,9 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                     [&](bool) -> SemanticAnalyzer::Result {
                       return ExpressionResult{LiteralType::Bool};
                     },
-                },
+                    [&](Nil) -> SemanticAnalyzer::Result {
+                      return ExpressionResult{LiteralType::Nil};
+                    }},
                 primary.value);
           },
           [&](BinaryExpression& binary) -> SemanticAnalyzer::Result {
@@ -246,7 +248,11 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             if (!lhs.has_value() || !rhs.has_value())
               return std::nullopt;
 
-            if (!TypeContext::IsTypeEquivalent(lhs->type_id, rhs->type_id)) {
+            if (!TypeContext::IsTypeEquivalent(lhs->type_id, rhs->type_id) &&
+                !((rhs->type_id == LiteralType::Nil &&
+                   type_context_.IsTypeSubsetOf(rhs->type_id, lhs->type_id)) ||
+                  (lhs->type_id == LiteralType::Nil &&
+                   type_context_.IsTypeSubsetOf(lhs->type_id, rhs->type_id)))) {
               error_collector_.Add("LHS and RHS are not compatible",
                                    expression->meta);
               error_collector_.Add(
@@ -260,10 +266,15 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
               return std::nullopt;
             }
 
+            ResolvedBinary resolved{ResolvedBinary::Specialization::Number};
             if (lhs->type_id ==
                 type_context_.GetTypeIdFor(ParsedType{"String"})) {
-              binary.is_string = true;
+              resolved.specialization = ResolvedBinary::Specialization::String;
+            } else if (lhs->type_id == LiteralType::Nil ||
+                       rhs->type_id == LiteralType::Nil) {
+              resolved.specialization = ResolvedBinary::Specialization::Nil;
             }
+            binary.resolved = std::move(resolved);
 
             // Comparison operators will always generate a boolean
             if (binary.op == TokenKind::kCompareGt ||
@@ -301,7 +312,9 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             if (!lhs.has_value() || !rhs.has_value())
               return std::nullopt;
 
-            if (!TypeContext::IsTypeEquivalent(lhs->type_id, rhs->type_id))
+            if (!TypeContext::IsTypeEquivalent(lhs->type_id, rhs->type_id) &&
+                !(rhs->type_id == LiteralType::Nil &&
+                  type_context_.IsTypeSubsetOf(rhs->type_id, lhs->type_id)))
               error_collector_.Add("Mismatched assignment", expression->meta);
 
             return lhs;

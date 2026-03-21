@@ -24,6 +24,7 @@ enum class TokenKind {
   kKwLet,           // let
   kKwStatic,        // static
   kKwAs,            // as
+  kKwNil,           // Nil
   kVariadic,        // ...
   kOpenParen,       // (
   kCloseParen,      // )

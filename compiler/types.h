@@ -28,11 +28,16 @@ std::ostream& operator<<(std::ostream& os, const Symbol& symbol);
 struct Expression;
 struct Statement;
 
+struct ResolvedBinary {
+  enum class Specialization { Number, String, Nil };
+  Specialization specialization = Specialization::Number;
+};
+
 struct BinaryExpression {
   TokenKind op;
   std::unique_ptr<Expression> lhs;
   std::unique_ptr<Expression> rhs;
-  bool is_string = false;
+  std::optional<ResolvedBinary> resolved;
 };
 
 struct PrefixUnaryExpression {
@@ -60,8 +65,10 @@ struct Identifier {
   std::optional<ResolvedIdentifier> resolved;
 };
 
+struct Nil {};
+
 struct PrimaryExpression {
-  std::variant<StringLiteral, Identifier, int32_t, float, bool> value;
+  std::variant<StringLiteral, Identifier, int32_t, float, bool, Nil> value;
 };
 
 enum FunctionKind {

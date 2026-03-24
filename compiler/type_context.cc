@@ -24,8 +24,7 @@ inline void ComputeHash(size_t& seed, TypeId value) {
 
 }  // namespace
 
-TypeContext::TypeContext(ErrorCollector& error_collector)
-    : error_collector_(error_collector) {
+TypeContext::TypeContext() {
   // Add dummy entries for the built-in types to simplify logic.
   for (size_t i = 0; i < LiteralType::kCount; ++i)
     type_lookup_[i] = BuiltInType{};
@@ -42,7 +41,7 @@ TypeContext::TypeContext(ErrorCollector& error_collector)
 
   // Enter "global" function scope by default to allow for top-level statements.
   EnterScope(ScopeType::FunctionScope, &main_fn);
-  auto main_symbol = DefineFunction(main_fn);
+  auto main_symbol = DefineFunction(main_fn, /*error_collector=*/nullptr);
   CHECK(main_symbol.has_value());
 }
 
@@ -86,7 +85,9 @@ Symbol TypeContext::DeclareStructSymbol(std::string_view name) {
   return InsertSymbol(name, Symbol::Struct, next_type_id_++);
 }
 
-void TypeContext::DefineStructType(TypeId self_id, StructDeclaration& decl) {
+void TypeContext::DefineStructType(TypeId self_id,
+                                   StructDeclaration& decl,
+                                   ErrorCollector& error_collector) {
   StructType struct_type;
   // Structs are nominally typed so we can simplify later logic by storing
   // "symbolic" information directly on the type (i.e. StructDeclaration).
@@ -96,15 +97,15 @@ void TypeContext::DefineStructType(TypeId self_id, StructDeclaration& decl) {
   for (const auto& [name, type] : decl.fields) {
     auto type_id = GetTypeIdFor(type);
     if (!type_id.has_value()) {
-      error_collector_.Add("Unknown type for struct field: " + name,
-                           type.metadata);
+      error_collector.Add("Unknown type for struct field: " + name,
+                          type.metadata);
       continue;
     }
 
     auto it = struct_type.member_symbols.find(name);
     if (it != struct_type.member_symbols.end()) {
-      error_collector_.Add("Duplicate field name in struct: " + name,
-                           type.metadata);
+      error_collector.Add("Duplicate field name in struct: " + name,
+                          type.metadata);
       continue;
     }
 
@@ -115,7 +116,8 @@ void TypeContext::DefineStructType(TypeId self_id, StructDeclaration& decl) {
 
   for (auto& [name, fn] : decl.methods) {
     // Errors are logged from within `DefineFunction`.
-    if (auto method_symbol = DefineFunction(fn, &decl, self_id);
+    if (auto method_symbol =
+            DefineFunction(fn, &error_collector, &decl, self_id);
         method_symbol.has_value()) {
       struct_type.member_symbols[name] = method_symbol.value();
     }
@@ -126,6 +128,7 @@ void TypeContext::DefineStructType(TypeId self_id, StructDeclaration& decl) {
 
 std::optional<Symbol> TypeContext::DefineFunction(
     FunctionDeclaration& fn,
+    ErrorCollector* error_collector,
     std::optional<StructDeclaration*> object,
     std::optional<TypeId> self_id) {
   std::string qualified_name = fn.name;
@@ -152,7 +155,8 @@ std::optional<Symbol> TypeContext::DefineFunction(
     call_idx = GetCallIdxFor(qualified_name, CreateIfMissing::YES);
   }
 
-  if (std::optional<TypeId> type_id = DeclareFunctionType(fn, self_id)) {
+  if (std::optional<TypeId> type_id =
+          DeclareFunctionType(fn, error_collector, self_id)) {
     Symbol symbol = InsertSymbol(fn.name, Symbol::Function, type_id.value(),
                                  call_idx.value());
     function_lookup_[call_idx.value()] = &fn;
@@ -195,7 +199,7 @@ std::optional<Symbol> TypeContext::GetSymbolFor(std::string_view name,
     if (it->scope_type == ScopeType::FunctionScope) {
       if (scope == ScopeToCheck::Function)
         break;
-      
+
       if (scope == ScopeToCheck::Closure && encountered_first_function_scope)
         break;
 
@@ -216,7 +220,7 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
                 {
                     {"Void", LiteralType::Void}, {"i32", LiteralType::i32},
                     {"f32", LiteralType::f32},   {"bool", LiteralType::Bool},
-                    {"any", LiteralType::Any}, {"Nil", LiteralType::Nil},
+                    {"any", LiteralType::Any},   {"Nil", LiteralType::Nil},
                 };
 
             // Fast path for built-in type names which are used frequently.
@@ -299,6 +303,7 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
 
 std::optional<TypeId> TypeContext::DeclareFunctionType(
     const FunctionDeclaration& fn,
+    ErrorCollector* error_collector,
     std::optional<TypeId> self_id) {
   std::vector<TypeId> argument_types;
   for (const auto& [name, type] : fn.arguments) {
@@ -310,9 +315,9 @@ std::optional<TypeId> TypeContext::DeclareFunctionType(
     }
   }
 
-  if (fn.function_kind == FunctionKind::Method &&
+  if (fn.function_kind == FunctionKind::Method && error_collector &&
       (argument_types.size() == 0 || argument_types[0] != self_id)) {
-    error_collector_.Add("Methods must begin with a `self` argument",
+    error_collector->Add("Methods must begin with a `self` argument",
                          fn.argument_range);
     return std::nullopt;
   }
@@ -409,6 +414,8 @@ std::optional<Symbol::Idx> TypeContext::GetCallIdxFor(const std::string& name,
       {"log", VM_BUILTIN(18)},
       {"fetch", VM_BUILTIN(19)},
       {"to_string", VM_BUILTIN(20)},
+      {"Font_load", VM_BUILTIN(21)},
+      {"Font_drawText", VM_BUILTIN(22)},
   };
 
   if (auto it = kBuiltInCallIdx.find(name); it != kBuiltInCallIdx.end())
@@ -459,7 +466,7 @@ std::string TypeContext::GetNameFromTypeId(TypeId type_id) const {
                 kBuiltInTypeNames = {
                     {LiteralType::Void, "Void"}, {LiteralType::i32, "i32"},
                     {LiteralType::f32, "f32"},   {LiteralType::Bool, "bool"},
-                    {LiteralType::Any, "any"}, {LiteralType::Nil, "Nil"},
+                    {LiteralType::Any, "any"},   {LiteralType::Nil, "Nil"},
                 };
             return kBuiltInTypeNames.at(type_id);
           },

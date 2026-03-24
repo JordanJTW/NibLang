@@ -1,0 +1,83 @@
+extern struct Array {
+  static fn new() -> Array;
+  static fn withSize(size: i32) -> Array;
+
+  fn push(self: Array, value: any);
+  fn get(self: Array, idx: i32) -> any;
+  fn set(self: Array, idx: i32, value: any);
+  fn length(self: Array) -> i32;
+
+  fn slice(self: Array, start: i32, count: i32) -> Array {
+    let slice = Array.withSize(count);
+
+    let idx = 0;
+    while (start + idx < self.length() && idx < count) {
+      slice.set(idx, self.get(start + idx));
+      idx = idx + 1;
+    }
+    return slice;
+  }
+
+  fn map(self: Array, transform: fn(any) -> any) -> Array {
+    let result = Array.withSize(self.length());
+
+    let idx = 0;
+    while (idx < self.length()) {
+      result.set(idx, transform(self.get(idx)));
+      idx = idx + 1;
+    }
+
+    return result;
+  }
+}
+
+struct BoxInt {
+  value: i32;
+}
+
+extern struct Map {
+  static fn new() -> Map;
+  fn get(self: Map, key: any) -> any;
+  fn set(self: Map, key: any, value: any) -> Void;
+}
+
+extern struct Promise {
+  static fn new() -> Promise;
+
+  fn fulfill(self: Promise, value: any);
+  fn reject(self: Promise, error: any);
+  fn then(self: Promise, on_fulfill: any, on_reject: any) -> Promise;
+
+  static fn all(promises: Array) -> Promise {
+    let promise = Promise.new();
+
+    let results = Array.withSize(promises.length());
+    let completed = BoxInt(0);
+
+    let idx = 0;
+    while (idx < promises.length()) {
+      (promises.get(idx) as Promise).then(
+        fn (value: any) {  
+          results.set(idx, value);  
+          completed.value = completed.value + 1;
+
+          if (completed.value == promises.length()) { 
+            promise.fulfill(results); 
+          }
+        },
+        fn (error: any) {
+          promise.reject(error);
+        }
+      );
+      idx = idx + 1;
+    }
+    return promise;
+  }
+}
+
+extern struct String {
+  fn length(s: String) -> i32;
+  fn charAt(s: String, idx: i32) -> i32;
+  fn substr(s: String, start: i32, end: i32) -> String;
+  fn startsWith(s: String, prefix: String, idx: i32) -> bool;
+}

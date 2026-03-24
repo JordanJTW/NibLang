@@ -228,6 +228,10 @@ struct AssignStatement {
   std::optional<ResolvedIdentifier> resolved;
 };
 
+struct ImportStatement {
+  std::string path;
+};
+
 struct Statement {
   std::variant<std::unique_ptr<Expression>,  // ExpressionStatement
                FunctionDeclaration,          // fn foo(x, y) {...}
@@ -238,7 +242,8 @@ struct Statement {
                BreakStatement,               // break;
                ContinueStatement,            // continue;
                AssignStatement,              // let x: i32 = 42;
-               StructDeclaration             // struct Foo { ... }
+               StructDeclaration,            // struct Foo { ... }
+               ImportStatement               // @import "path/to/import"
                >
       as;
   Metadata meta;

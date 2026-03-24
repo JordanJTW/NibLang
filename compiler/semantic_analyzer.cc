@@ -57,11 +57,11 @@ void SemanticAnalyzer::Check(Block& block) {
   // Type check the full struct bodies (and functions) once all types are known.
   // Errors are logged from within `DefineStructType` and `DefineFunction`.
   for (auto& [self, decl] : struct_decls) {
-    type_context_.DefineStructType(self.type_id, *decl);
+    type_context_.DefineStructType(self.type_id, *decl, error_collector_);
   }
   for (auto& statement : block.statements) {
     if (auto* fn_decl = std::get_if<FunctionDeclaration>(&statement->as)) {
-      type_context_.DefineFunction(*fn_decl);
+      type_context_.DefineFunction(*fn_decl, &error_collector_);
     }
   }
 
@@ -124,7 +124,8 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement) {
             }
           },
           // `break` and `continue` are single word statements.
-          [&](const BreakStatement&) {}, [&](const ContinueStatement&) {},
+          [&](const BreakStatement&) {},
+          [&](const ContinueStatement&) {},
           [&](AssignStatement& assign) {
             // Check this is the first assignment in this scope with that name.
             if (type_context_.GetSymbolFor(assign.name, TypeContext::Current)) {
@@ -166,7 +167,9 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement) {
             for (auto& [name, fn] : struct_decl.methods) {
               CheckFunctionBody(fn);
             }
-          }},
+          },
+          [&](ImportStatement& import) { /*nothing to type check*/ },
+      },
       statement->as);
 }
 
@@ -370,7 +373,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             return ExpressionResult{LiteralType::Bool};
           },
           [&](ClosureExpression& closure) -> SemanticAnalyzer::Result {
-            if (auto symbol = type_context_.DefineFunction(closure.fn)) {
+            if (auto symbol = type_context_.DefineFunction(closure.fn,
+                                                           &error_collector_)) {
               CheckFunctionBody(closure.fn);
               return ExpressionResult{symbol->type_id, std::move(symbol)};
             }

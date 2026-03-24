@@ -1,4 +1,3 @@
-#pragma once
 
 #include <memory>
 #include <optional>
@@ -18,7 +17,8 @@ class Parser {
   Block Parse();
 
  private:
-  void ParseBlock(Block& block);
+  enum class BlockType { Root, Scope };
+  void ParseBlock(Block& block, BlockType type = BlockType::Scope);
 
   std::unique_ptr<Expression> ParseExpression();
   std::unique_ptr<Expression> ParseAssignment();

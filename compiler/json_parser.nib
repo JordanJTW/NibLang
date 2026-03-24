@@ -1,0 +1,9 @@
+@import "std/json.nib"
+@import "std/types.nib"
+
+extern fn log(...);
+
+let str = "{\n  \"meta\": {\n    \"version\": 3,\n    \"generated_at\": 1773782000,\n    \"valid\": true\n  },\n  \"users\": [\n    {\n      \"id\": 101,\n      \"name\": \"alice\",\n      \"active\": true,\n      \"roles\": [\"admin\", \"editor\"],\n      \"stats\": {\n        \"posts\": 124,\n        \"followers\": 5321,\n        \"engagement\": 0.87\n      }\n    },\n    {\n      \"id\": 102,\n      \"name\": \"bob\",\n      \"active\": false,\n      \"roles\": [\"viewer\"],\n      \"stats\": {\n        \"posts\": 12,\n        \"followers\": 98,\n        \"engagement\": 0.12\n      }\n    }\n  ],\n  \"projects\": [\n    {\n      \"id\": \"p1\",\n      \"title\": \"simulator\",\n      \"tags\": [\"vm\", \"runtime\", \"network\"],\n      \"contributors\": [101, 102],\n      \"metrics\": {\n        \"builds\": [12, 15, 14, 18],\n        \"success_rate\": 0.92\n      }\n    },\n    {\n      \"id\": \"p2\",\n      \"title\": \"parser\",\n      \"tags\": [\"json\", \"lexer\", \"ast\"],\n      \"contributors\": [102],\n      \"metrics\": {\n        \"builds\": [3, 5, 7],\n        \"success_rate\": 0.78\n      }\n    }\n  ],\n  \"events\": [\n    {\n      \"type\": \"deploy\",\n      \"timestamp\": 1773781000,\n      \"details\": {\n        \"region\": \"us-west\",\n        \"duration\": 32,\n        \"success\": true\n      }\n    },\n    {\n      \"type\": \"scale\",\n      \"timestamp\": 1773781500,\n      \"details\": {\n        \"from\": 3,\n        \"to\": 7,\n        \"reason\": \"traffic\"\n      }\n    }\n  ],\n  \"matrix\": [\n    [1, 2, 3],\n    [4, 5, 6],\n    [7, 8, 9]\n  ],\n  \"flags\": {\n    \"feature_x\": true,\n    \"feature_y\": false,\n    \"feature_z\": true\n  }\n}\n";
+let parser = Parser(0);
+
+return parse_value(str, parser);

@@ -47,7 +47,7 @@ class TypeContext {
  public:
   enum LiteralType : TypeId { Void = 0, i32, f32, Bool, Any, Nil, kCount };
 
-  explicit TypeContext(ErrorCollector& error_collector);
+  explicit TypeContext();
 
   // Symbols are associated within the context of a function or block scope,
   // which allows for correct handling of variable shadowing, captures, etc.
@@ -68,7 +68,9 @@ class TypeContext {
   Symbol DeclareStructSymbol(std::string_view name);
   // Defines StructType for `self_id` by type checking `decl` and registering
   // field/member types. Returns false if any errors were encountered.
-  void DefineStructType(TypeId self_id, StructDeclaration& decl);
+  void DefineStructType(TypeId self_id,
+                        StructDeclaration& decl,
+                        ErrorCollector& error_collector);
 
   // Declares a new function symbol in the current scope. Functions are
   // structurally typed based on signature. If this functions signature has not
@@ -78,6 +80,7 @@ class TypeContext {
   // provided for method declarations.
   std::optional<Symbol> DefineFunction(
       FunctionDeclaration& decl,
+      ErrorCollector* error_collector,
       std::optional<StructDeclaration*> self_struct = std::nullopt,
       std::optional<TypeId> self_id = std::nullopt);
 
@@ -121,8 +124,6 @@ class TypeContext {
   std::string GetNameFromTypeId(TypeId type_id) const;
 
  private:
-  ErrorCollector& error_collector_;
-
   enum class CreateIfMissing { YES, NO };
   std::optional<CallIdx> GetCallIdxFor(const std::string& name,
                                        CreateIfMissing create);
@@ -131,6 +132,7 @@ class TypeContext {
 
   std::optional<TypeId> DeclareFunctionType(
       const FunctionDeclaration& decl,
+      ErrorCollector* error_collector,
       std::optional<TypeId> self_id = std::nullopt);
 
   Symbol InsertSymbol(std::string_view name,

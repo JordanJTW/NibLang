@@ -1,37 +1,4 @@
-extern struct String {
-  fn length(s: String) -> i32;
-  fn charAt(s: String, idx: i32) -> i32;
-  fn substr(s: String, start: i32, end: i32) -> String;
-  fn startsWith(s: String, prefix: String, idx: i32) -> bool;
-}
-
-extern struct Map {
-  static fn new() -> Map;
-  fn get(self: Map, key: any) -> any;
-  fn set(self: Map, key: any, value: any) -> Void;
-}
-
-extern struct Array {
-  static fn new() -> Array;
-  static fn withSize(size: i32) -> Array;
-
-  fn push(self: Array, value: any);
-  fn get(self: Array, idx: i32) -> any;
-  fn set(self: Array, idx: i32, value: any);
-
-  fn slice(self: Array, count: i32) -> Array {
-    let slice = Array.withSize(count);
-
-    let idx = 0;
-    while (idx < count) {
-      slice.set(idx, self.get(idx));
-      idx = idx + 1;
-    }
-    return slice;
-  }
-}
-
-extern fn log(...);
+@import "std/types.nib"
 
 struct Parser {
   idx: i32;

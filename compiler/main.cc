@@ -1,6 +1,7 @@
 #include <cassert>
 #include <cstdio>
 #include <fstream>
+#include <unordered_set>
 
 #include "compiler/assembler.h"
 #include "compiler/logging.h"
@@ -443,7 +444,9 @@ void compile(const Block& root,
                 compile_fn(method.second, builder, type_context,
                            struct_decl.name + "_" + method.first);
               }
-            }},
+            },
+            [&](ImportStatement& import) { /*nothing to compile*/ },
+        },
         stmt->as);
   }
 }
@@ -552,6 +555,82 @@ int DumpImage(const uint8_t* program, size_t program_size) {
   return 0;
 }
 
+struct File {
+  std::string resolved_path;
+  std::vector<std::string> import_paths;
+  Block root_block;
+  std::string file_contents;
+};
+
+std::string OpenFileWithFallback(std::ifstream& file,
+                                 std::string_view path,
+                                 std::string_view search_path) {
+  file.open(std::string(path));
+  if (file)
+    return path.data();
+
+  std::filesystem::path search_prefixed =
+      std::filesystem::path(search_path) / path;
+
+  file.clear();
+  file.open(search_prefixed);
+
+  if (file)
+    return search_prefixed.string();
+
+  fprintf(stderr, "Error opening: %s (also tried %s)\n", path.data(),
+          search_prefixed.string().c_str());
+  return {};
+}
+
+std::optional<File> CollectImportsFor(std::string_view path,
+                                      std::string_view search_path) {
+  std::ifstream file_to_compile;
+  std::string resolved_path =
+      OpenFileWithFallback(file_to_compile, path, search_path);
+
+  std::string file_contents{std::istreambuf_iterator<char>(file_to_compile),
+                            std::istreambuf_iterator<char>()};
+
+  Block root_block = Parser{file_contents}.Parse();
+
+  std::vector<std::string> import_paths;
+  for (const auto& statement : root_block.statements) {
+    if (const auto* import = std::get_if<ImportStatement>(&statement->as)) {
+      import_paths.push_back(import->path);
+    }
+  }
+
+  return File{std::move(resolved_path), std::move(import_paths),
+              std::move(root_block), std::move(file_contents)};
+}
+
+std::vector<File> CalculateImportsFor(std::string_view path,
+                                      std::string_view search_path) {
+  std::vector<File> result;
+  std::unordered_set<std::string> visited;
+
+  std::function<void(const std::string&)> dfs =
+      [&](const std::string& current_path) {
+        if (visited.find(current_path) != visited.end())
+          return;
+
+        visited.insert(current_path);
+
+        auto file_opt = CollectImportsFor(current_path, search_path);
+        if (!file_opt)
+          return;
+
+        File file = std::move(*file_opt);
+        for (const auto& import_path : file.import_paths)
+          dfs(import_path);
+
+        result.push_back(std::move(file));
+      };
+
+  dfs(std::string(path));
+  return result;
+}
 enum class OutputMode { Ast, DumpImage, Image };
 
 struct Options {
@@ -588,38 +667,39 @@ Options ParseArgs(int argc, char* argv[]) {
 int main(int argc, char* argv[]) {
   Options opts = ParseArgs(argc, argv);
 
-  std::ifstream file(opts.input_path);
-  if (!file) {
-    fprintf(stderr, "Error opening: %s\n", opts.input_path.c_str());
+  char* env_search_path = std::getenv("NIB_PATH");
+
+  if (env_search_path == NULL) {
+    fprintf(stderr, "Missing NIB_PATH=\"path/to/std\"\n");
     return 1;
   }
 
-  std::string contents{std::istreambuf_iterator<char>(file),
-                       std::istreambuf_iterator<char>()};
+  std::vector<File> files =
+      CalculateImportsFor(opts.input_path, env_search_path);
 
+  TypeContext type_context;
   ProgramBuilder builder;
-  Parser parser(contents);
 
-  Block root = parser.Parse();
+  for (File& file : files) {
+    auto error_collector = DefaultErrorCollector(file.file_contents);
+    SemanticAnalyzer analyzer(type_context, *error_collector);
+    analyzer.Check(file.root_block);
 
-  auto error_collector = DefaultErrorCollector(contents);
+    if (error_collector->HasErrors()) {
+      error_collector->PrintAllErrors();
+      return 1;
+    }
 
-  TypeContext type_context(*error_collector);
-  SemanticAnalyzer analyzer(type_context, *error_collector);
-  analyzer.Check(root);
-
-  if (error_collector->HasErrors()) {
-    error_collector->PrintAllErrors();
-    return 1;
+    if (opts.mode == OutputMode::Ast) {
+      Printer(&type_context).Print(file.root_block);
+    } else {
+      compile(file.root_block, builder, type_context);
+    }
   }
-
-  if (opts.mode == OutputMode::Ast) {
-    Printer(&type_context).Print(root);
-    return 0;
-  }
-
-  compile(root, builder, type_context);
   builder.GetCurrentCode().Return();
+
+  if (opts.mode == OutputMode::Ast)
+    return 0;
 
   std::vector<uint8_t> program_image = builder.GenerateImage();
 
@@ -639,5 +719,58 @@ int main(int argc, char* argv[]) {
       out.close();
     }
   }
+
+  // std::ifstream file(opts.input_path);
+  // if (!file) {
+  //   fprintf(stderr, "Error opening: %s\n", opts.input_path.c_str());
+  //   return 1;
+  // }
+
+  // std::string contents{std::istreambuf_iterator<char>(file),
+  //                      std::istreambuf_iterator<char>()};
+
+  // Parser parser(contents);
+
+  // Block root = parser.Parse();
+
+  // ProgramBuilder builder;
+
+  // auto error_collector = DefaultErrorCollector(contents);
+
+  // TypeContext type_context;
+  // SemanticAnalyzer analyzer(type_context, *error_collector);
+  // analyzer.Check(root);
+
+  // if (error_collector->HasErrors()) {
+  //   error_collector->PrintAllErrors();
+  //   return 1;
+  // }
+
+  // if (opts.mode == OutputMode::Ast) {
+  //   Printer(&type_context).Print(root);
+  //   return 0;
+  // }
+
+  // compile(root, builder, type_context);
+  // builder.GetCurrentCode().Return();
+
+  // std::vector<uint8_t> program_image = builder.GenerateImage();
+
+  // if (opts.mode == OutputMode::DumpImage) {
+  //   return DumpImage(program_image.data(), program_image.size());
+  // }
+
+  // if (opts.output_path.empty()) {
+  //   std::cout.write(reinterpret_cast<const char*>(program_image.data()),
+  //                   program_image.size());
+  //   std::cout.flush();
+  // } else {
+  //   std::ofstream out(opts.output_path, std::ios::binary);
+  //   if (out.is_open()) {
+  //     out.write(reinterpret_cast<const char*>(program_image.data()),
+  //               program_image.size());
+  //     out.close();
+  //   }
+  // }
   return 0;
 }

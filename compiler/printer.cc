@@ -227,7 +227,12 @@ void Printer::Print(const Statement& stmt, size_t indent) {
                         << std::endl;
               Print(method.second, indent + 6);
             }
-          }},
+          },
+          [&](const ImportStatement& import) {
+            std::cout << std::string(indent + 2, ' ') << "ImportStatement(\""
+                      << import.path << "\")" << std::endl;
+          },
+      },
       stmt.as);
 }
 

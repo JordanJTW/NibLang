@@ -25,6 +25,7 @@ enum class TokenKind {
   kKwStatic,        // static
   kKwAs,            // as
   kKwNil,           // Nil
+  kKwImport,        // @import 
   kVariadic,        // ...
   kOpenParen,       // (
   kCloseParen,      // )

@@ -24,7 +24,7 @@ class SemanticAnalyzerTest : public ::testing::Test {
  protected:
   std::unique_ptr<ErrorCollector> error_collector{
       DefaultErrorCollector("test_file")};
-  TypeContext type_context{*error_collector};
+  TypeContext type_context;
   SemanticAnalyzer semantic_analyzer{type_context, *error_collector};
 };
 

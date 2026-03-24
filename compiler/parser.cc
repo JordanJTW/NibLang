@@ -42,7 +42,7 @@ void print_error(const std::string& file,
 
 Block Parser::Parse() {
   Block root_block;
-  ParseBlock(root_block);
+  ParseBlock(root_block, BlockType::Root);
   return root_block;
 }
 
@@ -56,7 +56,7 @@ Block Parser::Parse() {
     continue;                    \
   }
 
-void Parser::ParseBlock(Block& block) {
+void Parser::ParseBlock(Block& block, BlockType type) {
   while (current_token_.kind != TokenKind::kEndOfFile &&
          current_token_.kind != TokenKind::kCloseBrace) {
     if (current_token_.kind == TokenKind::kUnknown) {
@@ -235,6 +235,31 @@ void Parser::ParseBlock(Block& block) {
           Statement{AssignStatement{variable_name->value, std::move(var_type),
                                     std::move(value_expr)},
                     Metadata::fromTokens(start_token, current_token_)}));
+      continue;
+    }
+
+    if (current_token_.kind == TokenKind::kKwImport) {
+      AdvanceToken();  // Past @import
+
+      if (type != BlockType::Root) {
+        HandleError("@imports can only appear in the root scope");
+        continue;
+      }
+
+      if (current_token_.kind != TokenKind::kString) {
+        HandleError("@import missing \"path/to/import\"");
+        continue;
+      }
+
+      Token import_path = current_token_;
+      AdvanceToken();  // Past @import "path/to/import"
+
+      if (current_token_.kind == TokenKind::kEndExpr) {
+        AdvanceToken();  // Skip past ; but do not consider it missing an error
+      }
+
+      block.statements.push_back(std::make_unique<Statement>(
+          Statement{ImportStatement{std::move(import_path.value)}}));
       continue;
     }
 
@@ -923,7 +948,7 @@ void Parser::HandleError(std::string_view message) {
            kind == TokenKind::kKwExtern || kind == TokenKind::kKwWhile ||
            kind == TokenKind::kKwReturn || kind == TokenKind::kKwBreak ||
            kind == TokenKind::kKwFn || kind == TokenKind::kKwContinue ||
-           kind == TokenKind::kKwThrow;
+           kind == TokenKind::kKwThrow || kind == TokenKind::kKwImport;
   };
 
   while (!is_start_of_statement(current_token_.kind) &&

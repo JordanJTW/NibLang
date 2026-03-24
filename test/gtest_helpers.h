@@ -33,6 +33,10 @@ MATCHER_P(StringType, expected, "is a String vm_value_t") {
   return std::string(str, length) == expected;
 }
 
+MATCHER_P(HasType, expected, "is a vm_value_t with type") {
+  return arg.type == expected;
+}
+
 MATCHER_P2(IsPromiseWithStateAndValue,
            expceted_state,
            value_matcher,

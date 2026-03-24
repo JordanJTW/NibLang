@@ -15,8 +15,7 @@ typedef struct MapNode {
   struct MapNode* next;
 } MapNode;
 
-Map* init_map(vm_gc_t* gc, size_t bucket_count);
-void free_map(Map* map);
+vm_value_t allocate_map(vm_gc_t* gc, size_t bucket_count);
 
 vm_value_t* map_get(Map* map, vm_value_t key);
 bool map_insert(Map* map, vm_value_t key, vm_value_t value);

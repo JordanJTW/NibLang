@@ -149,34 +149,7 @@ void free_vm(vm_t* vm) {
 
   free(vm->constants);
 
-  size_t total_heap = 0;
-  size_t count = 0;
-  size_t not_collected_count = 0;
-
-  vm_allocation_t** it = &vm->gc.allocation_head;
-  while (*it != NULL) {
-    vm_allocation_t* node = *it;
-
-    printf("size: %zu active: %s\n", node->allocation_size,
-           node->object == NULL ? "NO" : "YES");
-
-    if (node->object) {
-      printf("  => %p rc: %u (%s:%zu)\n", node->object, node->object->count,
-             node->from_name, node->from_line);
-      ++not_collected_count;
-    }
-    total_heap += node->allocation_size;
-
-    // Remove from list
-    *it = node->next;
-    free(node->from_name);
-    free(node);
-    ++count;
-  }
-  // assert(not_collected_count == 0 && "found non-RC collected heap!");
-
-  printf("Allocated %zu bytes in GC heap\n", total_heap);
-  printf("Overhead %zu bytes for GC heap\n", count * sizeof(vm_allocation_t));
+  free_gc(&vm->gc);
 
   assert(vm->current_frame == NULL && "leaked frames exist");
   printf("Stack SP after free: %zu\n", vm->stack.sp);
@@ -1126,4 +1099,34 @@ void* vm_gc_allocate(vm_gc_t* vm, size_t size) {
 
 vm_gc_t* vm_get_gc(vm_t* vm) {
   return &vm->gc;
+}
+
+void free_gc(vm_gc_t* gc) {
+  size_t total_heap = 0;
+  size_t count = 0;
+  size_t not_collected_count = 0;
+
+  vm_allocation_t** it = &gc->allocation_head;
+  while (*it != NULL) {
+    vm_allocation_t* node = *it;
+
+    printf("size: %zu active: %s\n", node->allocation_size,
+           node->object == NULL ? "NO" : "YES");
+
+    if (node->object) {
+      printf("  => %p rc: %u (%s:%zu)\n", node->object, node->object->count,
+             node->from_name, node->from_line);
+      ++not_collected_count;
+    }
+    total_heap += node->allocation_size;
+
+    *it = node->next;
+    free(node->from_name);
+    free(node);
+    ++count;
+  }
+  // assert(not_collected_count == 0 && "found non-RC collected heap!");
+
+  printf("Allocated %zu bytes in GC heap\n", total_heap);
+  printf("Overhead %zu bytes for GC heap\n", count * sizeof(vm_allocation_t));
 }

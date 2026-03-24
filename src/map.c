@@ -13,24 +13,35 @@ static inline bool is_map(vm_value_t value) {
   return value.type == VALUE_TYPE_MAP;
 }
 
-Map* init_map(vm_gc_t* gc, size_t bucket_count) {
-  Map* map = vm_gc_allocate(gc, sizeof(Map) + sizeof(MapNode*) * bucket_count);
-  if (map == NULL)
-    return NULL;
-  map->bucket_count = bucket_count;
-  return map;
-}
-
-void free_map(Map* map) {
+void free_map(void* self, bool should_free) {
+  Map* map = self;
   for (size_t i = 0; i < map->bucket_count; ++i) {
     MapNode* node = map->buckets[i];
     while (node) {
       MapNode* next = node->next;
+      vm_free_ref(&node->key);
+      vm_free_ref(&node->value);
       free(node);
       node = next;
     }
   }
-  free(map);
+  if (should_free)
+    free(self);
+}
+
+vm_value_t allocate_map(vm_gc_t* gc, size_t bucket_count) {
+  Map* map = vm_gc_allocate(gc, sizeof(Map) + sizeof(MapNode*) * bucket_count);
+  if (map == NULL)
+    return (vm_value_t){.type = VALUE_TYPE_NULL};
+
+  map->bucket_count = bucket_count;
+  map->ref_count.deleter = &free_map;
+  static uint32_t next_id = 0;
+  map->id = ++next_id;
+
+  vm_value_t value = (vm_value_t){.type = VALUE_TYPE_MAP, .as.map = map};
+  vm_adopt_ref(value);
+  return value;
 }
 
 static uint32_t hash(vm_value_t value) {
@@ -131,34 +142,8 @@ bool map_remove(Map* map, vm_value_t key) {
   return false;
 }
 
-void delete_map(void* self, bool should_free) {
-  Map* map = self;
-  for (size_t i = 0; i < map->bucket_count; ++i) {
-    MapNode* node = map->buckets[i];
-    while (node) {
-      MapNode* next = node->next;
-      vm_free_ref(&node->key);
-      vm_free_ref(&node->value);
-      free(node);
-      node = next;
-    }
-  }
-  if (should_free)
-    free(map);
-}
-
 vm_value_t vm_map_alloc(vm_value_t* argv, size_t argc, void* vm) {
-  Map* map = init_map(vm_get_gc(vm), /*bucket_count=*/13);
-  if (map == NULL) {
-    return (vm_value_t){.type = VALUE_TYPE_NULL};
-  }
-  map->ref_count.deleter = &delete_map;
-  static uint32_t next_id = 0;
-  map->id = ++next_id;
-
-  vm_value_t map_value = (vm_value_t){.type = VALUE_TYPE_MAP, .as.map = map};
-  vm_adopt_ref(map_value);
-  return map_value;
+  return allocate_map(vm_get_gc(vm), 13);
 }
 
 vm_value_t vm_map_get(vm_value_t* argv, size_t argc, void* vm) {

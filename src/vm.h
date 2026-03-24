@@ -124,6 +124,9 @@ void* vm_gc_allocate(vm_gc_t* gc, size_t size);
 // Returns the garbage-collector associated with `vm`.
 vm_gc_t* vm_get_gc(vm_t* vm);
 
+// Free `vm_gc_t` metadata used to handle garbage-collection.
+void free_gc(vm_gc_t* gc);
+
 vm_value_t vm_call_function(vm_t* vm,
                             Closure* fn,
                             vm_value_t* argv,

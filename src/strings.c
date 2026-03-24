@@ -36,7 +36,7 @@ vm_value_t vm_strings_substring(vm_value_t* argv, size_t argc, void* vm) {
     return vm_throw_exception(vm, allocate_str_from_c("RangeError"));
   }
 
-  return allocate_str_from_c_with_length(cstr + start, end - start);
+  return allocate_str_from_c_with_len(cstr + start, end - start);
 }
 
 vm_value_t vm_strings_get(vm_value_t* argv, size_t argc, void* vm) {
@@ -70,9 +70,8 @@ vm_value_t vm_strings_starts_with(vm_value_t* argv, size_t argc, void* vm) {
   size_t search_len = vm_as_str(&target, &search_str);
 
   int32_t idx;
-  if (!vm_as_int32(&argv[2], &idx) || idx < 0 || idx >= len ||
-      len - idx < search_len) {
-    return vm_throw_exception(vm, allocate_str_from_c("RangeError"));
+  if (!vm_as_int32(&argv[2], &idx)) {
+    return vm_throw_exception(vm, allocate_str_from_c("TypeError"));
   }
 
   int result = strncmp(cstr + idx, search_str, search_len);
@@ -83,5 +82,7 @@ vm_value_t vm_string_length(vm_value_t* argv, size_t argc, void* vm) {
   assert(argc == 1 && (argv[0].type == VALUE_TYPE_STR) &&
          "incorrect number of args or arg types");
 
-  return (vm_value_t){.type = VALUE_TYPE_INT, .as.i32 = argv[0].as.str->len};
+  RC_AUTOFREE vm_value_t this = argv[0];
+
+  return (vm_value_t){.type = VALUE_TYPE_INT, .as.i32 = this.as.str->len};
 }

@@ -56,6 +56,9 @@ void print_result(vm_value_t* result, int indent) {
     case VALUE_TYPE_NULL:
       printf("(null)\n");
       break;
+    case VALUE_TYPE_OPAQUE:
+      printf("<opaque>");
+      break;
     case VALUE_TYPE_VOID:
       printf("<none!?>");
       break;
@@ -70,32 +73,11 @@ static vm_value_t vm_log(vm_value_t* argv, size_t argc, void* vm) {
   return (vm_value_t){.type = VALUE_TYPE_VOID};
 }
 
-static vm_value_t vm_fetch(vm_value_t* argv, size_t argc, void* vm) {
-  assert(argc == 1 && argv[0].type == VALUE_TYPE_STR && "expected a URL");
-
-  RC_AUTOFREE vm_value_t url = argv[0];
-
-  char* str = NULL;
-  size_t strl = vm_as_str(&url, &str);
-
-  vm_value_t json = allocate_str_from_c("{\"key\": {\"value\": 666}}");
-  vm_adopt_ref(json);
-
-  vm_value_t result = allocate_promise();
-  promise_resolve(vm_get_job_queue(vm), result, json, false);
-
-  return result;
-}
-
-static const vm_function_t kNativeFunctions[2] = {
+static const vm_function_t kNativeFunctions[1] = {
     {.type = VM_NATIVE_FUNC,
      .argument_count = 0,
      .name = "log",
      .as.native = {.fn = vm_log, .userdata = NULL}},
-    {.type = VM_NATIVE_FUNC,
-     .argument_count = 1,
-     .name = "fetch",
-     .as.native = {.fn = vm_fetch, .userdata = NULL}},
 };
 
 int main(int argc, char* argv[]) {
@@ -132,12 +114,15 @@ int main(int argc, char* argv[]) {
                      sizeof(kNativeFunctions) / sizeof(vm_function_t));
   if (vm != NULL) {
     vm_value_t result = vm_run(vm, 0, true);
-    run_promise_jobs(vm, vm_get_job_queue(vm));
+    while (run_promise_jobs(vm, vm_get_job_queue(vm)))
+      ;
     printf("Result: ");
     print_result(&result, 0);
     printf("\n");
+    vm_free_ref(&result);
   }
 
+  free_vm(vm);
   fclose(file);
   free(buffer);
 }

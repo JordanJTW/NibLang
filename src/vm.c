@@ -87,6 +87,7 @@ typedef struct vm_t {
   vm_value_t exception;
   bool unhandled_exception;
   uint8_t* bytecode_data;
+  vm_gc_t gc;
   vm_function_t functions[];
 } vm_t;
 
@@ -132,10 +133,6 @@ vm_t* new_vm(const vm_value_t* constants,
   memcpy(vm->constants, constants, constants_count * sizeof(vm_value_t));
   vm->constants_count = constants_count;
 
-  // Ensure all constants are owned by the VM itself.
-  for (size_t i = 0; i < vm->constants_count; ++i)
-    rc_increment(&vm->constants[i]);
-
   vm->stack.capacity = 256;
   vm->stack.values = calloc(vm->stack.capacity, sizeof(vm_value_t));
   vm->job_queue = init_job_queue();
@@ -143,14 +140,48 @@ vm_t* new_vm(const vm_value_t* constants,
 }
 
 void free_vm(vm_t* vm) {
-  for (size_t i = 0; i < vm->constants_count; ++i)
+  for (size_t i = 0; i < vm->constants_count; ++i) {
+    printf("%p constant: %s rc: %u\n", vm->constants[i].as.ref,
+           vm->constants[i].as.str->c_str, vm->constants[i].as.ref->count);
+    assert(vm->constants[i].as.ref->count == 1);
     rc_decrement(&vm->constants[i]);
+  }
 
   free(vm->constants);
 
-  assert(vm->current_frame == NULL && "leaked frames exist");
-  assert(vm->stack.sp == 0 && "stack not empty on free");
+  size_t total_heap = 0;
+  size_t count = 0;
+  size_t not_collected_count = 0;
 
+  vm_allocation_t** it = &vm->gc.allocation_head;
+  while (*it != NULL) {
+    vm_allocation_t* node = *it;
+
+    printf("size: %zu active: %s\n", node->allocation_size,
+           node->object == NULL ? "NO" : "YES");
+
+    if (node->object) {
+      printf("  => %p rc: %u (%s:%zu)\n", node->object, node->object->count,
+             node->from_name, node->from_line);
+      ++not_collected_count;
+    }
+    total_heap += node->allocation_size;
+
+    // Remove from list
+    *it = node->next;
+    free(node->from_name);
+    free(node);
+    ++count;
+  }
+  // assert(not_collected_count == 0 && "found non-RC collected heap!");
+
+  printf("Allocated %zu bytes in GC heap\n", total_heap);
+  printf("Overhead %zu bytes for GC heap\n", count * sizeof(vm_allocation_t));
+
+  assert(vm->current_frame == NULL && "leaked frames exist");
+  printf("Stack SP after free: %zu\n", vm->stack.sp);
+
+  free(vm->bytecode_data);
   free(vm->stack.values);
   free_job_queue(vm->job_queue);
   free(vm);
@@ -169,8 +200,18 @@ static void rc_increment(vm_value_t* value) {
     case VALUE_TYPE_MAP:
     case VALUE_TYPE_STR:
     case VALUE_TYPE_FUNCTION:
-    case VALUE_TYPE_PROMISE: {
+    case VALUE_TYPE_PROMISE:
+    case VALUE_TYPE_OPAQUE: {
       ++(value->as.ref->count);
+
+      if (value->as.ref->allocation != NULL &&
+          value->as.ref->allocation->from_name)
+        printf("%s %p rc: %u (%s:%zu)\n", __func__, value->as.ref,
+               value->as.ref->count, value->as.ref->allocation->from_name,
+               value->as.ref->allocation->from_line);
+      else
+        printf("%s %p rc: %u no allocation\n", __func__, value->as.ref,
+               value->as.ref->count);
       break;
     }
   }
@@ -189,11 +230,33 @@ static void rc_decrement(vm_value_t* value) {
     case VALUE_TYPE_MAP:
     case VALUE_TYPE_STR:
     case VALUE_TYPE_FUNCTION:
-    case VALUE_TYPE_PROMISE: {
+    case VALUE_TYPE_PROMISE:
+    case VALUE_TYPE_OPAQUE: {
+      if (value->as.ref->allocation != NULL)
+        printf("Try %s %p rc: %u (%s:%zu)\n", __func__, value->as.ref,
+               value->as.ref->count, value->as.ref->allocation->from_name,
+               value->as.ref->allocation->from_line);
+      else
+        printf("Try %s %p rc: %u no allocation\n", __func__, value->as.ref,
+               value->as.ref->count);
+
       assert(value->as.ref->count > 0);
       --(value->as.ref->count);
-      if (value->as.ref->count == 0)
-        value->as.ref->deleter(value->as.ref);
+
+      if (value->as.ref->allocation != NULL &&
+          value->as.ref->allocation->from_name)
+        printf("%s %p rc: %u (%s:%zu)\n", __func__, value->as.ref,
+               value->as.ref->count, value->as.ref->allocation->from_name,
+               value->as.ref->allocation->from_line);
+
+      if (value->as.ref->count == 0) {
+        if (value->as.ref->allocation == NULL) {
+          printf("Type missing allocation: %d\n", value->type);
+        } else {
+          value->as.ref->allocation->object = NULL;
+        }
+        value->as.ref->deleter(value->as.ref, true);
+      }
       break;
     }
   }
@@ -250,12 +313,17 @@ static bool handle_exception(vm_t* vm) {
   return handle_exception(vm);
 }
 
-static void vm_invoke_closure(vm_t* vm,
+static void delete_str(void* str, bool should_free) {
+  if (should_free)
+    free(str);
+}
+
+static bool vm_invoke_closure(vm_t* vm,
                               Closure* closure,
                               vm_value_t* argv,
                               size_t argc) {
   if (closure->bound_argc == 0) {
-    vm_invoke(vm, closure->fn, argv, argc);
+    return vm_invoke(vm, closure->fn, argv, argc);
   } else {
     size_t to_bind_argc = closure->fn->argument_count - closure->bound_argc;
     to_bind_argc = to_bind_argc > argc ? to_bind_argc : argc;
@@ -266,8 +334,8 @@ static void vm_invoke_closure(vm_t* vm,
     for (size_t i = 0; i < closure->bound_argc; ++i)
       rc_increment(&closure->argument_storage[i]);
 
-    vm_invoke(vm, closure->fn, closure->argument_storage,
-              closure->bound_argc + to_bind_argc);
+    return vm_invoke(vm, closure->fn, closure->argument_storage,
+                     closure->bound_argc + to_bind_argc);
   }
 }
 
@@ -369,6 +437,7 @@ static void run_frame(vm_t* vm, const char* name) {
 
         vm->stack.sp -= argc;
         vm_invoke_closure(vm, fn.as.fn, vm->stack.values + vm->stack.sp, argc);
+        vm_free_ref(&fn);
         frame->pc += 5;
         break;
       }
@@ -496,17 +565,19 @@ static void run_frame(vm_t* vm, const char* name) {
 
         size_t total_length = arg1.as.str->len + arg2.as.str->len;
 
-        String* string = calloc(1, sizeof(String) + total_length + 1);
+        String* string = malloc(sizeof(String) + total_length + 1);
         string->len = total_length;
         memcpy(string->c_str, arg1.as.str->c_str, arg1.as.str->len);
         memcpy(string->c_str + arg1.as.str->len, arg2.as.str->c_str,
                arg2.as.str->len);
 
         string->c_str[total_length] = '\0';  // Add in the \0 terminator
-        string->rc.deleter = &free;
+        string->rc.deleter = &delete_str;
 
         push_stack(&vm->stack,
                    (vm_value_t){.type = VALUE_TYPE_STR, .as.str = string});
+        vm_free_ref(&arg1);
+        vm_free_ref(&arg2);
         ++frame->pc;
         break;
       }
@@ -542,7 +613,9 @@ static void run_frame(vm_t* vm, const char* name) {
         for (size_t i = 0; i < to_bind_argc; ++i)
           rc_decrement(vm->stack.values + (vm->stack.sp - to_bind_argc + i));
         vm->stack.sp -= to_bind_argc;
-        push_stack(&vm->stack, bound_fn);
+        // Push to stack without taking ownership.
+        assert(vm->stack.sp < vm->stack.capacity && "stack overflow");
+        vm->stack.values[vm->stack.sp++] = bound_fn;
         frame->pc += 9;
         break;
       }
@@ -706,16 +779,19 @@ bool vm_as_int32(const vm_value_t* value, int32_t* out) {
 }
 
 vm_value_t allocate_str_from_c(const char* str) {
-  return allocate_str_from_c_with_length(str, strlen(str));
+  return allocate_str_from_c_with_len(str, strlen(str));
 }
 
-vm_value_t allocate_str_from_c_with_length(const char* str, size_t length) {
+vm_value_t allocate_str_from_c_with_len(const char* str, size_t length) {
   String* string = calloc(1, sizeof(String) + length + 1);
   string->len = length;
   memcpy(string->c_str, str, length);
   string->c_str[length] = '\0';  // Add in the \0 terminator
-  string->rc.deleter = &free;
-  return (vm_value_t){.type = VALUE_TYPE_STR, .as.str = string};
+  string->rc.deleter = &delete_str;
+
+  vm_value_t value = {.type = VALUE_TYPE_STR, .as.str = string};
+  vm_adopt_ref(value);
+  return value;
 }
 
 size_t vm_as_str(const vm_value_t* value, char** out) {
@@ -805,8 +881,8 @@ vm_value_t vm_call_function(vm_t* vm,
                             Closure* closure,
                             vm_value_t* argv,
                             size_t argc) {
-  vm_invoke_closure(vm, closure, argv, argc);
-  run_frame(vm, closure->fn->name);
+  if (vm_invoke_closure(vm, closure, argv, argc))
+    run_frame(vm, closure->fn->name);
   if (vm->stack.sp > 0) {
     return pop_stack(&vm->stack);
   } else {
@@ -837,12 +913,12 @@ static void install_builtins(vm_t* vm) {
     }                                                                       \
   }
 
-  INSTALL(0, allocate_promise, 0);
+  INSTALL(0, vm_promise_alloc, 0);
   INSTALL(1, vm_promise_fulfill, 2);
   INSTALL(2, vm_promise_reject, 2);
   INSTALL(3, vm_promise_then, 3);
   INSTALL(4, vm_strings_substring, 3);
-  INSTALL(5, allocate_map, 0);
+  INSTALL(5, vm_map_alloc, 0);
   INSTALL(6, vm_strings_get, 2);
   INSTALL(7, vm_map_set, 3);
   INSTALL(8, vm_strings_starts_with, 3);
@@ -857,12 +933,14 @@ static void install_builtins(vm_t* vm) {
   INSTALL(17, vm_array_length, 1);
 }
 
-static void free_closure(void* self) {
+static void free_closure(void* self, bool should_free) {
   Closure* fn = self;
   for (size_t i = 0; i < fn->bound_argc; ++i) {
     vm_free_ref(&fn->argument_storage[i]);
   }
-  free(fn);
+
+  if (should_free)
+    free(fn);
 }
 
 vm_value_t bind_to_function(vm_t* vm,
@@ -874,8 +952,8 @@ vm_value_t bind_to_function(vm_t* vm,
   assert(argc <= fn->argument_count && "more arguments than required");
 
   size_t storage_size = argc > 0 ? fn->argument_count : 0;
-  Closure* func =
-      calloc(1, sizeof(Closure) + sizeof(vm_value_t) * storage_size);
+  Closure* func = vm_gc_allocate(
+      &vm->gc, sizeof(Closure) + sizeof(vm_value_t) * storage_size);
   func->fn = fn;
   func->bound_argc = argc;
   func->ref_count.deleter = &free_closure;
@@ -883,7 +961,9 @@ vm_value_t bind_to_function(vm_t* vm,
 
   for (size_t i = 0; i < argc; ++i)
     rc_increment(&func->argument_storage[i]);
-  return (vm_value_t){.type = VALUE_TYPE_FUNCTION, .as.fn = func};
+  vm_value_t value = {.type = VALUE_TYPE_FUNCTION, .as.fn = func};
+  vm_adopt_ref(value);
+  return value;
 }
 
 vm_job_queue_t* vm_get_job_queue(vm_t* vm) {
@@ -964,7 +1044,7 @@ vm_t* init_vm(const uint8_t* program,
 
     switch (section.type) {
       case CONST_STR:
-        vm->constants[parsed_constants++] = allocate_str_from_c_with_length(
+        vm->constants[parsed_constants++] = allocate_str_from_c_with_len(
             (char*)(program + offset), section.size);
         break;
       case FUNCTION: {
@@ -998,17 +1078,13 @@ vm_t* init_vm(const uint8_t* program,
     return NULL;
   }
 
-  // Ensure all constants are owned by the VM itself.
-  for (size_t i = 0; i < vm->constants_count; ++i)
-    rc_increment(&vm->constants[i]);
-
   vm->stack.capacity = 256;
   vm->stack.values = calloc(vm->stack.capacity, sizeof(vm_value_t));
   vm->job_queue = init_job_queue();
   return vm;
 }
 
-void vm_invoke(vm_t* vm, vm_function_t* fn, vm_value_t* argv, size_t argc) {
+bool vm_invoke(vm_t* vm, vm_function_t* fn, vm_value_t* argv, size_t argc) {
   assert(argc >= fn->argument_count && "not enough args");
   switch (fn->type) {
     case VM_BYTECODE: {
@@ -1021,13 +1097,33 @@ void vm_invoke(vm_t* vm, vm_function_t* fn, vm_value_t* argv, size_t argc) {
 
       new_frame->next = vm->current_frame;
       vm->current_frame = new_frame;
-      break;
+      return true;
     }
     case VM_NATIVE_FUNC: {
       vm_value_t result = fn->as.native.fn(argv, argc, fn->as.native.userdata);
-      if (result.type != VALUE_TYPE_VOID)
-        push_stack(&vm->stack, result);
-      break;
+      if (result.type != VALUE_TYPE_VOID) {
+        // Push to stack without taking ownership (callee handles incrementing).
+        assert(vm->stack.sp < vm->stack.capacity && "stack overflow");
+        vm->stack.values[vm->stack.sp++] = result;
+      }
+      return false;
     }
   }
+}
+
+void* vm_gc_allocate(vm_gc_t* vm, size_t size) {
+  vm_allocation_t* alloc = calloc(1, sizeof(vm_allocation_t));
+  ref_count_t* object = calloc(1, size);
+
+  alloc->allocation_size = size;
+  alloc->next = vm->allocation_head;
+  alloc->object = object;
+
+  object->allocation = alloc;
+  vm->allocation_head = alloc;
+  return object;
+}
+
+vm_gc_t* vm_get_gc(vm_t* vm) {
+  return &vm->gc;
 }

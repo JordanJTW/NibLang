@@ -60,11 +60,25 @@ typedef struct MapNode MapNode;
 typedef struct vm_promise_t Promise;
 typedef struct vm_array_t Array;
 typedef struct vm_closure_t Closure;
+typedef struct vm_allocation_t vm_allocation_t;
 
 typedef struct ref_count_t {
   uint32_t count;
-  void (*deleter)(void* self);
+  void (*deleter)(void* self, bool free);
+  vm_allocation_t* allocation;
 } ref_count_t;
+
+struct vm_allocation_t {
+  struct vm_allocation_t* next;
+  ref_count_t* object;
+  size_t allocation_size;
+  char* from_name;
+  size_t from_line;
+};
+
+typedef struct {
+  vm_allocation_t* allocation_head;
+} vm_gc_t;
 
 typedef struct vm_string_t {
   ref_count_t rc;
@@ -81,7 +95,7 @@ typedef struct vm_map_t {
 } Map;
 
 typedef struct vm_value {
-  enum {
+  enum type_t {
     VALUE_TYPE_VOID,  // Special return value for functions
     VALUE_TYPE_NULL,
     VALUE_TYPE_BOOL,
@@ -92,6 +106,7 @@ typedef struct vm_value {
     VALUE_TYPE_FUNCTION,
     VALUE_TYPE_PROMISE,
     VALUE_TYPE_ARRAY,
+    VALUE_TYPE_OPAQUE,
   } type;
   union {
     bool boolean;

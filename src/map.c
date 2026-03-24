@@ -13,8 +13,8 @@ static inline bool is_map(vm_value_t value) {
   return value.type == VALUE_TYPE_MAP;
 }
 
-Map* init_map(size_t bucket_count) {
-  Map* map = (Map*)calloc(1, sizeof(Map) + sizeof(MapNode*) * bucket_count);
+Map* init_map(vm_gc_t* gc, size_t bucket_count) {
+  Map* map = vm_gc_allocate(gc, sizeof(Map) + sizeof(MapNode*) * bucket_count);
   if (map == NULL)
     return NULL;
   map->bucket_count = bucket_count;
@@ -70,6 +70,7 @@ static int compare(vm_value_t v1, vm_value_t v2) {
     case VALUE_TYPE_FUNCTION:
     case VALUE_TYPE_PROMISE:
     case VALUE_TYPE_ARRAY:
+    case VALUE_TYPE_OPAQUE:
       return 0;
     case VALUE_TYPE_MAP:
       return v1.as.map->id - v2.as.map->id;
@@ -92,7 +93,11 @@ vm_value_t* map_get(Map* map, vm_value_t key) {
 bool map_insert(Map* map, vm_value_t key, vm_value_t value) {
   vm_value_t* found_node = map_get(map, key);
   if (found_node != NULL) {
+    vm_free_ref(&key);  // Already have `key` owned by map!
+
+    vm_value_t existing_value = *found_node;
     *found_node = value;
+    vm_free_ref(&existing_value);
     return false;
   }
 
@@ -126,7 +131,7 @@ bool map_remove(Map* map, vm_value_t key) {
   return false;
 }
 
-void delete_map(void* self) {
+void delete_map(void* self, bool should_free) {
   Map* map = self;
   for (size_t i = 0; i < map->bucket_count; ++i) {
     MapNode* node = map->buckets[i];
@@ -138,18 +143,22 @@ void delete_map(void* self) {
       node = next;
     }
   }
-  free(map);
+  if (should_free)
+    free(map);
 }
 
-vm_value_t allocate_map() {
-  Map* map = init_map(/*bucket_count=*/13);
+vm_value_t vm_map_alloc(vm_value_t* argv, size_t argc, void* vm) {
+  Map* map = init_map(vm_get_gc(vm), /*bucket_count=*/13);
   if (map == NULL) {
     return (vm_value_t){.type = VALUE_TYPE_NULL};
   }
   map->ref_count.deleter = &delete_map;
   static uint32_t next_id = 0;
   map->id = ++next_id;
-  return (vm_value_t){.type = VALUE_TYPE_MAP, .as.map = map};
+
+  vm_value_t map_value = (vm_value_t){.type = VALUE_TYPE_MAP, .as.map = map};
+  vm_adopt_ref(map_value);
+  return map_value;
 }
 
 vm_value_t vm_map_get(vm_value_t* argv, size_t argc, void* vm) {
@@ -157,7 +166,9 @@ vm_value_t vm_map_get(vm_value_t* argv, size_t argc, void* vm) {
          "incorrect number of args or arg types");
 
   RC_AUTOFREE vm_value_t this = argv[0];
-  vm_value_t* value = map_get(this.as.map, argv[1]);
+  RC_AUTOFREE vm_value_t key = argv[1];
+
+  vm_value_t* value = map_get(this.as.map, key);
   if (value == NULL)
     return (vm_value_t){.type = VALUE_TYPE_NULL};
 
@@ -170,6 +181,7 @@ vm_value_t vm_map_set(vm_value_t* argv, size_t argc, void* vm) {
          "incorrect number of args or arg types");
 
   RC_AUTOFREE vm_value_t this = argv[0];
+
   map_insert(this.as.map, argv[1], argv[2]);
   return (vm_value_t){.type = VALUE_TYPE_VOID};
 }

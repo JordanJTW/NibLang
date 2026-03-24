@@ -8,7 +8,7 @@
 #include "src/types.h"
 #include "src/vm.h"
 
-void vm_array_destroy(void* ptr) {
+void vm_array_destroy(void* ptr, bool should_free) {
   Array* array = ptr;
 
   for (size_t i = 0; i < array->len; i++) {
@@ -19,8 +19,8 @@ void vm_array_destroy(void* ptr) {
   free(array);
 }
 
-Array* allocate_array(int length) {
-  Array* const array = calloc(1, sizeof(Array));
+Array* allocate_array(vm_t* vm, int length) {
+  Array* const array = vm_gc_allocate(vm_get_gc(vm), sizeof(Array));
   array->capacity = length;
   array->len = length;
   array->data = calloc(length, sizeof(vm_value_t));
@@ -30,15 +30,19 @@ Array* allocate_array(int length) {
 
 vm_value_t vm_array_new(vm_value_t* argv, size_t argc, void* vm) {
   int length = argc == 1 ? argv[0].as.i32 : 0;
-  return (vm_value_t){.type = VALUE_TYPE_ARRAY,
-                      .as.array = allocate_array(length)};
+  vm_value_t array_value = {.type = VALUE_TYPE_ARRAY,
+                            .as.array = allocate_array(vm, length)};
+  vm_adopt_ref(array_value);
+  return array_value;
 }
 
 vm_value_t vm_array_init(vm_value_t* argv, size_t argc, void* vm) {
-  Array* array = allocate_array(argc);
+  Array* array = allocate_array(vm, argc);
 
   memcpy(array->data, argv, argc * sizeof(vm_value_t));
-  return (vm_value_t){.type = VALUE_TYPE_ARRAY, .as.array = array};
+  vm_value_t array_value = {.type = VALUE_TYPE_ARRAY, .as.array = array};
+  vm_adopt_ref(array_value);
+  return array_value;
 }
 
 vm_value_t vm_array_get(vm_value_t* argv, size_t argc, void* vm) {
@@ -55,9 +59,8 @@ vm_value_t vm_array_get(vm_value_t* argv, size_t argc, void* vm) {
     return vm_throw_exception(vm, allocate_str_from_c("RangeError"));
   }
 
-  vm_value_t result = array->data[idx];
-  vm_adopt_ref(result);
-  return result;
+  vm_adopt_ref(array->data[idx]);
+  return array->data[idx];
 }
 
 vm_value_t vm_array_length(vm_value_t* argv, size_t argc, void* vm) {
@@ -112,6 +115,6 @@ vm_value_t vm_array_push(vm_value_t* argv, size_t argc, void* vm) {
     array->data = tmp;
   }
 
-  array->data[array->len++] = argv[1];
+  array->data[array->len++] = argv[1];  // Ownership transferred
   return (vm_value_t){.type = VALUE_TYPE_VOID};
 }

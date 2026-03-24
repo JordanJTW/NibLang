@@ -12,7 +12,7 @@ extern "C" {
 vm_job_queue_t* init_job_queue();
 void free_job_queue(vm_job_queue_t* job_queue);
 
-vm_value_t allocate_promise();
+vm_value_t allocate_promise(vm_t* vm);
 
 // Resolves the state of a PENDING promise with `value` (to be executed on the
 // next call to `run_promise_jobs()`). If `rejected` is true, then `value` is
@@ -28,7 +28,8 @@ void promise_resolve(vm_job_queue_t* job_queue,
 // of the callbacks. If the callbacks return a Promise then it is linked to the
 // Promise returned (i.e. if one Promise resolves the other resolves to the
 // same value).
-vm_value_t promise_then(vm_job_queue_t* job_queue,
+vm_value_t promise_then(vm_t* vm,
+                        vm_job_queue_t* job_queue,
                         vm_value_t source_promise,
                         vm_value_t on_fulfilled_fn,
                         vm_value_t on_rejected_fn);
@@ -38,6 +39,7 @@ vm_value_t promise_then(vm_job_queue_t* job_queue,
 bool run_promise_jobs(vm_t* vm, vm_job_queue_t* job_queue);
 
 // Trampolines for calling from VM code.
+vm_value_t vm_promise_alloc(vm_value_t* argv, size_t argc, void*);
 vm_value_t vm_promise_fulfill(vm_value_t* argv, size_t argc, void*);
 vm_value_t vm_promise_reject(vm_value_t* argv, size_t argc, void*);
 vm_value_t vm_promise_then(vm_value_t* argv, size_t argc, void*);

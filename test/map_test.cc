@@ -10,14 +10,16 @@
 #include "src/vm.h"
 
 TEST(Map, Init) {
-  Map* map = init_map(13);
+  vm_gc_t gc;
+  Map* map = init_map(&gc, 13);
   EXPECT_NE(map, nullptr);
   EXPECT_EQ(map->bucket_count, 13);
   free_map(map);
 }
 
 TEST(Map, StoreAndGet_IntKey) {
-  Map* map = init_map(13);
+  vm_gc_t gc;
+  Map* map = init_map(&gc, 13);
 
   vm_value_t key = {.type = vm_value::VALUE_TYPE_INT, .as.i32 = 42};
   vm_value_t value = {.type = vm_value::VALUE_TYPE_INT, .as.i32 = 99};
@@ -33,12 +35,11 @@ TEST(Map, StoreAndGet_IntKey) {
 }
 
 TEST(Map, StoreAndGet_StringKey) {
-  Map* map = init_map(13);
+  vm_gc_t gc;
+  Map* map = init_map(&gc, 13);
 
   RC_AUTOFREE vm_value_t key = allocate_str_from_c("hello");
-  vm_adopt_ref(key);
   RC_AUTOFREE vm_value_t value = allocate_str_from_c("world");
-  vm_adopt_ref(value);
 
   EXPECT_TRUE(map_insert(map, key, value));
 
@@ -53,13 +54,18 @@ TEST(Map, StoreAndGet_StringKey) {
 }
 
 TEST(Map, StoreAndGet_MapKey) {
-  Map* map = init_map(13);
+  vm_gc_t gc;
+  Map* map = init_map(&gc, 13);
 
-  RC_AUTOFREE vm_value_t key = allocate_map();
+  Map* key_map = init_map(&gc, 1);
+
+  RC_AUTOFREE vm_value_t key = {.type = vm_value_t::VALUE_TYPE_MAP,
+                                .as.map = key_map};
   vm_adopt_ref(key);
   RC_AUTOFREE vm_value_t value = allocate_str_from_c("from map key");
-  vm_adopt_ref(value);
 
+  vm_adopt_ref(key);
+  vm_adopt_ref(value);
   EXPECT_TRUE(map_insert(map, key, value));
 
   vm_value_t* retrieved = map_get(map, key);
@@ -73,7 +79,8 @@ TEST(Map, StoreAndGet_MapKey) {
 }
 
 TEST(Map, StoreAndGet_FullBucket) {
-  Map* map = init_map(1);
+  vm_gc_t gc;
+  Map* map = init_map(&gc, 1);
 
   RC_AUTOFREE vm_value_t key_hello = allocate_str_from_c("hello");
   vm_adopt_ref(key_hello);
@@ -121,13 +128,16 @@ TEST(Map, StoreAndGet_FullBucket) {
 }
 
 TEST(Map, StoreAndGet_ReplaceValue) {
-  Map* map = init_map(13);
+  vm_gc_t gc;
+  Map* map = init_map(&gc, 13);
 
   RC_AUTOFREE vm_value_t key = allocate_str_from_c("hello");
-  vm_adopt_ref(key);
 
+  vm_adopt_ref(key);
   EXPECT_TRUE(map_insert(
       map, key, (vm_value_t){.type = vm_value::VALUE_TYPE_INT, .as.i32 = 123}));
+
+  vm_adopt_ref(key);
   EXPECT_FALSE(map_insert(
       map, key, (vm_value_t){.type = vm_value::VALUE_TYPE_INT, .as.i32 = 369}));
 

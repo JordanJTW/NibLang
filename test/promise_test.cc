@@ -48,8 +48,7 @@ class PromiseTest : public ::testing::Test {
 };
 
 TEST_F(PromiseTest, ResolveChain) {
-  RC_AUTOFREE vm_value_t promise_value = allocate_promise();
-  vm_adopt_ref(promise_value);
+  RC_AUTOFREE vm_value_t promise_value = allocate_promise(vm_);
 
   EXPECT_FALSE(run_promise_jobs(vm_, job_queue_));
 
@@ -67,12 +66,11 @@ TEST_F(PromiseTest, ResolveChain) {
       }));
 
   RC_AUTOFREE vm_value_t then_promise =
-      promise_then(job_queue_, promise_value,
+      promise_then(vm_, job_queue_, promise_value,
                    bind_to_function(vm_, 0 /*on_fulfilled_fn*/,
                                     /*argv=*/nullptr, /*argc=*/0),
                    bind_to_function(vm_, 1 /*on_rejected_fn*/,
                                     /*argv=*/nullptr, /*argc=*/0));
-  vm_adopt_ref(then_promise);
 
   EXPECT_TRUE(run_promise_jobs(vm_, job_queue_));
 
@@ -80,8 +78,7 @@ TEST_F(PromiseTest, ResolveChain) {
 }
 
 TEST_F(PromiseTest, ResolveChainWithPromise) {
-  RC_AUTOFREE vm_value_t promise_value = allocate_promise();
-  vm_adopt_ref(promise_value);
+  RC_AUTOFREE vm_value_t promise_value = allocate_promise(vm_);
 
   EXPECT_FALSE(run_promise_jobs(vm_, job_queue_));
   vm_value_t value = {.type = vm_value::VALUE_TYPE_INT, .as.i32 = 42};
@@ -91,8 +88,7 @@ TEST_F(PromiseTest, ResolveChainWithPromise) {
 
   EXPECT_FALSE(run_promise_jobs(vm_, job_queue_));
 
-  RC_AUTOFREE vm_value_t inner_promise = allocate_promise();
-  vm_adopt_ref(inner_promise);
+  RC_AUTOFREE vm_value_t inner_promise = allocate_promise(vm_);
 
   EXPECT_CALL(on_fulfilled_func, Call(ElementsAre(Int32Type(42))))
       .WillOnce([inner_promise](std::vector<vm_value_t> args) {
@@ -100,12 +96,11 @@ TEST_F(PromiseTest, ResolveChainWithPromise) {
       });
 
   RC_AUTOFREE vm_value_t then_promise =
-      promise_then(job_queue_, promise_value,
+      promise_then(vm_, job_queue_, promise_value,
                    bind_to_function(vm_, 0 /*on_fulfilled_fn*/,
                                     /*argv=*/nullptr, /*argc=*/0),
                    bind_to_function(vm_, 1 /*on_rejected_fn*/,
                                     /*argv=*/nullptr, /*argc=*/0));
-  vm_adopt_ref(then_promise);
 
   EXPECT_TRUE(run_promise_jobs(vm_, job_queue_));
 
@@ -121,8 +116,7 @@ TEST_F(PromiseTest, ResolveChainWithPromise) {
 }
 
 TEST_F(PromiseTest, FulfillPromiseWithRejected) {
-  RC_AUTOFREE vm_value_t promise_value = allocate_promise();
-  vm_adopt_ref(promise_value);
+  RC_AUTOFREE vm_value_t promise_value = allocate_promise(vm_);
 
   EXPECT_FALSE(run_promise_jobs(vm_, job_queue_));
   vm_value_t value = {.type = vm_value::VALUE_TYPE_INT, .as.i32 = 666};
@@ -138,12 +132,11 @@ TEST_F(PromiseTest, FulfillPromiseWithRejected) {
       });
 
   RC_AUTOFREE vm_value_t then_promise =
-      promise_then(job_queue_, promise_value,
+      promise_then(vm_, job_queue_, promise_value,
                    bind_to_function(vm_, 0 /*on_fulfilled_fn*/,
                                     /*argv=*/nullptr, /*argc=*/0),
                    bind_to_function(vm_, 1 /*on_rejected_fn*/,
                                     /*argv=*/nullptr, /*argc=*/0));
-  vm_adopt_ref(then_promise);
 
   EXPECT_TRUE(run_promise_jobs(vm_, job_queue_));
 
@@ -151,8 +144,7 @@ TEST_F(PromiseTest, FulfillPromiseWithRejected) {
 }
 
 TEST_F(PromiseTest, PromiseHandleCatch) {
-  RC_AUTOFREE vm_value_t promise_value = allocate_promise();
-  vm_adopt_ref(promise_value);
+  RC_AUTOFREE vm_value_t promise_value = allocate_promise(vm_);
 
   EXPECT_FALSE(run_promise_jobs(vm_, job_queue_));
   vm_value_t value = {.type = vm_value::VALUE_TYPE_INT, .as.i32 = 666};
@@ -165,11 +157,10 @@ TEST_F(PromiseTest, PromiseHandleCatch) {
   EXPECT_CALL(on_fulfilled_func, Call(_)).Times(0);
 
   RC_AUTOFREE vm_value_t then_promise =
-      promise_then(job_queue_, promise_value,
+      promise_then(vm_, job_queue_, promise_value,
                    bind_to_function(vm_, 0 /*on_fulfilled_fn*/,
                                     /*argv=*/nullptr, /*argc=*/0),
                    (vm_value_t){.type = vm_value_t::VALUE_TYPE_NULL});
-  vm_adopt_ref(then_promise);
 
   EXPECT_TRUE(run_promise_jobs(vm_, job_queue_));
   EXPECT_THAT(then_promise, IsRejectedWith(Int32Type(666)));
@@ -179,8 +170,8 @@ TEST_F(PromiseTest, PromiseHandleCatch) {
         return (vm_value_t){.type = vm_value::VALUE_TYPE_INT, .as.i32 = 42};
       });
 
-  vm_value_t catch_promise =
-      promise_then(job_queue_, promise_value,
+  RC_AUTOFREE vm_value_t catch_promise =
+      promise_then(vm_, job_queue_, promise_value,
                    (vm_value_t){.type = vm_value_t::VALUE_TYPE_NULL},
                    bind_to_function(vm_, 1 /*on_rejected_fn*/,
                                     /*argv=*/nullptr, /*argc=*/0));
@@ -190,8 +181,7 @@ TEST_F(PromiseTest, PromiseHandleCatch) {
 }
 
 TEST_F(PromiseTest, FulfillPromiseThrow) {
-  RC_AUTOFREE vm_value_t promise_value = allocate_promise();
-  vm_adopt_ref(promise_value);
+  RC_AUTOFREE vm_value_t promise_value = allocate_promise(vm_);
 
   EXPECT_FALSE(run_promise_jobs(vm_, job_queue_));
   vm_value_t value = {.type = vm_value::VALUE_TYPE_INT, .as.i32 = 42};
@@ -209,12 +199,11 @@ TEST_F(PromiseTest, FulfillPromiseThrow) {
       });
 
   RC_AUTOFREE vm_value_t then_promise =
-      promise_then(job_queue_, promise_value,
+      promise_then(vm_, job_queue_, promise_value,
                    bind_to_function(vm_, 0 /*on_fulfilled_fn*/,
                                     /*argv=*/nullptr, /*argc=*/0),
                    bind_to_function(vm_, 1 /*on_rejected_fn*/,
                                     /*argv=*/nullptr, /*argc=*/0));
-  vm_adopt_ref(then_promise);
 
   EXPECT_TRUE(run_promise_jobs(vm_, job_queue_));
 
@@ -222,12 +211,10 @@ TEST_F(PromiseTest, FulfillPromiseThrow) {
 }
 
 TEST_F(PromiseTest, FulfillWithHeapType) {
-  RC_AUTOFREE vm_value_t promise_value = allocate_promise();
-  vm_adopt_ref(promise_value);
+  RC_AUTOFREE vm_value_t promise_value = allocate_promise(vm_);
 
   EXPECT_FALSE(run_promise_jobs(vm_, job_queue_));
-  vm_value_t hello_string = allocate_str_from_c("hello");
-  vm_adopt_ref(hello_string); // Pass ownership to value
+  RC_AUTOFREE vm_value_t hello_string = allocate_str_from_c("hello");
   promise_resolve(job_queue_, promise_value, hello_string,
                   /*is_rejected=*/false);
 
@@ -236,17 +223,15 @@ TEST_F(PromiseTest, FulfillWithHeapType) {
   EXPECT_FALSE(run_promise_jobs(vm_, job_queue_));
 
   vm_value_t world_string = allocate_str_from_c("world");
-  vm_adopt_ref(world_string);  // Pass ownership to value
   EXPECT_CALL(on_fulfilled_func, Call(ElementsAre(StringType("hello"))))
       .WillOnce([&](std::vector<vm_value_t> args) { return world_string; });
 
   RC_AUTOFREE vm_value_t then_promise =
-      promise_then(job_queue_, promise_value,
+      promise_then(vm_, job_queue_, promise_value,
                    bind_to_function(vm_, 0 /*on_fulfilled_fn*/,
                                     /*argv=*/nullptr, /*argc=*/0),
                    bind_to_function(vm_, 1 /*on_rejected_fn*/,
                                     /*argv=*/nullptr, /*argc=*/0));
-  vm_adopt_ref(then_promise);
 
   EXPECT_TRUE(run_promise_jobs(vm_, job_queue_));
 

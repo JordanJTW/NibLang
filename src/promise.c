@@ -31,7 +31,7 @@ static bool is_promise(vm_value_t value) {
   return value.type == VALUE_TYPE_PROMISE;
 }
 
-static void free_promise(void* self) {
+static void free_promise(void* self, bool should_free) {
   Promise* promise = self;
   vm_free_ref(&promise->value);
   vm_promise_then_t* entry = promise->then_list;
@@ -43,14 +43,17 @@ static void free_promise(void* self) {
     free(entry);
     entry = next;
   }
-  free(promise);
+  if (should_free)
+    free(promise);
 }
 
-vm_value_t allocate_promise() {
-  Promise* promise = calloc(1, sizeof(Promise));
+vm_value_t allocate_promise(vm_t* vm) {
+  Promise* promise = vm_gc_allocate(vm_get_gc(vm), sizeof(Promise));
   promise->state = PROMISE_STATE_PENDING;
   promise->ref_count.deleter = &free_promise;
-  return (vm_value_t){.type = VALUE_TYPE_PROMISE, .as.promise = promise};
+  vm_value_t value = {.type = VALUE_TYPE_PROMISE, .as.promise = promise};
+  vm_adopt_ref(value);
+  return value;
 }
 
 static bool is_function(vm_value_t value) {
@@ -89,34 +92,35 @@ static void enqueue_promise_job(vm_job_queue_t* job_queue,
   }
 }
 
-vm_value_t promise_then(vm_job_queue_t* job_queue,
+vm_value_t promise_then(vm_t* vm,
+                        vm_job_queue_t* job_queue,
                         vm_value_t source_promise,
                         vm_value_t on_fulfilled_fn,
                         vm_value_t on_rejected_fn) {
   assert(is_promise(source_promise) && "promise_then called on non-promise");
 
-  vm_value_t new_promise = allocate_promise();
-
-  vm_promise_then_t* then = calloc(1, sizeof(vm_promise_then_t));
-  then->on_fulfilled_fn = on_fulfilled_fn;
-  vm_adopt_ref(then->on_fulfilled_fn);
-  then->on_rejected_fn = on_rejected_fn;
-  vm_adopt_ref(then->on_rejected_fn);
-  then->next_promise = new_promise;
-  vm_adopt_ref(then->next_promise);
+  vm_value_t new_promise = allocate_promise(vm);
 
   Promise* const source = source_promise.as.promise;
-  then->next = source->then_list;
-  source->then_list = then;
-
   // If source already settled, enqueue immediately
   if (source->state != PROMISE_STATE_PENDING) {
     vm_value_t fn = source->state == PROMISE_STATE_REJECTED ? on_rejected_fn
                                                             : on_fulfilled_fn;
     enqueue_promise_job(job_queue, fn, source->value, new_promise,
                         /*rejected=*/source->state == PROMISE_STATE_REJECTED);
+    vm_free_ref(&on_fulfilled_fn);
+    vm_free_ref(&on_rejected_fn);
+    return new_promise;
   }
 
+  vm_promise_then_t* then = calloc(1, sizeof(vm_promise_then_t));
+  then->on_fulfilled_fn = on_fulfilled_fn;
+  then->on_rejected_fn = on_rejected_fn;
+  then->next_promise = new_promise;
+  vm_adopt_ref(then->next_promise);
+
+  then->next = source->then_list;
+  source->then_list = then;
   return new_promise;
 }
 
@@ -133,11 +137,22 @@ void promise_resolve(vm_job_queue_t* job_queue,
   p->state = rejected ? PROMISE_STATE_REJECTED : PROMISE_STATE_FULFILLED;
   p->value = value;
 
-  for (vm_promise_then_t* t = p->then_list; t; t = t->next) {
+  for (vm_promise_then_t** pp = &p->then_list; *pp;) {
+    vm_promise_then_t* then = *pp;
+
     enqueue_promise_job(job_queue,
-                        rejected ? t->on_rejected_fn : t->on_fulfilled_fn,
-                        value, t->next_promise, rejected);
+                        rejected ? then->on_rejected_fn : then->on_fulfilled_fn,
+                        value, then->next_promise, rejected);
+
+    // `enqueue_promise_job()` adopts its own ownership of these
+    vm_free_ref(&then->on_fulfilled_fn);
+    vm_free_ref(&then->on_rejected_fn);
+    vm_free_ref(&then->next_promise);
+
+    *pp = then->next;
+    free(then);
   }
+  p->then_list = NULL;
 }
 
 static void promise_chain(vm_t* vm,
@@ -151,12 +166,16 @@ static void promise_chain(vm_t* vm,
     return;
   }
 
-  promise_then(
-      job_queue, source_promise,
+  vm_value_t on_fulfill =
       bind_to_function(vm, 1 /*Promise.fulfill*/ | VM_BUILTIN_SELECT_BITMASK,
-                       &target_promise, /*argc=*/1),
+                       &target_promise, /*argc=*/1);
+  vm_value_t on_reject =
       bind_to_function(vm, 2 /*Promise.reject*/ | VM_BUILTIN_SELECT_BITMASK,
-                       &target_promise, /*argc=*/1));
+                       &target_promise, /*argc=*/1);
+  
+  vm_value_t ignore_promise =
+      promise_then(vm, job_queue, source_promise, on_fulfill, on_reject);
+  vm_free_ref(&ignore_promise);
 }
 
 static void free_job(vm_job_t* job) {
@@ -178,12 +197,14 @@ bool run_promise_jobs(vm_t* vm, vm_job_queue_t* job_queue) {
     bool is_exception = false;
 
     if (job->fn.type == VALUE_TYPE_FUNCTION) {
+      vm_adopt_ref(job->value);  // Arguments are expected to transfer ownership
       result = vm_call_function(vm, job->fn.as.fn, &job->value, /*argc=*/1);
       if (vm_get_exception(vm, &result))
         is_exception = true;
     } else {
       // If no handler is found, forward the result (and state) of the last
       result = job->value;
+      vm_adopt_ref(result);  // Do not steal the job's ownership of value
       is_exception = job->rejected;
     }
 
@@ -197,6 +218,9 @@ bool run_promise_jobs(vm_t* vm, vm_job_queue_t* job_queue) {
   return had_jobs;
 }
 
+vm_value_t vm_promise_alloc(vm_value_t* argv, size_t argc, void* userdata) {
+  return allocate_promise(userdata);
+}
 vm_value_t vm_promise_fulfill(vm_value_t* argv, size_t argc, void* userdata) {
   assert(argc == 2 && is_promise(argv[0]) &&
          "Promise.fulfill must be invoked with $this and a value");
@@ -220,9 +244,7 @@ vm_value_t vm_promise_then(vm_value_t* argv, size_t argc, void* userdata) {
          "Promise.then must be invoked with $this and two functions");
 
   RC_AUTOFREE vm_value_t this = argv[0];
-  vm_value_t new_promise =
-      promise_then(vm_get_job_queue(userdata), this, argv[1], argv[2]);
-  vm_free_ref(&argv[1]);  // Adopts a new ref in `promise_then`
-  vm_free_ref(&argv[2]);  // Adopts a new ref in `promise_then`
+  vm_value_t new_promise = promise_then(userdata, vm_get_job_queue(userdata),
+                                        this, argv[1], argv[2]);
   return new_promise;
 }

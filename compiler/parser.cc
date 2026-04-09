@@ -829,11 +829,6 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
       // extern functions support passing raw variadic arguments to the runtime.
       // This must be the very last parameter passed to the function.
       if (current_token_.kind == TokenKind::kVariadic) {
-        if (function_kind != FunctionKind::Extern) {
-          HandleError("'...' is only allowed in extern functions");
-          return std::nullopt;
-        }
-
         is_variadic = true;
         AdvanceToken();  // skip ...
 

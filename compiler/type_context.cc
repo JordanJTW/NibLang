@@ -152,6 +152,11 @@ std::optional<Symbol> TypeContext::DefineFunction(
       return std::nullopt;
     }
 
+    if (error_collector && fn.is_variadic) {
+      LOG(ERROR) << "'...' is only allowed in extern functions";
+      return std::nullopt;
+    }
+
     call_idx = GetCallIdxFor(qualified_name, CreateIfMissing::YES);
   }
 

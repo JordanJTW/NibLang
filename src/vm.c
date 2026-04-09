@@ -511,7 +511,7 @@ static void run_frame(vm_t* vm, const char* name) {
 
         size_t total_length = arg1.as.str->len + arg2.as.str->len;
 
-        String* string = calloc(sizeof(String) + total_length + 1);
+        String* string = calloc(1, sizeof(String) + total_length + 1);
         string->len = total_length;
         memcpy(string->c_str, arg1.as.str->c_str, arg1.as.str->len);
         memcpy(string->c_str + arg1.as.str->len, arg2.as.str->c_str,

@@ -67,7 +67,10 @@ extern struct Promise {
           }
         },
         fn (error: any) {
-          promise.reject(error);
+          if (completed.value != -1) {
+            promise.reject(error);
+            completed.value = -1;
+          }
         }
       );
       idx = idx + 1;

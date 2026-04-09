@@ -1,5 +1,6 @@
 extern struct Array {
   static fn new() -> Array;
+  static fn init(...) -> Array;
   static fn withSize(size: i32) -> Array;
 
   fn push(self: Array, value: any);

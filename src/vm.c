@@ -141,8 +141,6 @@ vm_t* new_vm(const vm_value_t* constants,
 
 void free_vm(vm_t* vm) {
   for (size_t i = 0; i < vm->constants_count; ++i) {
-    printf("%p constant: %s rc: %u\n", vm->constants[i].as.ref,
-           vm->constants[i].as.str->c_str, vm->constants[i].as.ref->count);
     assert(vm->constants[i].as.ref->count == 1);
     rc_decrement(&vm->constants[i]);
   }
@@ -176,15 +174,6 @@ static void rc_increment(vm_value_t* value) {
     case VALUE_TYPE_PROMISE:
     case VALUE_TYPE_OPAQUE: {
       ++(value->as.ref->count);
-
-      if (value->as.ref->allocation != NULL &&
-          value->as.ref->allocation->from_name)
-        printf("%s %p rc: %u (%s:%zu)\n", __func__, value->as.ref,
-               value->as.ref->count, value->as.ref->allocation->from_name,
-               value->as.ref->allocation->from_line);
-      else
-        printf("%s %p rc: %u no allocation\n", __func__, value->as.ref,
-               value->as.ref->count);
       break;
     }
   }
@@ -205,29 +194,13 @@ static void rc_decrement(vm_value_t* value) {
     case VALUE_TYPE_FUNCTION:
     case VALUE_TYPE_PROMISE:
     case VALUE_TYPE_OPAQUE: {
-      if (value->as.ref->allocation != NULL)
-        printf("Try %s %p rc: %u (%s:%zu)\n", __func__, value->as.ref,
-               value->as.ref->count, value->as.ref->allocation->from_name,
-               value->as.ref->allocation->from_line);
-      else
-        printf("Try %s %p rc: %u no allocation\n", __func__, value->as.ref,
-               value->as.ref->count);
-
       assert(value->as.ref->count > 0);
       --(value->as.ref->count);
 
-      if (value->as.ref->allocation != NULL &&
-          value->as.ref->allocation->from_name)
-        printf("%s %p rc: %u (%s:%zu)\n", __func__, value->as.ref,
-               value->as.ref->count, value->as.ref->allocation->from_name,
-               value->as.ref->allocation->from_line);
-
       if (value->as.ref->count == 0) {
-        if (value->as.ref->allocation == NULL) {
-          printf("Type missing allocation: %d\n", value->type);
-        } else {
+        if (value->as.ref->allocation != NULL)
           value->as.ref->allocation->object = NULL;
-        }
+
         value->as.ref->deleter(value->as.ref, true);
       }
       break;
@@ -538,7 +511,7 @@ static void run_frame(vm_t* vm, const char* name) {
 
         size_t total_length = arg1.as.str->len + arg2.as.str->len;
 
-        String* string = malloc(sizeof(String) + total_length + 1);
+        String* string = calloc(sizeof(String) + total_length + 1);
         string->len = total_length;
         memcpy(string->c_str, arg1.as.str->c_str, arg1.as.str->len);
         memcpy(string->c_str + arg1.as.str->len, arg2.as.str->c_str,
@@ -796,7 +769,7 @@ static vm_value_t handle_number_op(num_op_t op, vm_value_t a, vm_value_t b) {
     float f1 = value_to_float(a);
     float f2 = value_to_float(b);
 
-    float result;
+    float result = 0;
     switch (op) {
       case NUM_OP_ADD:
         DEBUG_LOG("OP_ADD %f + %f", f1, f2);
@@ -929,7 +902,7 @@ vm_value_t bind_to_function(vm_t* vm,
       &vm->gc, sizeof(Closure) + sizeof(vm_value_t) * storage_size);
   func->fn = fn;
   func->bound_argc = argc;
-  func->ref_count.deleter = &free_closure;
+  func->rc.deleter = &free_closure;
   memcpy(func->argument_storage, argv, argc * sizeof(vm_value_t));
 
   for (size_t i = 0; i < argc; ++i)
@@ -1025,12 +998,12 @@ vm_t* init_vm(const uint8_t* program,
             &vm->functions[vm->native_functions_count + (parsed_functions++)];
         fn->type = VM_BYTECODE;
 
-        fn->argument_count = section.as.fn.argument_count;
-        fn->as.bytecode.local_count = section.as.fn.local_count;
+        fn->argument_count = section.fn.argument_count;
+        fn->as.bytecode.local_count = section.fn.local_count;
         fn->as.bytecode.data = vm->bytecode_data + bytecode_offset;
         fn->as.bytecode.data_len = section.size;
         fn->name = ((const char*)vm->bytecode_data) + header.bytecode_size +
-                   section.as.fn.name_offset;
+                   section.fn.name_offset;
         memcpy(vm->bytecode_data + bytecode_offset, program + offset,
                section.size);
         bytecode_offset += section.size;
@@ -1082,6 +1055,7 @@ bool vm_invoke(vm_t* vm, vm_function_t* fn, vm_value_t* argv, size_t argc) {
       return false;
     }
   }
+  return false;
 }
 
 void* vm_gc_allocate(vm_gc_t* vm, size_t size) {

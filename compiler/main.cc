@@ -506,9 +506,9 @@ int DumpImage(const uint8_t* program, size_t program_size) {
 
       case vm_section_t::FUNCTION: {
         FunctionInfo fn;
-        fn.arg_count = section.as.fn.argument_count;
-        fn.local_count = section.as.fn.local_count;
-        fn.name_offset = section.as.fn.name_offset;
+        fn.arg_count = section.fn.argument_count;
+        fn.local_count = section.fn.local_count;
+        fn.name_offset = section.fn.name_offset;
         fn.bytecode.assign(program + offset, program + offset + section.size);
         functions.push_back(std::move(fn));
         parsed_functions++;

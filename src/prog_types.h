@@ -23,9 +23,6 @@ typedef struct vm_prog_function_t {
 typedef struct vm_section_t {
   enum : uint8_t { CONST_STR, FUNCTION, DEBUG } type;
   uint32_t size;
-  union {
-    vm_prog_function_t fn;
-    char str[];
-  } as;
+  vm_prog_function_t fn;
 } vm_section_t;
 #pragma pack(pop)

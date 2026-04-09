@@ -19,30 +19,27 @@ void vm_array_destroy(void* ptr, bool should_free) {
   free(array);
 }
 
-Array* allocate_array(vm_t* vm, int length) {
+vm_value_t allocate_array(vm_t* vm, int length) {
   Array* const array = vm_gc_allocate(vm_get_gc(vm), sizeof(Array));
   array->capacity = length;
   array->len = length;
   array->data = calloc(length, sizeof(vm_value_t));
   array->rc.deleter = &vm_array_destroy;
-  return array;
+
+  vm_value_t value = {.type = VALUE_TYPE_ARRAY, .as.array = array};
+  vm_adopt_ref(value);
+  return value;
 }
 
 vm_value_t vm_array_new(vm_value_t* argv, size_t argc, void* vm) {
   int length = argc == 1 ? argv[0].as.i32 : 0;
-  vm_value_t array_value = {.type = VALUE_TYPE_ARRAY,
-                            .as.array = allocate_array(vm, length)};
-  vm_adopt_ref(array_value);
-  return array_value;
+  return allocate_array(vm, length);
 }
 
 vm_value_t vm_array_init(vm_value_t* argv, size_t argc, void* vm) {
-  Array* array = allocate_array(vm, argc);
-
-  memcpy(array->data, argv, argc * sizeof(vm_value_t));
-  vm_value_t array_value = {.type = VALUE_TYPE_ARRAY, .as.array = array};
-  vm_adopt_ref(array_value);
-  return array_value;
+  vm_value_t value = allocate_array(vm, argc);
+  memcpy(value.as.array->data, argv, argc * sizeof(vm_value_t));
+  return value;
 }
 
 vm_value_t vm_array_get(vm_value_t* argv, size_t argc, void* vm) {
@@ -54,7 +51,7 @@ vm_value_t vm_array_get(vm_value_t* argv, size_t argc, void* vm) {
 
   Array* array = this.as.array;
 
-  int idx = -1;
+  int32_t idx = -1;
   if (!vm_as_int32(&argv[1], &idx) || idx < 0 || idx >= array->len) {
     return vm_throw_exception(vm, allocate_str_from_c("RangeError"));
   }
@@ -81,7 +78,7 @@ vm_value_t vm_array_set(vm_value_t* argv, size_t argc, void* vm) {
 
   Array* array = this.as.array;
 
-  int idx = -1;
+  int32_t idx = -1;
   if (!vm_as_int32(&argv[1], &idx) || idx < 0 || idx >= array->len) {
     return vm_throw_exception(vm, allocate_str_from_c("RangeError"));
   }

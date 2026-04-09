@@ -87,7 +87,7 @@ typedef struct vm_string_t {
 } String;
 
 typedef struct vm_map_t {
-  ref_count_t ref_count;
+  ref_count_t rc;
   uint32_t id;
   size_t element_count;
   size_t bucket_count;
@@ -125,7 +125,7 @@ typedef struct vm_value {
 typedef struct vm_promise_then_t vm_promise_then_t;
 
 typedef struct vm_promise_t {
-  ref_count_t ref_count;
+  ref_count_t rc;
   enum state_t {
     PROMISE_STATE_PENDING,
     PROMISE_STATE_FULFILLED,

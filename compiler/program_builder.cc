@@ -122,10 +122,10 @@ std::vector<uint8_t> ProgramBuilder::GenerateImage() {
 
     vm_section_t section = {.type = vm_section_t::FUNCTION,
                             .size = static_cast<uint32_t>(fn_bytecode.size()),
-                            .as.fn = {.argument_count = fn.argc,
-                                      .local_count = fn.next_id,
-                                      .name_offset = static_cast<uint16_t>(
-                                          debug_offset[fn.call_idx])}};
+                            .fn = {.argument_count = fn.argc,
+                                   .local_count = fn.next_id,
+                                   .name_offset = static_cast<uint16_t>(
+                                       debug_offset[fn.call_idx])}};
 
     memcpy(program_image.data() + offset, &section, sizeof(vm_section_t));
     memcpy(program_image.data() + offset + sizeof(vm_section_t),

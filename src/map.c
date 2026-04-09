@@ -35,7 +35,7 @@ vm_value_t allocate_map(vm_gc_t* gc, size_t bucket_count) {
     return (vm_value_t){.type = VALUE_TYPE_NULL};
 
   map->bucket_count = bucket_count;
-  map->ref_count.deleter = &free_map;
+  map->rc.deleter = &free_map;
   static uint32_t next_id = 0;
   map->id = ++next_id;
 
@@ -82,7 +82,7 @@ static int compare(vm_value_t v1, vm_value_t v2) {
     case VALUE_TYPE_PROMISE:
     case VALUE_TYPE_ARRAY:
     case VALUE_TYPE_OPAQUE:
-      return 0;
+      break;
     case VALUE_TYPE_MAP:
       return v1.as.map->id - v2.as.map->id;
     case VALUE_TYPE_INT:
@@ -90,6 +90,7 @@ static int compare(vm_value_t v1, vm_value_t v2) {
     case VALUE_TYPE_STR:
       return strcmp(v1.as.str->c_str, v2.as.str->c_str);
   }
+  return 0;
 }
 
 vm_value_t* map_get(Map* map, vm_value_t key) {

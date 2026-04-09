@@ -60,7 +60,7 @@ typedef struct vm_function_t {
 } vm_function_t;
 
 typedef struct vm_closure_t {
-  ref_count_t ref_count;
+  ref_count_t rc;
   vm_function_t* fn;
   size_t bound_argc;
   vm_value_t argument_storage[];

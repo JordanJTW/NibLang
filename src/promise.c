@@ -50,7 +50,7 @@ static void free_promise(void* self, bool should_free) {
 vm_value_t allocate_promise(vm_t* vm) {
   Promise* promise = vm_gc_allocate(vm_get_gc(vm), sizeof(Promise));
   promise->state = PROMISE_STATE_PENDING;
-  promise->ref_count.deleter = &free_promise;
+  promise->rc.deleter = &free_promise;
   vm_value_t value = {.type = VALUE_TYPE_PROMISE, .as.promise = promise};
   vm_adopt_ref(value);
   return value;
@@ -137,22 +137,24 @@ void promise_resolve(vm_job_queue_t* job_queue,
   p->state = rejected ? PROMISE_STATE_REJECTED : PROMISE_STATE_FULFILLED;
   p->value = value;
 
-  for (vm_promise_then_t** pp = &p->then_list; *pp;) {
-    vm_promise_then_t* then = *pp;
+  vm_promise_then_t* current = p->then_list;
+  p->then_list = NULL;  // Ensure detached in case of re-entrency
 
-    enqueue_promise_job(job_queue,
-                        rejected ? then->on_rejected_fn : then->on_fulfilled_fn,
-                        value, then->next_promise, rejected);
+  while (current) {
+    vm_promise_then_t* next = current->next;
 
-    // `enqueue_promise_job()` adopts its own ownership of these
-    vm_free_ref(&then->on_fulfilled_fn);
-    vm_free_ref(&then->on_rejected_fn);
-    vm_free_ref(&then->next_promise);
+    enqueue_promise_job(
+        job_queue,
+        rejected ? current->on_rejected_fn : current->on_fulfilled_fn, value,
+        current->next_promise, rejected);
 
-    *pp = then->next;
-    free(then);
+    vm_free_ref(&current->on_fulfilled_fn);
+    vm_free_ref(&current->on_rejected_fn);
+    vm_free_ref(&current->next_promise);
+    free(current);
+
+    current = next;
   }
-  p->then_list = NULL;
 }
 
 static void promise_chain(vm_t* vm,
@@ -172,7 +174,7 @@ static void promise_chain(vm_t* vm,
   vm_value_t on_reject =
       bind_to_function(vm, 2 /*Promise.reject*/ | VM_BUILTIN_SELECT_BITMASK,
                        &target_promise, /*argc=*/1);
-  
+
   vm_value_t ignore_promise =
       promise_then(vm, job_queue, source_promise, on_fulfill, on_reject);
   vm_free_ref(&ignore_promise);

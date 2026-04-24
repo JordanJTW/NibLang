@@ -82,6 +82,7 @@ TEST_F(PromiseTest, ResolveChainWithPromise) {
 
   EXPECT_FALSE(run_promise_jobs(vm_, job_queue_));
   vm_value_t value = {.type = vm_value::VALUE_TYPE_INT, .as.i32 = 42};
+  vm_adopt_ref(promise_value);  // `promise_resolve` steals the reference.
   promise_resolve(job_queue_, promise_value, value, false);
 
   EXPECT_THAT(promise_value, IsFulfilledWith(Int32Type(42)));
@@ -92,6 +93,7 @@ TEST_F(PromiseTest, ResolveChainWithPromise) {
 
   EXPECT_CALL(on_fulfilled_func, Call(ElementsAre(Int32Type(42))))
       .WillOnce([inner_promise](std::vector<vm_value_t> args) {
+        vm_adopt_ref(inner_promise);  // Reference is passed to caller.
         return inner_promise;
       });
 

@@ -178,6 +178,8 @@ static void promise_chain(vm_t* vm,
   vm_value_t ignore_promise =
       promise_then(vm, job_queue, source_promise, on_fulfill, on_reject);
   vm_free_ref(&ignore_promise);
+  // Match `vm_promise_then` with `source_promise` reference freed.
+  vm_free_ref(&source_promise);
 }
 
 static void free_job(vm_job_t* job) {

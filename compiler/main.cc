@@ -188,6 +188,9 @@ void compile_expr(const std::unique_ptr<Expression>& expr,
                     [&](int32_t i32) {
                       builder.GetCurrentCode().PushInt32(i32);
                     },
+                    [&](const CodepointLiteral& codepoint) {
+                      builder.GetCurrentCode().PushInt32(codepoint.value);
+                    },
                     [&](float f32) { builder.GetCurrentCode().PushFloat(f32); },
                     [&](bool b) { builder.GetCurrentCode().PushBool(b); },
                     [&](Nil) { builder.GetCurrentCode().PushNil(); }},

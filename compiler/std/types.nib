@@ -81,7 +81,7 @@ extern struct Promise {
 
 extern struct String {
   fn length(s: String) -> i32;
-  fn charAt(s: String, idx: i32) -> i32;
+  fn charAt(s: String, idx: i32) -> Codepoint;
   fn substr(s: String, start: i32, end: i32) -> String;
   fn startsWith(s: String, prefix: String, idx: i32) -> bool;
 }

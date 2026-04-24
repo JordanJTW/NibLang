@@ -29,7 +29,7 @@ class Parser {
   std::unique_ptr<Expression> ParseUnary();
   std::unique_ptr<Expression> ParsePostFix();
   std::unique_ptr<Expression> ParsePrimary();
-  std::unique_ptr<Expression> ParseValue(const Token& value);
+  std::unique_ptr<Expression> ParseValue();
 
   std::unique_ptr<Expression> ParseCall(std::unique_ptr<Expression> callee);
 

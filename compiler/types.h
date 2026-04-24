@@ -54,6 +54,11 @@ struct StringLiteral {
   std::string value;
 };
 
+struct CodepointLiteral {
+  uint32_t value;
+  std::string escaped_value;
+};
+
 using CallIdx = size_t;
 
 struct ResolvedIdentifier {
@@ -68,7 +73,14 @@ struct Identifier {
 struct Nil {};
 
 struct PrimaryExpression {
-  std::variant<StringLiteral, Identifier, int32_t, float, bool, Nil> value;
+  std::variant<StringLiteral,
+               CodepointLiteral,
+               Identifier,
+               int32_t,
+               float,
+               bool,
+               Nil>
+      value;
 };
 
 enum FunctionKind {

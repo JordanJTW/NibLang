@@ -123,6 +123,12 @@ static void print_primary(const PrimaryExpression& primary, size_t indent) {
                    std::cout << std::string(indent, ' ') << "Float: " << f32
                              << std::endl;
                  },
+                 [&](const CodepointLiteral& codepoint) {
+                   // TODO: Handle unicode codepoints > 0x7F when supported.
+                   std::cout << std::string(indent, ' ') << "Codepoint: '"
+                             << codepoint.escaped_value << "' ("
+                             << codepoint.value << ")" << std::endl;
+                 },
                  [&](bool b) {
                    std::cout << std::string(indent, ' ')
                              << "Bool: " << (b ? "true" : "false") << std::endl;
@@ -229,8 +235,8 @@ void Printer::Print(const Statement& stmt, size_t indent) {
             }
           },
           [&](const ImportStatement& import) {
-            std::cout << std::string(indent + 2, ' ') << "ImportStatement(\""
-                      << import.path << "\")" << std::endl;
+            std::cout << "ImportStatement(\"" << import.path << "\")"
+                      << std::endl;
           },
       },
       stmt.as);

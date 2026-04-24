@@ -223,9 +223,13 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
           [&](const std::string& type_name) -> std::optional<TypeId> {
             static const std::unordered_map<std::string, TypeId> kBuiltInTypes =
                 {
-                    {"Void", LiteralType::Void}, {"i32", LiteralType::i32},
-                    {"f32", LiteralType::f32},   {"bool", LiteralType::Bool},
-                    {"any", LiteralType::Any},   {"Nil", LiteralType::Nil},
+                    {"Void", LiteralType::Void},
+                    {"i32", LiteralType::i32},
+                    {"Codepoint", LiteralType::Codepoint},
+                    {"f32", LiteralType::f32},
+                    {"bool", LiteralType::Bool},
+                    {"any", LiteralType::Any},
+                    {"Nil", LiteralType::Nil},
                 };
 
             // Fast path for built-in type names which are used frequently.
@@ -465,45 +469,48 @@ std::string TypeContext::GetNameFromTypeId(TypeId type_id) const {
   }
 
   return std::visit(
-      Overloaded{
-          [&](const BuiltInType& type) {
-            static const std::unordered_map<TypeId, std::string>
-                kBuiltInTypeNames = {
-                    {LiteralType::Void, "Void"}, {LiteralType::i32, "i32"},
-                    {LiteralType::f32, "f32"},   {LiteralType::Bool, "bool"},
-                    {LiteralType::Any, "any"},   {LiteralType::Nil, "Nil"},
-                };
-            return kBuiltInTypeNames.at(type_id);
-          },
-          [&](const FunctionType type) {
-            std::stringstream ss;
-            ss << "fn (";
-            for (size_t i = 0; i < type.arg_types.size(); ++i) {
-              if (i > 0)
-                ss << ", ";
-              ss << GetNameFromTypeId(type.arg_types[i]);
-            }
-            if (type.is_variadic) {
-              if (!type.arg_types.empty())
-                ss << ", ";
-              ss << "...";
-            }
-            ss << ") -> " << GetNameFromTypeId(type.return_type);
-            return ss.str();
-          },
-          [&](const StructType type) {
-            return "struct " + type.struct_declaration->name;
-          },
-          [&](const UnionType type) {
-            std::stringstream ss;
-            ss << "(";
-            for (size_t i = 0; i < type.types.size(); ++i) {
-              if (i > 0)
-                ss << ", ";
-              ss << GetNameFromTypeId(type.types[i]);
-            }
-            ss << ")";
-            return ss.str();
-          }},
+      Overloaded{[&](const BuiltInType& type) {
+                   static const std::unordered_map<TypeId, std::string>
+                       kBuiltInTypeNames = {
+                           {LiteralType::Void, "Void"},
+                           {LiteralType::i32, "i32"},
+                           {LiteralType::f32, "f32"},
+                           {LiteralType::Codepoint, "Codepoint"},
+                           {LiteralType::Bool, "bool"},
+                           {LiteralType::Any, "any"},
+                           {LiteralType::Nil, "Nil"},
+                       };
+                   return kBuiltInTypeNames.at(type_id);
+                 },
+                 [&](const FunctionType type) {
+                   std::stringstream ss;
+                   ss << "fn (";
+                   for (size_t i = 0; i < type.arg_types.size(); ++i) {
+                     if (i > 0)
+                       ss << ", ";
+                     ss << GetNameFromTypeId(type.arg_types[i]);
+                   }
+                   if (type.is_variadic) {
+                     if (!type.arg_types.empty())
+                       ss << ", ";
+                     ss << "...";
+                   }
+                   ss << ") -> " << GetNameFromTypeId(type.return_type);
+                   return ss.str();
+                 },
+                 [&](const StructType type) {
+                   return "struct " + type.struct_declaration->name;
+                 },
+                 [&](const UnionType type) {
+                   std::stringstream ss;
+                   ss << "Union[";
+                   for (size_t i = 0; i < type.types.size(); ++i) {
+                     if (i > 0)
+                       ss << ", ";
+                     ss << GetNameFromTypeId(type.types[i]);
+                   }
+                   ss << "]";
+                   return ss.str();
+                 }},
       it->second);
 }

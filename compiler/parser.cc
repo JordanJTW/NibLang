@@ -10,6 +10,8 @@
 #include "compiler/tokenizer.h"
 #include "compiler/types.h"
 
+namespace {
+
 template <typename T>
 std::unique_ptr<Expression> make_primary_expression(T&& value,
                                                     const Token& token) {
@@ -40,6 +42,58 @@ void print_error(const std::string& file,
             << "^ " << message << std::endl;
 }
 
+struct EscapeResult {
+  uint32_t codepoint;
+  size_t bytes_consumed;
+  std::optional<std::string> error_message = std::nullopt;
+};
+
+EscapeResult unescape_codepoint(std::string_view input) {
+  if (input.empty()) {
+    return {0, 0, "incomplete escape sequence"};
+  }
+
+  char ch = input[0];
+
+  // Normal character
+  if (ch != '\\') {
+    return {static_cast<uint8_t>(ch), 1};
+  }
+
+  // Escape must have at least 2 chars
+  if (input.size() < 2) {
+    return {0, 1, "incomplete escape sequence"};
+  }
+
+  char esc = input[1];
+  switch (esc) {
+    case 'a':
+      return {'\a', 2};
+    case 'b':
+      return {'\b', 2};
+    case 'f':
+      return {'\f', 2};
+    case 'n':
+      return {'\n', 2};
+    case 'r':
+      return {'\r', 2};
+    case 't':
+      return {'\t', 2};
+    case 'v':
+      return {'\v', 2};
+    case '\\':
+      return {'\\', 2};
+    case '\'':
+      return {'\'', 2};
+    case '"':
+      return {'"', 2};
+    default:
+      return {0, 2, "invalid escape sequence"};
+  }
+}
+
+}  // namespace
+
 Block Parser::Parse() {
   Block root_block;
   ParseBlock(root_block, BlockType::Root);
@@ -59,12 +113,6 @@ Block Parser::Parse() {
 void Parser::ParseBlock(Block& block, BlockType type) {
   while (current_token_.kind != TokenKind::kEndOfFile &&
          current_token_.kind != TokenKind::kCloseBrace) {
-    if (current_token_.kind == TokenKind::kUnknown) {
-      HandleError("unknown token");
-      AdvanceToken();
-      continue;
-    }
-
     Token start_token = current_token_;
 
     bool is_extern = false;
@@ -283,35 +331,77 @@ void Parser::ParseBlock(Block& block, BlockType type) {
   AdvanceToken();  // consume '}' or EOF
 }
 
-std::unique_ptr<Expression> Parser::ParseValue(const Token& value) {
-  switch (value.kind) {
+std::unique_ptr<Expression> Parser::ParseValue() {
+  switch (current_token_.kind) {
     case TokenKind::kNumber: {
-      if ((value.value.find('.') != std::string::npos) ||
-          value.value.back() == 'f') {
-        float f32 = std::stof(value.value);
-        return make_primary_expression(f32, value);
+      if ((current_token_.value.find('.') != std::string::npos) ||
+          current_token_.value.back() == 'f') {
+        float f32 = std::stof(current_token_.value);
+        return make_primary_expression(f32, current_token_);
       } else {
-        int i32 = std::stoi(value.value);
-        return make_primary_expression(i32, value);
+        int i32 = std::stoi(current_token_.value);
+        return make_primary_expression(i32, current_token_);
       }
     }
     case TokenKind::kIdent: {
-      return make_primary_expression(Identifier{.name = value.value}, value);
+      return make_primary_expression(Identifier{.name = current_token_.value},
+                                     current_token_);
     }
     case TokenKind::kString: {
-      return make_primary_expression(StringLiteral{value.value}, value);
+      size_t i = 0;
+      std::string unescaped;
+      while (i < current_token_.value.size()) {
+        auto res = unescape_codepoint(current_token_.value.substr(i));
+
+        if (res.error_message.has_value()) {
+          HandleError(res.error_message.value());
+          return nullptr;
+        }
+
+        if (res.codepoint > 0x7F) {
+          HandleError(
+              "non-ASCII characters are not supported in string literals");
+          return nullptr;
+        }
+
+        unescaped += static_cast<char>(res.codepoint);
+        i += res.bytes_consumed;
+      }
+
+      return make_primary_expression(StringLiteral{unescaped}, current_token_);
+    }
+    case TokenKind::kChar: {
+      auto res = unescape_codepoint(current_token_.value);
+      if (res.error_message.has_value()) {
+        HandleError(res.error_message.value());
+        return nullptr;
+      }
+
+      if (res.codepoint > 0x7F) {
+        HandleError("non-ASCII characters are not supported in char literals");
+        return nullptr;
+      }
+
+      if (res.bytes_consumed != current_token_.value.size()) {
+        HandleError("char literal is too long");
+        return nullptr;
+      }
+
+      return make_primary_expression(
+          CodepointLiteral{res.codepoint, current_token_.value},
+          current_token_);
     }
     case TokenKind::kKwTrue: {
-      return make_primary_expression(true, value);
+      return make_primary_expression(true, current_token_);
     }
     case TokenKind::kKwFalse: {
-      return make_primary_expression(false, value);
+      return make_primary_expression(false, current_token_);
     }
     case TokenKind::kKwNil: {
-      return make_primary_expression(Nil{}, value);
+      return make_primary_expression(Nil{}, current_token_);
     }
     default:
-      print_error(text_, value.meta, "unknown literal type");
+      print_error(text_, current_token_.meta, "unknown literal type");
       return nullptr;
   }
 }
@@ -547,13 +637,14 @@ std::unique_ptr<Expression> Parser::ParsePrimary() {
   switch (current_token_.kind) {
     case TokenKind::kNumber:
     case TokenKind::kString:
+    case TokenKind::kChar:
     case TokenKind::kIdent:
     case TokenKind::kKwTrue:
     case TokenKind::kKwFalse:
     case TokenKind::kKwNil: {
-      Token value = current_token_;
+      auto expr = ParseValue();
       AdvanceToken();
-      return ParseValue(value);
+      return expr;
     }
 
     case TokenKind::kOpenParen: {
@@ -594,10 +685,8 @@ std::unique_ptr<Expression> Parser::ParseCall(
   std::vector<std::unique_ptr<Expression>> arguments;
   if (current_token_.kind != TokenKind::kCloseParen) {
     while (true) {
-      auto arg = ParseExpression();
-      if (!arg)
-        return nullptr;
-      arguments.push_back(std::move(arg));
+      if (auto arg = ParseExpression())
+        arguments.push_back(std::move(arg));
 
       if (current_token_.kind == TokenKind::kCloseParen)
         break;
@@ -918,9 +1007,27 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
 
 void Parser::AdvanceToken() {
   current_token_ = tokenizer_.next();
-  // Always skip comments when parsing the AST
-  while (current_token_.kind == TokenKind::kComment)
-    current_token_ = tokenizer_.next();
+  while (true) {
+    if (current_token_.kind == TokenKind::kTokenError) {
+      print_error(text_, current_token_.meta, current_token_.value);
+      current_token_ = tokenizer_.next();
+      continue;
+    }
+
+    if (current_token_.kind == TokenKind::kUnknown) {
+      print_error(text_, current_token_.meta,
+                  "unknown token: \"" + current_token_.value + "\"");
+      current_token_ = tokenizer_.next();
+      continue;
+    }
+
+    if (current_token_.kind == TokenKind::kComment) {
+      current_token_ = tokenizer_.next();
+      continue;
+    }
+
+    break;
+  }
 }
 
 std::optional<Token> Parser::ExpectNextToken(TokenKind expected_kind,
@@ -947,6 +1054,7 @@ void Parser::HandleError(std::string_view message) {
   };
 
   while (!is_start_of_statement(current_token_.kind) &&
+         current_token_.kind != TokenKind::kComma &&
          current_token_.kind != TokenKind::kEndExpr &&
          current_token_.kind != TokenKind::kEndOfFile)
     AdvanceToken();

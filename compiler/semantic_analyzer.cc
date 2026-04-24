@@ -233,6 +233,10 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                     [&](int32_t) -> SemanticAnalyzer::Result {
                       return ExpressionResult{LiteralType::i32};
                     },
+                    [&](const CodepointLiteral& codepoint)
+                        -> SemanticAnalyzer::Result {
+                      return ExpressionResult{LiteralType::Codepoint};
+                    },
                     [&](float) -> SemanticAnalyzer::Result {
                       return ExpressionResult{LiteralType::f32};
                     },

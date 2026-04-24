@@ -5,58 +5,62 @@
 
 enum class TokenKind {
   kUnknown = 0,
-  kIdent,           // $id, $id1
-  kNumber,          // 5, 5.0
-  kString,          // "hello world"
-  kTemplateString,  // `hello ${world}`
-  kKwIf,            // if
-  kKwElse,          // else
-  kKwFn,            // fn
-  kKwTrue,          // true
-  kKwFalse,         // false
-  kKwReturn,        // return
-  kKwThrow,         // throw
-  kKwWhile,         // while
-  kKwBreak,         // break
-  kKwContinue,      // continue
-  kKwStruct,        // struct
-  kKwExtern,        // extern
-  kKwLet,           // let
-  kKwStatic,        // static
-  kKwAs,            // as
-  kKwNil,           // Nil
-  kKwImport,        // @import 
-  kVariadic,        // ...
-  kOpenParen,       // (
-  kCloseParen,      // )
-  kOpenBrace,       // {
-  kCloseBrace,      // }
-  kSquareOpen,      // [
-  kSquareClose,     // ]
-  kDot,             // .
-  kPipe,            // |
-  kComma,           // ,
-  kColon,           // :
-  kAssign,          // =
-  kPlus,            // +
-  kMinus,           // -
-  kMultiply,        // *
-  kDivide,          // /
-  kNot,             // !
-  kPlusPlus,        // ++
-  kMinusMinus,      // --
-  kCompareGt,       // >
-  kCompareLt,       // <
-  kCompareGe,       // >=
-  kCompareLe,       // <=
-  kCompareEq,       // ==
-  kCompareNe,       // !=
-  kSkinnyArrow,     // ->
-  kAndAnd,          // &&
-  kOrOr,            // ||
-  kComment,         // // comment text
-  kEndExpr,         // ;
-  kEndOfFile,       // EOF
+  kIdent,             // $id, $id1
+  kNumber,            // 5, 5.0
+  kString,            // "hello world"
+  kTemplateString,    // `hello ${world}`
+  kChar,              // '\n'
+  kKwIf,              // if
+  kKwElse,            // else
+  kKwFn,              // fn
+  kKwTrue,            // true
+  kKwFalse,           // false
+  kKwReturn,          // return
+  kKwThrow,           // throw
+  kKwWhile,           // while
+  kKwBreak,           // break
+  kKwContinue,        // continue
+  kKwStruct,          // struct
+  kKwExtern,          // extern
+  kKwLet,             // let
+  kKwStatic,          // static
+  kKwAs,              // as
+  kKwNil,             // Nil
+  kKwImport,          // @import
+  kVariadic,          // ...
+  kOpenParen,         // (
+  kCloseParen,        // )
+  kOpenBrace,         // {
+  kCloseBrace,        // }
+  kSquareOpen,        // [
+  kSquareClose,       // ]
+  kDot,               // .
+  kPipe,              // |
+  kComma,             // ,
+  kColon,             // :
+  kAssign,            // =
+  kPlus,              // +
+  kMinus,             // -
+  kMultiply,          // *
+  kDivide,            // /
+  kNot,               // !
+  kQuestion,          // ?
+  kPlusPlus,          // ++
+  kMinusMinus,        // --
+  kQuestionQuestion,  // ??
+  kCompareGt,         // >
+  kCompareLt,         // <
+  kCompareGe,         // >=
+  kCompareLe,         // <=
+  kCompareEq,         // ==
+  kCompareNe,         // !=
+  kSkinnyArrow,       // ->
+  kAndAnd,            // &&
+  kOrOr,              // ||
+  kComment,           // // comment text
+  kTokenError,        // Token containing an error message from tokenization
+  kEndExpr,           // ;
+  kEndOfFile,         // EOF
 };
 
 struct TextRange {
@@ -84,8 +88,6 @@ class Tokenizer {
   Token next();
 
  private:
-  std::string read_until(char endpoint);
-
   const std::string data_;
   size_t offset_{0};
 

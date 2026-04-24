@@ -4,12 +4,12 @@ struct Parser {
   idx: i32;
 }
 
-fn is_digit(ch: i32) -> bool {
-  return ch >= 48 && ch <= 57; // '0'..'9'
+fn is_digit(ch: Codepoint) -> bool {
+  return ch >= '0' && ch <= '9';
 }
 
-fn is_whitespace(ch: i32) -> bool {
-  return (ch == 32 || ch == 10 || ch == 13 || ch == 9);  // space, newline, carriage return, tab
+fn is_whitespace(ch: Codepoint) -> bool {
+  return (ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t');
 }
 
 fn skip_whitespace(input: String, parser: Parser) {
@@ -19,7 +19,7 @@ fn skip_whitespace(input: String, parser: Parser) {
   }
 }
 
-fn expect_char(input: String, parser: Parser, expected: i32) {
+fn expect_char(input: String, parser: Parser, expected: Codepoint) {
   if (parser.idx >= input.length() ||
       input.charAt(parser.idx) != expected) {
     throw "unexpected character";
@@ -32,8 +32,8 @@ fn parse_string(input: String, parser: Parser) -> String {
   let start_idx: i32 = parser.idx;
 
   while (parser.idx < input.length()) {
-    let ch: i32 = input.charAt(parser.idx);
-    if (ch == 34) {  // closing "
+    let ch: Codepoint = input.charAt(parser.idx);
+    if (ch == '"') {  // closing "
       let tmp: String = input.substr(start_idx, parser.idx);  // [start, end)
       parser.idx = parser.idx + 1; // skip closing "
       return tmp;
@@ -46,7 +46,7 @@ fn parse_string(input: String, parser: Parser) -> String {
 fn parse_number(input: String, parser: Parser) -> i32 | f32 {
   let negative: bool = false;
 
-  if (input.charAt(parser.idx) == 45) { // '-'
+  if (input.charAt(parser.idx) == '-') {
     negative = true;
     parser.idx = parser.idx + 1;
   }
@@ -61,16 +61,16 @@ fn parse_number(input: String, parser: Parser) -> i32 | f32 {
   while (parser.idx < input.length() &&
          is_digit(input.charAt(parser.idx))) {
 
-    let digit: i32 = (input.charAt(parser.idx) - 48);
+    let digit: i32 = (input.charAt(parser.idx) - '0') as i32;
 
     int_part = int_part * 10 + digit;
     parser.idx = parser.idx + 1;
   }
 
-  let value: f32 = int_part;
+  let value: f32 = int_part as f32;
 
   if (parser.idx < input.length() &&
-      input.charAt(parser.idx) == 46) { // '.'
+      input.charAt(parser.idx) == '.') {
 
     parser.idx = parser.idx + 1;
 
@@ -84,8 +84,7 @@ fn parse_number(input: String, parser: Parser) -> i32 | f32 {
     while (parser.idx < input.length() &&
            is_digit(input.charAt(parser.idx))) {
 
-      let digit: i32 =
-          (input.charAt(parser.idx) - 48);
+      let digit = (input.charAt(parser.idx) - '0') as f32;
 
       value = value + digit / divisor;
       divisor = divisor * 10.0;
@@ -95,8 +94,8 @@ fn parse_number(input: String, parser: Parser) -> i32 | f32 {
   }
 
   if (parser.idx < input.length() &&
-      (input.charAt(parser.idx) == 101 ||   // 'e'
-       input.charAt(parser.idx) == 69)) {  // 'E'
+      (input.charAt(parser.idx) == 'e' ||   
+       input.charAt(parser.idx) == 'E')) {  
 
     parser.idx = parser.idx + 1;
 
@@ -106,10 +105,10 @@ fn parse_number(input: String, parser: Parser) -> i32 | f32 {
 
     let exp_negative: bool = false;
 
-    if (input.charAt(parser.idx) == 43) { // '+'
+    if (input.charAt(parser.idx) == '+') { 
       parser.idx = parser.idx + 1;
     } else { 
-      if (input.charAt(parser.idx) == 45) { // '-'
+      if (input.charAt(parser.idx) == '-') {
         exp_negative = true;
         parser.idx = parser.idx + 1;
       }
@@ -127,7 +126,7 @@ fn parse_number(input: String, parser: Parser) -> i32 | f32 {
 
       exponent =
           exponent * 10 +
-          (input.charAt(parser.idx) - 48);
+          (input.charAt(parser.idx) - '0') as i32;
 
       parser.idx = parser.idx + 1;
     }
@@ -161,8 +160,8 @@ fn parse_object(input: String, parser: Parser) -> Map {
   if (parser.idx >= input.length()) {
     throw "unterminated obj";
   }
-  let ch: i32 = input.charAt(parser.idx);
-  while (ch != 125) {  // }
+  let ch: Codepoint = input.charAt(parser.idx);
+  while (ch != '}') { 
     skip_whitespace(input, parser);
     let key: String = parse_string(input, parser);
     skip_whitespace(input, parser);
@@ -177,7 +176,7 @@ fn parse_object(input: String, parser: Parser) -> Map {
     ch = input.charAt(parser.idx);
     parser.idx = parser.idx + 1;
 
-    if (ch != 44) {
+    if (ch != ',') {
       return obj;
     }
 
@@ -189,14 +188,14 @@ fn parse_object(input: String, parser: Parser) -> Map {
 }
 
 fn parse_array(input: String, parser: Parser) -> Array {
-  expect_char(input, parser, 91); // [
+  expect_char(input, parser, '['); // [
 
   skip_whitespace(input, parser);
 
   let array = Array.new();
 
   if (parser.idx < input.length() &&
-      input.charAt(parser.idx) == 93) {
+      input.charAt(parser.idx) == ']') {
     parser.idx = parser.idx + 1;
     return array;
   }
@@ -214,12 +213,12 @@ fn parse_array(input: String, parser: Parser) -> Array {
 
     let ch = input.charAt(parser.idx);
 
-    if (ch == 44) { // ,
+    if (ch == ',') {
       parser.idx = parser.idx + 1;
       continue;
     }
 
-    if (ch == 93) { // ]
+    if (ch == ']') {
       parser.idx = parser.idx + 1;
       break;
     }
@@ -237,11 +236,11 @@ fn parse_value(input: String, parser: Parser) -> bool | i32 | f32 | Array | Stri
     throw "unexpected EOF";
   }
 
-  let ch: i32 = input.charAt(parser.idx);
+  let ch: Codepoint = input.charAt(parser.idx);
 
-  if (ch == 123) { return parse_object(input, parser); }
-  if (ch == 91) { return parse_array(input, parser); }
-  if (ch == 34) { return parse_string(input, parser); }
+  if (ch == '{') { return parse_object(input, parser); }
+  if (ch == '[') { return parse_array(input, parser); }
+  if (ch == '"') { return parse_string(input, parser); }
 
   if (input.startsWith("true", parser.idx)) {
     parser.idx = parser.idx + 4;
@@ -258,7 +257,7 @@ fn parse_value(input: String, parser: Parser) -> bool | i32 | f32 | Array | Stri
   //   return Nil;
   // }
 
-  if (ch == 45 || is_digit(ch)) {
+  if (ch == '-' || is_digit(ch)) {
     return parse_number(input, parser);
   }
 

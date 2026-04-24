@@ -52,6 +52,8 @@ std::optional<TokenKind> get_single_char_token(char ch) {
       return TokenKind::kPipe;
     case '!':
       return TokenKind::kNot;
+    case '?':
+      return TokenKind::kQuestion;
     default:
       return std::nullopt;
   }
@@ -76,6 +78,8 @@ std::optional<TokenKind> get_double_char_token(std::string_view value) {
     return TokenKind::kPlusPlus;
   if (value == "--")
     return TokenKind::kMinusMinus;
+  if (value == "??")
+    return TokenKind::kQuestionQuestion;
   return std::nullopt;
 }
 
@@ -149,15 +153,42 @@ Token Tokenizer::next() {
     return make_token(TokenKind::kNumber);
   }
 
+  auto make_string_token = [&](TokenKind kind, char endpoint) {
+    ++offset_;  // Skip opening char
+
+    size_t start = offset_;
+    while (offset_ < data_.size()) {
+      char ch = data_[offset_++];
+      if (ch == '\n')
+        break;
+
+      if (ch == '\\') {
+        if (offset_ >= data_.size())
+          return make_token(TokenKind::kTokenError, "unterminated escape");
+
+        ++offset_;  // skip escaped char
+      } else if (ch == endpoint) {
+        size_t length = offset_ - start - 1;  // exclude endpoint
+        return make_token(kind, data_.substr(start, length));
+      }
+    }
+    std::cout << "unterminated!" << std::endl;
+    return make_token(TokenKind::kTokenError, "unterminated literal");
+  };
+
   // String
   if (ch == '"') {
-    ++offset_;  // Skip initial '"'
-    return make_token(TokenKind::kString, read_until('"'));
+    return make_string_token(TokenKind::kString, '"');
   }
 
+  // Template String
   if (ch == '`') {
-    ++offset_;  // Skip initial '`'
-    return make_token(TokenKind::kTemplateString, read_until('`'));
+    return make_string_token(TokenKind::kTemplateString, '`');
+  }
+
+  // Char
+  if (ch == '\'') {
+    return make_string_token(TokenKind::kChar, '\'');
   }
 
   if (std::string_view{data_.data() + offset_, 3} == "...") {
@@ -191,33 +222,6 @@ Token Tokenizer::next() {
   return make_token(TokenKind::kUnknown);
 }
 
-std::string Tokenizer::read_until(char endpoint) {
-  std::string value;
-  while (offset_ < data_.size() && data_[offset_] != endpoint) {
-    if (data_[offset_] == '\\') {
-      ++offset_;  // skip backslash
-      char escaped = data_[offset_++];
-
-      switch (escaped) {
-        case 'n':
-          value.push_back('\n');
-          break;
-        case 't':
-          value.push_back('\t');
-          break;
-        case 'r':
-          value.push_back('\r');
-        default:
-          value.push_back(escaped);
-      }
-    } else {
-      value.push_back(data_[offset_++]);
-    }
-  }
-  ++offset_;  // Skip $endpoint
-  return value;
-}
-
 std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
 #define KIND_TO_NAME($type) \
   case TokenKind::$type:    \
@@ -228,6 +232,7 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kNumber);
     KIND_TO_NAME(kString);
     KIND_TO_NAME(kTemplateString);
+    KIND_TO_NAME(kChar);
     KIND_TO_NAME(kKwIf);
     KIND_TO_NAME(kKwElse);
     KIND_TO_NAME(kKwFn);
@@ -262,8 +267,10 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kMultiply);
     KIND_TO_NAME(kDivide);
     KIND_TO_NAME(kNot);
+    KIND_TO_NAME(kQuestion);
     KIND_TO_NAME(kPlusPlus);
     KIND_TO_NAME(kMinusMinus);
+    KIND_TO_NAME(kQuestionQuestion);
     KIND_TO_NAME(kCompareGt);
     KIND_TO_NAME(kCompareLt);
     KIND_TO_NAME(kCompareGe);
@@ -274,6 +281,7 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kAndAnd);
     KIND_TO_NAME(kOrOr);
     KIND_TO_NAME(kComment);
+    KIND_TO_NAME(kTokenError);
     KIND_TO_NAME(kEndExpr);
     KIND_TO_NAME(kEndOfFile);
   }

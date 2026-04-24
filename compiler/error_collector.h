@@ -7,12 +7,15 @@
 class ErrorCollector {
  public:
   virtual ~ErrorCollector() = default;
-  virtual void Add(std::string_view message, Metadata meta) = 0;
-  virtual void PrintAllErrors() const = 0;
 
-  virtual bool HasErrors() const {
-    return false;
-  }
+  virtual void Add(std::string_view message, Metadata meta);
+  virtual void PrintAllErrors(std::string_view file_contents) const;
+  virtual bool HasErrors() const;
+
+ private:
+  struct Error {
+    std::string message;
+    Metadata meta;
+  };
+  std::vector<Error> errors;
 };
-
-std::unique_ptr<ErrorCollector> DefaultErrorCollector(std::string_view file);

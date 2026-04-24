@@ -22,10 +22,9 @@ namespace {
 
 class SemanticAnalyzerTest : public ::testing::Test {
  protected:
-  std::unique_ptr<ErrorCollector> error_collector{
-      DefaultErrorCollector("test_file")};
+  ErrorCollector error_collector;
   TypeContext type_context;
-  SemanticAnalyzer semantic_analyzer{type_context, *error_collector};
+  SemanticAnalyzer semantic_analyzer{type_context, error_collector};
 };
 
 TEST_F(SemanticAnalyzerTest, Expression_PrimaryExpr_BuiltInValue) {

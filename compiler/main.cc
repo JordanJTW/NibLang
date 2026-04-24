@@ -175,14 +175,13 @@ int main(int argc, char* argv[]) {
 
   bool any_errors = false;
   for (File& file : files) {
-    std::unique_ptr<ErrorCollector> error_collector =
-        DefaultErrorCollector(file.file_contents);
-    SemanticAnalyzer analyzer(type_context, *error_collector);
+    ErrorCollector error_collector;
+    SemanticAnalyzer analyzer(type_context, error_collector);
     analyzer.Check(file.root_block);
 
-    if (error_collector->HasErrors()) {
+    if (error_collector.HasErrors()) {
       std::cerr << "Errors in file: " << file.resolved_path << "\n";
-      error_collector->PrintAllErrors();
+      error_collector.PrintAllErrors(file.file_contents);
       any_errors = true;
     }
   }

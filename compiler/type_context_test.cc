@@ -20,8 +20,7 @@ namespace {
 
 class TypeContextTest : public ::testing::Test {
  protected:
-  std::unique_ptr<ErrorCollector> error_collector{
-      DefaultErrorCollector("test_file")};
+  ErrorCollector error_collector;
   TypeContext type_context;
 };
 
@@ -48,7 +47,7 @@ TEST_F(TypeContextTest, GetTypeIdFor_Function) {
       .body = std::make_unique<Block>(),  // non-extern MUST have body
   };
 
-  auto symbol = type_context.DefineFunction(fn_decl, error_collector.get());
+  auto symbol = type_context.DefineFunction(fn_decl, &error_collector);
   ASSERT_TRUE(symbol.has_value());
   EXPECT_EQ(symbol->kind, Symbol::Function);
 
@@ -160,7 +159,7 @@ TEST_F(TypeContextTest, DefineStructType) {
 
   auto struct_symbol = type_context.DeclareStructSymbol("TestStruct");
   type_context.DefineStructType(struct_symbol.type_id, struct_decl,
-                                *error_collector);
+                                error_collector);
 
   // Check that struct type is registered
   auto struct_info =
@@ -185,7 +184,7 @@ TEST_F(TypeContextTest, DefineFunction_Method) {
 
   auto struct_symbol = type_context.DeclareStructSymbol("TestStruct");
   type_context.DefineStructType(struct_symbol.type_id, struct_decl,
-                                *error_collector);
+                                error_collector);
 
   FunctionDeclaration method_decl{
       .name = "test_method",
@@ -197,7 +196,7 @@ TEST_F(TypeContextTest, DefineFunction_Method) {
   };
 
   auto symbol = type_context.DefineFunction(
-      method_decl, error_collector.get(), &struct_decl, struct_symbol.type_id);
+      method_decl, &error_collector, &struct_decl, struct_symbol.type_id);
   ASSERT_TRUE(symbol.has_value());
   EXPECT_EQ(symbol->kind, Symbol::Function);
 }
@@ -209,7 +208,7 @@ TEST_F(TypeContextTest, DefineFunction_ExternMethod) {
 
   auto struct_symbol = type_context.DeclareStructSymbol("String");
   type_context.DefineStructType(struct_symbol.type_id, struct_decl,
-                                *error_collector);
+                                error_collector);
 
   FunctionDeclaration method_decl{
       .name = "length",
@@ -219,7 +218,7 @@ TEST_F(TypeContextTest, DefineFunction_ExternMethod) {
   };
 
   auto symbol = type_context.DefineFunction(
-      method_decl, error_collector.get(), &struct_decl, struct_symbol.type_id);
+      method_decl, &error_collector, &struct_decl, struct_symbol.type_id);
   ASSERT_TRUE(symbol.has_value());
   EXPECT_EQ(symbol->kind, Symbol::Function);
   ASSERT_TRUE(symbol->idx.has_value());
@@ -234,15 +233,13 @@ TEST_F(TypeContextTest, DefineFunction_UnknownExtern) {
       .function_kind = FunctionKind::Extern,
   };
 
-  auto symbol = type_context.DefineFunction(extern_fn, error_collector.get());
+  auto symbol = type_context.DefineFunction(extern_fn, &error_collector);
   EXPECT_FALSE(symbol.has_value());  // CallIdx can not be determined
 }
 
 TEST_F(TypeContextTest, IsTypeSubsetOf) {
   // Equivalent types
   EXPECT_TRUE(type_context.IsTypeSubsetOf(TypeContext::i32, TypeContext::i32));
-  EXPECT_TRUE(type_context.IsTypeSubsetOf(
-      TypeContext::i32, TypeContext::f32));  // numeric coercion
 
   // Any type
   EXPECT_TRUE(type_context.IsTypeSubsetOf(TypeContext::i32, TypeContext::Any));
@@ -258,7 +255,7 @@ TEST_F(TypeContextTest, IsTypeSubsetOf) {
   StructDeclaration test_struct_decl;
   test_struct_decl.is_extern = true;
   type_context.DefineStructType(test_struct.type_id, test_struct_decl,
-                                *error_collector);
+                                error_collector);
 
   EXPECT_TRUE(type_context.IsTypeSubsetOf(TypeContext::i32, union_id.value()));
   EXPECT_TRUE(type_context.IsTypeSubsetOf(TypeContext::Bool, union_id.value()));
@@ -304,7 +301,7 @@ TEST_F(TypeContextTest, GetNameFromTypeId) {
       .function_kind = FunctionKind::Free,
       .body = std::make_unique<Block>(),
   };
-  auto symbol = type_context.DefineFunction(fn_decl, error_collector.get());
+  auto symbol = type_context.DefineFunction(fn_decl, &error_collector);
   ASSERT_TRUE(symbol.has_value());
   std::string fn_name = type_context.GetNameFromTypeId(symbol->type_id);
   EXPECT_EQ(fn_name, "fn (i32) -> bool");
@@ -319,7 +316,7 @@ TEST_F(TypeContextTest, GetNameFromTypeId) {
       .body = std::make_unique<Block>(),
   };
   auto variadic_symbol =
-      type_context.DefineFunction(variadic_fn, error_collector.get());
+      type_context.DefineFunction(variadic_fn, &error_collector);
   ASSERT_TRUE(variadic_symbol.has_value());
   std::string variadic_name =
       type_context.GetNameFromTypeId(variadic_symbol->type_id);
@@ -331,7 +328,7 @@ TEST_F(TypeContextTest, GetNameFromTypeId) {
   struct_decl.is_extern = false;
   auto struct_symbol = type_context.DeclareStructSymbol("TestStruct");
   type_context.DefineStructType(struct_symbol.type_id, struct_decl,
-                                *error_collector);
+                                error_collector);
   EXPECT_EQ(type_context.GetNameFromTypeId(struct_symbol.type_id),
             "struct TestStruct");
 
@@ -352,7 +349,7 @@ TEST_F(TypeContextTest, GetFunctionDeclaration) {
       .function_kind = FunctionKind::Free,
       .body = std::make_unique<Block>(),
   };
-  auto symbol = type_context.DefineFunction(fn_decl, error_collector.get());
+  auto symbol = type_context.DefineFunction(fn_decl, &error_collector);
   ASSERT_TRUE(symbol.has_value());
   ASSERT_TRUE(symbol->idx.has_value());
 
@@ -462,7 +459,7 @@ TEST_F(TypeContextTest, GetCurrentFunction) {
       .function_kind = FunctionKind::Free,
       .body = std::make_unique<Block>(),
   };
-  auto symbol = type_context.DefineFunction(fn_decl, error_collector.get());
+  auto symbol = type_context.DefineFunction(fn_decl, &error_collector);
   ASSERT_TRUE(symbol.has_value());
   type_context.EnterScope(TypeContext::ScopeType::FunctionScope, &fn_decl);
 

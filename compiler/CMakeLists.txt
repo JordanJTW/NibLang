@@ -6,6 +6,7 @@ target_link_libraries(bytecode_generator PRIVATE assembler parser printer progra
 target_include_directories(bytecode_generator PRIVATE ${PROJECT_SOURCE_DIR})
 
 add_library(error_collector error_collector.cc)
+target_link_libraries(error_collector PRIVATE types)
 target_include_directories(error_collector PRIVATE ${PROJECT_SOURCE_DIR})
 
 add_library(logging logging.cc)

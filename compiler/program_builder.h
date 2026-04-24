@@ -26,6 +26,7 @@ class ProgramBuilder {
   Assembler& GetCurrentCode();
 
   std::vector<uint8_t> GenerateImage();
+  static bool DumpImage(std::vector<uint8_t> program);
 
  private:
   uint32_t GetIdFor(Symbol lookup);

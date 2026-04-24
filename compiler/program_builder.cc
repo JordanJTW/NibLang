@@ -157,3 +157,111 @@ std::vector<uint8_t> ProgramBuilder::GenerateImage() {
 
   return program_image;
 }
+
+// static
+bool ProgramBuilder::DumpImage(std::vector<uint8_t> program) {
+  if (sizeof(vm_prog_header_t) > program.size()) {
+    LOG(ERROR) << "Program too small to contain header";
+    return false;
+  }
+
+  vm_prog_header_t header;
+  memcpy(&header, program.data(), sizeof(vm_prog_header_t));
+
+  if (header.magic[0] != 'I' || header.magic[1] != 'N' ||
+      header.magic[2] != 'K' || header.magic[3] != '!') {
+    LOG(ERROR) << "Invalid magic";
+    return false;
+  }
+
+  LOG(INFO) << "Program version: " << header.version;
+  LOG(INFO) << "Constants: " << header.constant_count;
+  LOG(INFO) << "Functions: " << header.function_count;
+  LOG(INFO) << "Bytecode Size: " << header.bytecode_size;
+  LOG(INFO) << "Debug Size: " << header.debug_size;
+
+  size_t offset = sizeof(vm_prog_header_t);
+
+  size_t parsed_constants = 0;
+  size_t parsed_functions = 0;
+  std::vector<uint8_t> debug_data;
+
+  struct FunctionInfo {
+    uint32_t arg_count;
+    uint32_t local_count;
+    uint32_t name_offset;
+    std::vector<uint8_t> bytecode;
+  };
+  std::vector<FunctionInfo> functions;
+
+  while (offset + sizeof(vm_section_t) < program.size()) {
+    vm_section_t section;
+    memcpy(&section, program.data() + offset, sizeof(vm_section_t));
+    offset += sizeof(vm_section_t);
+
+    if (offset + section.size > program.size()) {
+      LOG(ERROR) << "Section size exceeds program size";
+      return false;
+    }
+
+    switch (section.type) {
+      case vm_section_t::CONST_STR: {
+        const char* str =
+            reinterpret_cast<const char*>(program.data() + offset);
+        LOG(INFO) << "Constant " << parsed_constants++ << ": \""
+                  << std::string(str, section.size) << "\"";
+        break;
+      }
+
+      case vm_section_t::FUNCTION: {
+        FunctionInfo fn;
+        fn.arg_count = section.fn.argument_count;
+        fn.local_count = section.fn.local_count;
+        fn.name_offset = section.fn.name_offset;
+        fn.bytecode.assign(program.data() + offset,
+                           program.data() + offset + section.size);
+        functions.push_back(std::move(fn));
+        parsed_functions++;
+        break;
+      }
+
+      case vm_section_t::DEBUG: {
+        debug_data.assign(program.data() + offset,
+                          program.data() + offset + section.size);
+        break;
+      }
+
+      default:
+        LOG(ERROR) << "Unknown section type: "
+                   << static_cast<int>(section.type);
+        return false;
+    }
+    offset += section.size;
+  }
+
+  for (size_t i = 0; i < functions.size(); i++) {
+    const auto& fn = functions[i];
+
+    const char* name = "<unknown>";
+
+    if (!debug_data.empty() && fn.name_offset < debug_data.size()) {
+      name = reinterpret_cast<const char*>(debug_data.data() + fn.name_offset);
+    }
+
+    LOG(INFO) << "Function " << i << ": " << name << " (args: " << fn.arg_count
+              << ", locals: " << fn.local_count
+              << ", bytecode size: " << fn.bytecode.size() << ")";
+    DumpByteCode(fn.bytecode);
+    printf("\n");
+  }
+
+  if (parsed_constants != header.constant_count ||
+      parsed_functions != header.function_count) {
+    LOG(WARNING) << "counts mismatch";
+    LOG(WARNING) << "Constants: " << parsed_constants << " / "
+                 << header.constant_count;
+    LOG(WARNING) << "Functions: " << parsed_functions << " / "
+                 << header.function_count;
+  }
+  return true;
+}

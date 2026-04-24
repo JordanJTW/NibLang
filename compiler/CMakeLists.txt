@@ -42,6 +42,10 @@ target_link_libraries(compiler PRIVATE bytecode_generator parser program_builder
 
 include(GoogleTest)
 
+add_executable(golden_tests golden_tests.cc)
+target_link_libraries(golden_tests PRIVATE gmock_main bytecode_generator parser program_builder type_context vm)
+target_include_directories(golden_tests PRIVATE ${PROJECT_SOURCE_DIR})
+gtest_discover_tests(golden_tests)
 add_executable(semantic_analyzer_test semantic_analyzer_test.cc)
 target_link_libraries(semantic_analyzer_test PRIVATE gmock_main semantic_analyzer types)
 target_include_directories(semantic_analyzer_test PRIVATE ${PROJECT_SOURCE_DIR})

@@ -112,3 +112,26 @@ std::ostream& operator<<(std::ostream& os, Promise::state_t state) {
       return os << "REJECTED";
   }
 }
+
+void PrintTo(const vm_value_t& value, ::std::ostream* os) {
+  switch (value.type) {
+    case vm_value_t::VALUE_TYPE_INT:
+      *os << value.as.i32 << "i";
+      break;
+    case vm_value_t::VALUE_TYPE_FLOAT:
+      *os << value.as.f32 << "f";
+      break;
+    case vm_value_t::VALUE_TYPE_BOOL:
+      *os << (value.as.boolean ? "True" : "False");
+      break;
+    case vm_value_t::VALUE_TYPE_STR:
+      *os << "\"" << value.as.str->c_str << "\"";
+      break;
+    case vm_value_t::VALUE_TYPE_NULL:
+      *os << "Nil";
+      break;
+    default:
+      *os << "UnknownType(" << value.type << ")";
+      break;
+  }
+}

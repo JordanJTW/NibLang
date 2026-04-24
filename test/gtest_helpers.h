@@ -33,6 +33,11 @@ MATCHER_P(StringType, expected, "is a String vm_value_t") {
   return std::string(str, length) == expected;
 }
 
+// Matches vm_value_t with VALUE_TYPE_NULL
+MATCHER(NilType, "is a Nil vm_value_t") {
+  return arg.type == vm_value_t::VALUE_TYPE_NULL;
+}
+
 MATCHER_P(HasType, expected, "is a vm_value_t with type") {
   return arg.type == expected;
 }
@@ -76,15 +81,15 @@ MATCHER_P(IsRejectedWith,
       arg, result_listener);
 }
 
-ACTION(ReturnNullType) {
-  return vm_value_t{.type = vm_value::VALUE_TYPE_NULL};
+ACTION(ReturnVoidType) {
+  return vm_value_t{.type = vm_value::VALUE_TYPE_VOID};
 }
 
-ACTION(FreeArgsAndReturnNullType) {
+ACTION(FreeArgsAndReturnVoidType) {
   for (const auto& arg : arg0) {
     vm_free_ref(const_cast<vm_value_t*>(&arg));
   }
-  return vm_value_t{.type = vm_value::VALUE_TYPE_NULL};
+  return vm_value_t{.type = vm_value::VALUE_TYPE_VOID};
 }
 
 using MockNativeFunc =

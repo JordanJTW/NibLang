@@ -61,7 +61,7 @@ TEST(VM, CallFunc) {
        .as.native = {.fn = native_trampoline, .userdata = &native_func}}};
 
   EXPECT_CALL(native_func, Call(ElementsAre(Int32Type(10))))
-      .WillOnce(ReturnNullType());
+      .WillOnce(ReturnVoidType());
 
   vm_t* vm = new_vm(nullptr, 0, funcs, sizeof(funcs) / sizeof(vm_function_t));
   vm_run(vm, /*entry_point_idx=*/0, false);
@@ -93,7 +93,7 @@ TEST(VM, ConstantString) {
        .as.native = {.fn = native_trampoline, .userdata = &native_func}}};
 
   EXPECT_CALL(native_func, Call(ElementsAre(StringType("hello world"))))
-      .WillOnce(FreeArgsAndReturnNullType());
+      .WillOnce(FreeArgsAndReturnVoidType());
 
   vm_t* vm = new_vm(constants, sizeof(constants) / sizeof(vm_value_t), funcs,
                     sizeof(funcs) / sizeof(vm_function_t));
@@ -144,7 +144,7 @@ TEST(VM, ForLoop) {
   for (int32_t expected_value = 0; expected_value < 5; ++expected_value) {
     EXPECT_CALL(native_func, Call(ElementsAre(Int32Type(expected_value))))
         .InSequence(seq)
-        .WillOnce(ReturnNullType());
+        .WillOnce(ReturnVoidType());
   }
 
   vm_t* vm = new_vm(nullptr, 0, funcs, sizeof(funcs) / sizeof(vm_function_t));
@@ -193,7 +193,7 @@ TEST(VM, RefCountString) {
   ::testing::Sequence seq;
   for (const auto& expected_str : {"ll", "rld"}) {
     EXPECT_CALL(print_func, Call(ElementsAre(StringType(expected_str))))
-        .WillOnce(FreeArgsAndReturnNullType());
+        .WillOnce(FreeArgsAndReturnVoidType());
   }
 
   vm_value_t constants[] = {
@@ -330,7 +330,7 @@ TEST_P(TryCatchTest, DISABLED_ValidateFlowControl) {
   ::testing::Sequence seq;
   for (uint32_t expected : GetParam().states) {
     EXPECT_CALL(state_func_, Call(ElementsAre(Int32Type(expected))))
-        .WillOnce(ReturnNullType());
+        .WillOnce(ReturnVoidType());
   }
 
   vm_run(vm_, /*entry_point_idx=*/0, false);

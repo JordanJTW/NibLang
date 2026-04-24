@@ -24,7 +24,9 @@ inline void ComputeHash(size_t& seed, TypeId value) {
 
 }  // namespace
 
-TypeContext::TypeContext() {
+TypeContext::TypeContext(std::span<const std::string_view> external_functions)
+    : external_functions_(external_functions.begin(),
+                          external_functions.end()) {
   // Add dummy entries for the built-in types to simplify logic.
   for (size_t i = 0; i < LiteralType::kCount; ++i)
     type_lookup_[i] = BuiltInType{};
@@ -490,15 +492,23 @@ std::optional<Symbol::Idx> TypeContext::GetCallIdxFor(const std::string& name,
       {"String_length", VM_BUILTIN_STRING_LENGTH},
       {"String_startsWith", VM_BUILTIN_STRINGS_STARTWITH},
       {"String_substr", VM_BUILTIN_STRINGS_SUBSTRING},
-      {"log", VM_BUILTIN(18)},
-      {"fetch", VM_BUILTIN(19)},
-      {"to_string", VM_BUILTIN(20)},
-      {"Font_load", VM_BUILTIN(21)},
-      {"Font_drawText", VM_BUILTIN(22)},
   };
+
+  // Since some built-in functions (i.e. Array_withSize) overload a single
+  // native function, this count can differ from `kBuiltInCallIdx.size()`.
+  static constexpr size_t kBuiltInCallCount = 18;
 
   if (auto it = kBuiltInCallIdx.find(name); it != kBuiltInCallIdx.end())
     return it->second;
+
+  if (auto it = std::find(external_functions_.begin(),
+                          external_functions_.end(), name);
+      it != external_functions_.end()) {
+    // Functions provided to the VM appear directly after built-ins within the
+    // function look-up table (calculate the index and convert to VM_BUILTIN).
+    return VM_BUILTIN(std::distance(external_functions_.begin(), it) +
+                      kBuiltInCallCount);
+  }
 
   if (create == CreateIfMissing::YES)
     return next_call_idx_++;

@@ -136,6 +136,28 @@ Options ParseArgs(int argc, char* argv[]) {
   return opts;
 }
 
+constexpr std::array<std::string_view, 19> kRuntimeFunctions = {
+    "log",
+    "fetch",
+    "String_valueOf",
+    "Font_load",
+    "Font_drawText",
+    "Font_calculateSpan",
+    "Screen_width",
+    "Screen_height",
+    "Screen_clear",
+    "setTimeout",
+    "setInterval",
+    "clearTimeout",
+    "DateTime_now",
+    "DateTime_year",
+    "DateTime_month",
+    "DateTime_day",
+    "DateTime_hour",
+    "DateTime_minute",
+    "DateTime_second",
+};
+
 int main(int argc, char* argv[]) {
   Options opts = ParseArgs(argc, argv);
 
@@ -149,7 +171,7 @@ int main(int argc, char* argv[]) {
   std::vector<File> files =
       CalculateImportsFor(opts.input_path, env_search_path);
 
-  TypeContext type_context;
+  TypeContext type_context(kRuntimeFunctions);
 
   bool any_errors = false;
   for (File& file : files) {

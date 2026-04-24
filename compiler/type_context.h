@@ -3,6 +3,7 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <span>
 #include <variant>
 #include <vector>
 
@@ -60,7 +61,8 @@ class TypeContext {
     kCount
   };
 
-  explicit TypeContext();
+  explicit TypeContext(
+      std::span<const std::string_view> external_functions = {});
 
   // Symbols are associated within the context of a function or block scope,
   // which allows for correct handling of variable shadowing, captures, etc.
@@ -193,4 +195,6 @@ class TypeContext {
 
   // Function declarations can be looked up by CallIdx since they are 1:1.
   std::unordered_map<Symbol::Idx, const FunctionDeclaration*> function_lookup_;
+
+  std::vector<std::string> external_functions_;
 };

@@ -173,9 +173,9 @@ TEST_F(TypeContextTest, DefineStructType) {
   ASSERT_TRUE(struct_info->member_symbols.count("field1"));
   ASSERT_TRUE(struct_info->member_symbols.count("field2"));
   EXPECT_EQ(struct_info->member_symbols.at("field1"),
-            (Symbol{Symbol::Field, TypeContext::i32, /*idx=*/0}));
+            (Symbol{Symbol::Field, TypeContext::i32, "field1", /*idx=*/0}));
   EXPECT_EQ(struct_info->member_symbols.at("field2"),
-            (Symbol{Symbol::Field, TypeContext::f32, /*idx=*/1}));
+            (Symbol{Symbol::Field, TypeContext::f32, "field2", /*idx=*/1}));
 }
 
 TEST_F(TypeContextTest, DefineFunction_Method) {
@@ -236,21 +236,6 @@ TEST_F(TypeContextTest, DefineFunction_UnknownExtern) {
 
   auto symbol = type_context.DefineFunction(extern_fn, error_collector.get());
   EXPECT_FALSE(symbol.has_value());  // CallIdx can not be determined
-}
-
-TEST_F(TypeContextTest, IsTypeEquivalent) {
-  EXPECT_TRUE(
-      TypeContext::IsTypeEquivalent(TypeContext::i32, TypeContext::i32));
-  EXPECT_TRUE(
-      TypeContext::IsTypeEquivalent(TypeContext::f32, TypeContext::f32));
-  EXPECT_TRUE(
-      TypeContext::IsTypeEquivalent(TypeContext::i32, TypeContext::f32));
-  EXPECT_TRUE(
-      TypeContext::IsTypeEquivalent(TypeContext::f32, TypeContext::i32));
-  EXPECT_FALSE(
-      TypeContext::IsTypeEquivalent(TypeContext::i32, TypeContext::Bool));
-  EXPECT_FALSE(
-      TypeContext::IsTypeEquivalent(TypeContext::Void, TypeContext::Any));
 }
 
 TEST_F(TypeContextTest, IsTypeSubsetOf) {

@@ -27,6 +27,7 @@ class Parser {
   std::unique_ptr<Expression> ParseAdditive();
   std::unique_ptr<Expression> ParseMultiplicative();
   std::unique_ptr<Expression> ParseUnary();
+  std::unique_ptr<Expression> ParseInFix();
   std::unique_ptr<Expression> ParsePostFix();
   std::unique_ptr<Expression> ParsePrimary();
   std::unique_ptr<Expression> ParseValue();

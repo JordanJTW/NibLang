@@ -86,7 +86,9 @@ vm_value_t vm_array_set(vm_value_t* argv, size_t argc, void* vm) {
   vm_free_ref(&array->data[idx]);  // Free whatever is currently there
 
   array->data[idx] = argv[2];
-  return (vm_value_t){.type = VALUE_TYPE_VOID};
+
+  vm_adopt_ref(array->data[idx]);  // Take ownership of the new value
+  return array->data[idx];
 }
 
 vm_value_t vm_array_push(vm_value_t* argv, size_t argc, void* vm) {

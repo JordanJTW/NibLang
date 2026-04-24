@@ -13,8 +13,9 @@ using TypeId = size_t;
 struct Symbol {
   using Idx = size_t;
 
-  enum Kind { Function, Struct, Field, Variable, Capture } kind;
+  enum Kind { Function, Struct, Field, Variable, Capture, Narrowed } kind;
   TypeId type_id;
+  std::string name;
   // Used for function table resolution, struct field ordering, etc.
   std::optional<Idx> idx;
 
@@ -115,6 +116,10 @@ struct MemberAccessExpression {
   std::optional<ResolvedAccess> resolved;
 };
 
+struct OptionalAccessExpression {
+  std::unique_ptr<Expression> target;
+};
+
 struct ArrayAccessExpression {
   std::unique_ptr<Expression> array;
   std::unique_ptr<Expression> index;
@@ -147,16 +152,37 @@ struct ParsedFunctionType {
   std::shared_ptr<ParsedType> return_value;
 };
 
+struct ParsedOptionalType {
+  std::shared_ptr<ParsedType> wrapped_type;
+};
+
 struct ParsedType {
-  std::variant<std::string, ParsedUnionType, ParsedFunctionType> type;
+  std::variant<std::string,
+               ParsedUnionType,
+               ParsedFunctionType,
+               ParsedOptionalType>
+      type;
   Metadata metadata;
 };
 
 std::ostream& operator<<(std::ostream& os, const ParsedType& type);
 
+enum class TypeCastStrategy {
+  // "as" cast throws an exception if the cast is invalid.
+  STRICT,
+  // "as?" cast returns Nil (i.e. is an Optional) if the cast is invalid.
+  OPTIONAL
+};
+
 struct TypeCastExpression {
   std::unique_ptr<Expression> expr;
   ParsedType as_type;
+  TypeCastStrategy strategy;
+};
+
+struct NilCoalescingExpression {
+  std::unique_ptr<Expression> lhs;
+  std::unique_ptr<Expression> rhs;
 };
 
 struct ResolvedFunction {
@@ -186,6 +212,10 @@ struct ClosureExpression {
   FunctionDeclaration fn;
 };
 
+struct OptionalChainExpression {
+  std::unique_ptr<Expression> root;
+};
+
 struct Expression {
   std::variant<PrimaryExpression,
                BinaryExpression,
@@ -197,7 +227,10 @@ struct Expression {
                ArrayAccessExpression,
                LogicExpression,
                ClosureExpression,
-               TypeCastExpression>
+               TypeCastExpression,
+               OptionalChainExpression,
+               NilCoalescingExpression,
+               OptionalAccessExpression>
       as;
 
   Metadata meta;

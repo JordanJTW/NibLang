@@ -550,7 +550,60 @@ std::unique_ptr<Expression> Parser::ParseUnary() {
                    Metadata::fromTokens(start_token, current_token_)});
   }
 
-  return ParsePostFix();
+  return ParseInFix();
+}
+
+std::unique_ptr<Expression> Parser::ParseInFix() {
+  auto expr = ParsePostFix();
+  if (!expr)
+    return nullptr;
+
+  while (true) {
+    if (current_token_.kind == TokenKind::kKwAs) {
+      Token start_token = current_token_;
+      AdvanceToken();  // consume 'as'
+
+      bool should_allow_as_nil = false;
+      if (current_token_.kind == TokenKind::kQuestion) {
+        AdvanceToken();  // consume '?'
+        should_allow_as_nil = true;
+      }
+
+      std::optional<ParsedType> type = ParseType();
+      if (!type)
+        return nullptr;
+
+      if (type->type.index() == 4 /* ParsedOptionalType */) {
+        HandleError("Casts must be to non-nilable types");
+        return nullptr;
+      }
+
+      expr = std::make_unique<Expression>(Expression{
+          TypeCastExpression{std::move(expr), std::move(type.value()),
+                             should_allow_as_nil ? TypeCastStrategy::OPTIONAL
+                                                 : TypeCastStrategy::STRICT},
+          Metadata::fromTokens(start_token, current_token_)});
+      continue;
+    }
+
+    if (current_token_.kind == TokenKind::kQuestionQuestion) {
+      Token start_token = current_token_;
+      AdvanceToken();  // consume '??'
+
+      // Allows for right associativity in expressions like `x ?? y ?? 0`.
+      std::unique_ptr<Expression> rhs = ParseInFix();
+      if (!rhs)
+        return nullptr;
+
+      expr = std::make_unique<Expression>(
+          Expression{NilCoalescingExpression{std::move(expr), std::move(rhs)},
+                     Metadata::fromTokens(start_token, current_token_)});
+      continue;
+    }
+    break;
+  }
+
+  return expr;
 }
 
 std::unique_ptr<Expression> Parser::ParsePostFix() {
@@ -560,37 +613,22 @@ std::unique_ptr<Expression> Parser::ParsePostFix() {
   if (!expr)
     return nullptr;
 
+  bool is_optional_chain = false;
   while (true) {
-    // Handle function call i.e. $expr(...)
-    if (current_token_.kind == TokenKind::kOpenParen) {
-      expr = ParseCall(std::move(expr));
-      if (!expr)
-        return nullptr;
-      continue;
+    Token post_fix_start_token = current_token_;
+
+    bool is_optional_access = false;
+    if (current_token_.kind == TokenKind::kQuestion) {
+      AdvanceToken();  // consume '?'
+      is_optional_chain = is_optional_access = true;
     }
 
-    if (current_token_.kind == TokenKind::kPlusPlus ||
-        current_token_.kind == TokenKind::kMinusMinus) {
-      Token op = current_token_;
-      AdvanceToken();  // consume operator
-      expr = std::make_unique<Expression>(
-          Expression{PostfixUnaryExpression{op.kind, std::move(expr)},
-                     Metadata::fromTokens(start_token, current_token_)});
-      continue;
-    }
-
-    if (current_token_.kind == TokenKind::kKwAs) {
-      AdvanceToken();  // consume 'as'
-
-      std::optional<ParsedType> type = ParseType();
-      if (!type)
-        return nullptr;
-
-      expr = std::make_unique<Expression>(Expression{
-          TypeCastExpression{std::move(expr), std::move(type.value())},
-          Metadata::fromTokens(start_token, current_token_)});
-      continue;
-    }
+    auto wrap_optional = [&](std::unique_ptr<Expression> expr) {
+      return is_optional_access
+                 ? std::make_unique<Expression>(
+                       Expression{OptionalAccessExpression{std::move(expr)}})
+                 : std::move(expr);
+    };
 
     if (current_token_.kind == TokenKind::kDot) {
       AdvanceToken();  // consume '.'
@@ -602,9 +640,17 @@ std::unique_ptr<Expression> Parser::ParsePostFix() {
       Token ident = current_token_;
       AdvanceToken();  // consume identifier
 
-      expr = std::make_unique<Expression>(
-          Expression{MemberAccessExpression{std::move(expr), ident.value},
-                     Metadata::fromTokens(start_token, current_token_)});
+      expr = std::make_unique<Expression>(Expression{
+          MemberAccessExpression{wrap_optional(std::move(expr)), ident.value},
+          Metadata::fromTokens(post_fix_start_token, current_token_)});
+      continue;
+    }
+
+    // Handle function call i.e. $expr(...)
+    if (current_token_.kind == TokenKind::kOpenParen) {
+      expr = ParseCall(wrap_optional(std::move(expr)));
+      if (!expr)
+        return nullptr;
       continue;
     }
 
@@ -622,14 +668,37 @@ std::unique_ptr<Expression> Parser::ParsePostFix() {
 
       AdvanceToken();  // consume ']'
 
-      expr = std::make_unique<Expression>(
-          Expression{ArrayAccessExpression{std::move(expr), std::move(index)},
-                     Metadata::fromTokens(start_token, current_token_)});
+      expr = std::make_unique<Expression>(Expression{
+          ArrayAccessExpression{wrap_optional(std::move(expr)),
+                                std::move(index)},
+          Metadata::fromTokens(post_fix_start_token, current_token_)});
+      continue;
+    }
+
+    if (is_optional_access) {
+      HandleError(
+          "optional chaining is only supported for member access (?.), "
+          "subscript (?[]), and function call fn?()");
+      continue;
+    }
+
+    if (current_token_.kind == TokenKind::kPlusPlus ||
+        current_token_.kind == TokenKind::kMinusMinus) {
+      Token op = current_token_;
+      AdvanceToken();  // consume operator
+      expr = std::make_unique<Expression>(Expression{
+          PostfixUnaryExpression{op.kind, std::move(expr)},
+          Metadata::fromTokens(post_fix_start_token, current_token_)});
       continue;
     }
     break;
   }
 
+  if (is_optional_chain) {
+    expr = std::make_unique<Expression>(
+        Expression{OptionalChainExpression{std::move(expr)},
+                   Metadata::fromTokens(start_token, current_token_)});
+  }
   return expr;
 }
 
@@ -781,21 +850,50 @@ std::optional<ParsedType> Parser::ParseFunctionType() {
 }
 
 std::optional<ParsedType> Parser::ParsePrimaryType() {
-  if (current_token_.kind == TokenKind::kKwFn) {
-    return ParseFunctionType();
-  }
+  Token start_token = current_token_;
 
-  if (current_token_.kind == TokenKind::kIdent ||
-      current_token_.kind == TokenKind::kKwNil) {
+  ParsedType result;
+  // Handles parenthesized types i.e. (fn() -> i32) or (String | i32)?.
+  if (current_token_.kind == TokenKind::kOpenParen) {
+    AdvanceToken();  // consume '('
+
+    auto inner_type = ParseType();
+    if (!inner_type)
+      return std::nullopt;
+
+    ExpectNextToken(TokenKind::kCloseParen, "expected ')'");
+    result = std::move(inner_type.value());
+  }
+  // Handles function types i.e. fn(i32) -> bool.
+  else if (current_token_.kind == TokenKind::kKwFn) {
+    auto func_type = ParseFunctionType();
+    if (!func_type)
+      return std::nullopt;
+    result = std::move(func_type.value());
+  }
+  // Handles type atoms i.e. String, i32, MyStruct, and Nil. 
+  else if (current_token_.kind == TokenKind::kIdent ||
+           current_token_.kind == TokenKind::kKwNil) {
     Token type_token = current_token_;
     AdvanceToken();
-    return ParsedType{type_token.value, type_token.meta};
+
+    result = ParsedType{type_token.value, type_token.meta};
+  } else {
+    HandleError("expected type");
+    return std::nullopt;
   }
 
-  HandleError("expected type");
-  return std::nullopt;
-}
 
+  // Handles wrapping types as an Optional i.e. String?, (fn() -> i32)?, etc.
+  if (current_token_.kind == TokenKind::kQuestion) {
+    AdvanceToken();  // consume '?'
+    result = ParsedType{
+        ParsedOptionalType{std::make_shared<ParsedType>(std::move(result))},
+        Metadata::fromTokens(start_token, current_token_)};
+  }
+
+  return result;
+}
 std::optional<StructDeclaration> Parser::ParseStructDeclaration(
     ExternStruct is_extern) {
   ExpectNextToken(TokenKind::kKwStruct, "expected 'struct'");

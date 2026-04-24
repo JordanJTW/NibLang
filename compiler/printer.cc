@@ -350,8 +350,34 @@ void Printer::Print(const Expression& expr, size_t indent) {
           [&](const TypeCastExpression& cast) {
             std::cout << std::string(indent, ' ')
                       << "TypeCastExpression(type: " << GetTypeName(expr.type)
+                      << ", strategy: "
+                      << (cast.strategy == TypeCastStrategy::STRICT
+                              ? "STRICT"
+                              : "OPTIONAL")
                       << "): " << std::endl;
             Print(*cast.expr, indent + 2);
+          },
+          [&](const OptionalChainExpression& chain) {
+            std::cout << std::string(indent, ' ')
+                      << "OptionalChainExpression(type: "
+                      << GetTypeName(expr.type) << "): " << std::endl;
+            Print(*chain.root, indent + 2);
+          },
+          [&](const NilCoalescingExpression& coalesce) {
+            std::cout << std::string(indent, ' ')
+                      << "NilCoalescingExpression(type: "
+                      << GetTypeName(expr.type) << "): " << std::endl;
+            std::cout << std::string(indent + 2, ' ') << "LHS:" << std::endl;
+            Print(*coalesce.lhs, indent + 2);
+
+            std::cout << std::string(indent + 2, ' ') << "RHS:" << std::endl;
+            Print(*coalesce.rhs, indent + 2);
+          },
+          [&](const OptionalAccessExpression& optional_access) {
+            std::cout << std::string(indent, ' ')
+                      << "OptionalAccessExpression(type: "
+                      << GetTypeName(expr.type) << "): " << std::endl;
+            Print(*optional_access.target, indent + 2);
           }},
       expr.as);
 }

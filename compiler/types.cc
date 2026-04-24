@@ -21,6 +21,8 @@ std::ostream& operator<<(std::ostream& os, Symbol::Kind kind) {
       return os << "Variable";
     case Symbol::Capture:
       return os << "Capture";
+    case Symbol::Narrowed:
+      return os << "Narrowed";
   }
 }
 
@@ -54,8 +56,10 @@ std::ostream& operator<<(std::ostream& os, const ParsedType& type) {
                             os << ") -> " << *type.return_value;
                           else
                             os << ")";
+                        },
+                        [&](const ParsedOptionalType& type) {
+                          os << *type.wrapped_type << "?";
                         }},
              type.type);
-
   return os;
 }

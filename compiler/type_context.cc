@@ -110,7 +110,7 @@ void TypeContext::DefineStructType(TypeId self_id,
     }
 
     struct_type.member_symbols[name] =
-        Symbol{Symbol::Field, type_id.value(), field_idx++};
+        Symbol{Symbol::Field, type_id.value(), name, field_idx++};
     struct_type.field_types.push_back(type_id.value());
   }
 
@@ -162,8 +162,8 @@ std::optional<Symbol> TypeContext::DefineFunction(
 
   if (std::optional<TypeId> type_id =
           DeclareFunctionType(fn, error_collector, self_id)) {
-    Symbol symbol = InsertSymbol(fn.name, Symbol::Function, type_id.value(),
-                                 call_idx.value());
+    Symbol symbol = InsertSymbol(qualified_name, Symbol::Function,
+                                 type_id.value(), call_idx.value());
     function_lookup_[call_idx.value()] = &fn;
     fn.resolved = ResolvedFunction{symbol};
     return symbol;
@@ -183,11 +183,18 @@ Symbol TypeContext::DeclareCaptureSymbol(std::string_view name,
                       scopes_[current_fn_scope_idx_].next_symbol_idx++);
 }
 
+Symbol TypeContext::DeclareNarrowedSymbol(Symbol symbol_to_narrow,
+                                          TypeId narrowed_type) {
+  // Narrowed symbols shadow existing symbols, so they get the same index.
+  return InsertSymbol(symbol_to_narrow.name, Symbol::Narrowed, narrowed_type,
+                      symbol_to_narrow.idx);
+}
+
 Symbol TypeContext::InsertSymbol(std::string_view name,
                                  Symbol::Kind kind,
                                  TypeId type_id,
                                  std::optional<Symbol::Idx> idx) {
-  Symbol symbol = {kind, type_id, idx};
+  Symbol symbol = {kind, type_id, name.data(), idx};
   scopes_.back().symbols[name.data()] = symbol;
   return symbol;
 }
@@ -247,38 +254,18 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
             return std::nullopt;
           },
           [&](const ParsedUnionType& type) -> std::optional<TypeId> {
-            // Look-up member types and normalize (sort/dedupe/flatten).
-            std::set<TypeId> normalized_types;  // std::set sorts and dedupes
+            std::vector<TypeId> type_ids;
             for (const auto& name : type.names) {
-              std::optional<TypeId> member_type = GetTypeIdFor(name);
-              if (!member_type.has_value())
+              std::optional<TypeId> type_id = GetTypeIdFor(name);
+              if (!type_id.has_value())
                 return std::nullopt;
 
-              // If the member itself is a union, flatten it.
-              if (auto* u = GetTypeInfo<UnionType>(member_type.value())) {
-                normalized_types.insert(u->types.begin(), u->types.end());
-              } else {
-                normalized_types.insert(member_type.value());
-              }
+              type_ids.push_back(type_id.value());
             }
-            CHECK_GT(normalized_types.size(), 1)
+            CHECK_GT(type_ids.size(), 1)
                 << "Parser returned a weird ParsedUnionType";
 
-            // Intern unions structurally to a TypeId for faster comparisons.
-            // UnionType stores the types as a std::vector instead of a std::set
-            // to take advatange of better cache-locality and moves from the
-            // contiguous memory (as opposed to the tree used by std::set).
-            auto key =
-                UnionType{{normalized_types.begin(), normalized_types.end()}};
-            if (const auto& it = interned_union_type_.find(key);
-                it != interned_union_type_.end()) {
-              return it->second;
-            }
-
-            TypeId type_id = next_type_id_++;
-            interned_union_type_[key] = type_id;
-            type_lookup_[type_id] = key;
-            return type_id;
+            return GetUnionOf(type_ids);
           },
           [&](const ParsedFunctionType& type) -> std::optional<TypeId> {
             std::vector<TypeId> arg_types;
@@ -306,8 +293,86 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
             interned_fn_type_[key] = type_id;
             type_lookup_[type_id] = key;
             return type_id;
-          }},
+          },
+          [&](const ParsedOptionalType& optional_type)
+              -> std::optional<TypeId> {
+            CHECK(optional_type.wrapped_type)
+                << "Parser should never return an OptionalType without a "
+                   "wrapped type";
+
+            auto wrapped_type_id = GetTypeIdFor(*optional_type.wrapped_type);
+            if (!wrapped_type_id.has_value())
+              return std::nullopt;
+
+            auto key = wrapped_type_id.value();
+            if (const auto& it = interned_optional_type_.find(key);
+                it != interned_optional_type_.end()) {
+              return it->second;
+            }
+
+            TypeId type_id = next_type_id_++;
+            interned_optional_type_[key] = type_id;
+            type_lookup_[type_id] = OptionalType{wrapped_type_id.value()};
+            return type_id;
+          },
+      },
       type.type);
+}
+
+TypeId TypeContext::WrapTypeIdAsOptional(TypeId type_id) {
+  auto key = type_id;
+  if (const auto& it = interned_optional_type_.find(key);
+      it != interned_optional_type_.end()) {
+    return it->second;
+  }
+
+  TypeId optional_type_id = next_type_id_++;
+  interned_optional_type_[key] = optional_type_id;
+  type_lookup_[optional_type_id] = OptionalType{type_id};
+  return optional_type_id;
+}
+
+std::optional<TypeId> TypeContext::UnwrapOptionalTypeId(TypeId type_id) const {
+  if (std::holds_alternative<OptionalType>(type_lookup_.at(type_id))) {
+    return std::get<OptionalType>(type_lookup_.at(type_id)).wrapped_type;
+  }
+  return std::nullopt;
+}
+
+TypeId TypeContext::GetUnionOf(const std::vector<TypeId>& types) {
+  // Look-up member types and normalize (sort/dedupe/flatten).
+  std::set<TypeId> normalized_types;  // std::set sorts and dedupes
+  for (const auto& type_id : types) {
+    // If the member itself is a union, flatten it.
+    if (auto* u = GetTypeInfo<UnionType>(type_id)) {
+      normalized_types.insert(u->types.begin(), u->types.end());
+    } else {
+      normalized_types.insert(type_id);
+    }
+  }
+
+  // If after normalization the union is just a single type, then return it.
+  if (normalized_types.size() == 1) {
+    return *normalized_types.begin();
+  }
+
+  // Intern unions structurally to a TypeId for faster comparisons.
+  // UnionType stores the types as a std::vector instead of a std::set
+  // to take advatange of better cache-locality (due to contiguous memory).
+  auto key = UnionType{{normalized_types.begin(), normalized_types.end()}};
+  if (const auto& it = interned_union_type_.find(key);
+      it != interned_union_type_.end()) {
+    return it->second;
+  }
+
+  TypeId type_id = next_type_id_++;
+  interned_union_type_[key] = type_id;
+  type_lookup_[type_id] = key;
+  return type_id;
+}
+
+bool TypeContext::IsTypeNilable(TypeId type_id) const {
+  return type_id == LiteralType::Nil || UnwrapOptionalTypeId(type_id);
 }
 
 std::optional<TypeId> TypeContext::DeclareFunctionType(
@@ -328,7 +393,6 @@ std::optional<TypeId> TypeContext::DeclareFunctionType(
       (argument_types.size() == 0 || argument_types[0] != self_id)) {
     error_collector->Add("Methods must begin with a `self` argument",
                          fn.argument_range);
-    return std::nullopt;
   }
 
   std::optional<TypeId> return_type = GetTypeIdFor(fn.return_type);
@@ -352,20 +416,8 @@ std::optional<TypeId> TypeContext::DeclareFunctionType(
   return type_id;
 }
 
-// static
-bool TypeContext::IsTypeEquivalent(TypeId lhs, TypeId rhs) {
-  if (lhs == rhs)
-    return true;
-
-  return (lhs == TypeContext::LiteralType::i32 ||
-          lhs == TypeContext::LiteralType::f32) &&
-         (rhs == TypeContext::LiteralType::i32 ||
-          rhs == TypeContext::LiteralType::f32);
-}
-
 bool TypeContext::IsTypeSubsetOf(TypeId sub_type_id, TypeId super_type_id) {
-  if (IsTypeEquivalent(sub_type_id, super_type_id) ||
-      super_type_id == LiteralType::Any)
+  if (sub_type_id == super_type_id || super_type_id == LiteralType::Any)
     return true;
 
   const TypeInfo& sub_type = type_lookup_.at(sub_type_id);
@@ -391,6 +443,24 @@ bool TypeContext::IsTypeSubsetOf(TypeId sub_type_id, TypeId super_type_id) {
     return std::all_of(sub_types.begin(), sub_types.end(), [&](TypeId id) {
       return std::binary_search(super_types.begin(), super_types.end(), id);
     });
+  }
+
+  if (sub_type_id == LiteralType::Nil &&
+      std::holds_alternative<OptionalType>(super_type)) {
+    return true;  // Nil is a subset of any Optional type.
+  }
+
+  if (std::holds_alternative<OptionalType>(sub_type) &&
+      std::holds_alternative<OptionalType>(super_type)) {
+    const auto& sub_wrapped = std::get<OptionalType>(sub_type).wrapped_type;
+    const auto& super_wrapped = std::get<OptionalType>(super_type).wrapped_type;
+    return IsTypeSubsetOf(sub_wrapped, super_wrapped);
+  }
+
+  if (!std::holds_alternative<OptionalType>(sub_type) &&
+      std::holds_alternative<OptionalType>(super_type)) {
+    const auto& super_wrapped = std::get<OptionalType>(super_type).wrapped_type;
+    return IsTypeSubsetOf(sub_type_id, super_wrapped);
   }
 
   // Neither type is a union so they must be different concrete types.
@@ -511,6 +581,9 @@ std::string TypeContext::GetNameFromTypeId(TypeId type_id) const {
                    }
                    ss << "]";
                    return ss.str();
+                 },
+                 [&](const OptionalType type) {
+                   return GetNameFromTypeId(type.wrapped_type) + "?";
                  }},
       it->second);
 }

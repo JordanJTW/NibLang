@@ -5,7 +5,7 @@ extern struct Array {
 
   fn push(self: Array, value: any);
   fn get(self: Array, idx: i32) -> any;
-  fn set(self: Array, idx: i32, value: any);
+  fn set(self: Array, idx: i32, value: any) -> any;
   fn length(self: Array) -> i32;
 
   fn slice(self: Array, start: i32, count: i32) -> Array {

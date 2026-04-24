@@ -41,6 +41,10 @@ struct UnionType {
   };
 };
 
+struct OptionalType {
+  TypeId wrapped_type;
+};
+
 // Stores context for structural and nominal typing through-out the compiler.
 // Lowers identifiers to Symbols with unique indexes per SymbolKind.
 class TypeContext {
@@ -97,6 +101,8 @@ class TypeContext {
   Symbol DeclareVariableSymbol(std::string_view name, TypeId type_id);
   // Declares a Symbol of type CAPTURE in the current scope and returns it.
   Symbol DeclareCaptureSymbol(std::string_view name, TypeId type_id);
+  // Declares a Symbol of type NARROWED in the current scope and returns it.
+  Symbol DeclareNarrowedSymbol(Symbol symbol_to_narrow, TypeId narrowed_type);
 
   // Looks up a symbol by name within the given scope. By default, searches the
   // current scope and all parent scopes. If `scope` is Function, it will search
@@ -109,9 +115,20 @@ class TypeContext {
   // Returns the TypeId for a given ParsedType if it can be resolved.
   std::optional<TypeId> GetTypeIdFor(const ParsedType& type);
 
-  // Helper to compare two types for equivalence, accounting for implicit
-  // coercions (e.g. i32 to f32). Should be used instead of direct comparison.
-  static bool IsTypeEquivalent(TypeId t1, TypeId t2);
+  // Wraps a TypeId as an optional type, creating a new TypeId if needed.
+  TypeId WrapTypeIdAsOptional(TypeId type_id);
+  // Unwraps an optional TypeId to get the wrapped TypeId, returns std::nullopt
+  // if the given TypeId is not an optional type.
+  std::optional<TypeId> UnwrapOptionalTypeId(TypeId type_id) const;
+
+  // Returns the TypeId for the union of `types`.
+  TypeId GetUnionOf(const std::vector<TypeId>& types);
+
+  // Returns if TypeId if Nil or could be Nil i.e. Nil + Optional.
+  bool IsTypeNilable(TypeId type_id) const;
+
+  // Returns true if `sub_type_id` is a subset of `super_type_id` (i.e. can be
+  // used in its place). This is used for function argument type checking, etc.
   bool IsTypeSubsetOf(TypeId sub_type, TypeId super_type);
 
   template <typename T>
@@ -164,12 +181,14 @@ class TypeContext {
   std::unordered_map<FunctionType, TypeId, FunctionType::Hash>
       interned_fn_type_;
   std::unordered_map<UnionType, TypeId, UnionType::Hash> interned_union_type_;
+  // Maps wrapped_type -> optional_type_id for quick lookup.
+  std::unordered_map<TypeId, TypeId> interned_optional_type_;
 
   // Declaring an interned "type" for the built-ins simplifies `IsTypeSubsetOf`.
   struct BuiltInType {};
 
-  using TypeInfo =
-      std::variant<BuiltInType, FunctionType, StructType, UnionType>;
+  using TypeInfo = std::
+      variant<BuiltInType, FunctionType, OptionalType, StructType, UnionType>;
   std::unordered_map<TypeId, TypeInfo> type_lookup_;
 
   // Function declarations can be looked up by CallIdx since they are 1:1.

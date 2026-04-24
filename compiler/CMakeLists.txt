@@ -1,6 +1,10 @@
 add_library(assembler assembler.cc)
 target_include_directories(assembler PRIVATE ${PROJECT_SOURCE_DIR})
 
+add_library(bytecode_generator bytecode_generator.cc)
+target_link_libraries(bytecode_generator PRIVATE assembler parser printer program_builder semantic_analyzer tokenizer type_context)
+target_include_directories(bytecode_generator PRIVATE ${PROJECT_SOURCE_DIR})
+
 add_library(error_collector error_collector.cc)
 target_include_directories(error_collector PRIVATE ${PROJECT_SOURCE_DIR})
 
@@ -9,7 +13,7 @@ target_include_directories(logging PRIVATE ${PROJECT_SOURCE_DIR})
 
 add_library(printer printer.cc)
 target_include_directories(printer PRIVATE ${PROJECT_SOURCE_DIR})
-target_link_libraries(printer PRIVATE types)
+target_link_libraries(printer PRIVATE type_context types)
 
 add_library(parser parser.cc)
 target_include_directories(parser PRIVATE ${PROJECT_SOURCE_DIR})
@@ -33,7 +37,7 @@ target_include_directories(types PRIVATE ${PROJECT_SOURCE_DIR})
 
 add_executable(compiler main.cc)
 target_include_directories(compiler PRIVATE ${PROJECT_SOURCE_DIR})
-target_link_libraries(compiler PRIVATE assembler parser printer program_builder semantic_analyzer tokenizer type_context)
+target_link_libraries(compiler PRIVATE bytecode_generator parser program_builder type_context)
 
 include(GoogleTest)
 

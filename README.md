@@ -1,20 +1,18 @@
-<!-- <div align="center">
+<div align="center">
 
 <img src="assets/logo.png?raw=true" height="40px"/>
 
-![Build/Test](https://github.com/JordanJTW/cyder/actions/workflows/cmake.yml/badge.svg?event=push)
-
-</div> -->
+</div>
 
 # About
 
 NibLang is a statically typed, compiled language. It is designed to run in a custom virtual-machine on memory constrained microcontrollers (ESP32, NRF52, etc).
 
 The language offers:
+- A robust type system with concrete types with `Optional` 
 - Memory management (automatic RC and a mark-sweep GC to clear cycles[^1])
 - Built-in primitive containers (Array, Map, String[^2])
 - Promise based async task scheduling
-- A robust type system with concrete types and an Optional primitive
 
 [^1]: Only ARC is currently supported but the GC is planned.
 [^2]: Currently only supports ASCII but UTF-8 is planned.
@@ -76,7 +74,7 @@ export NIB_PATH=`pwd`/compiler
 - [x] Nil coalescing `foo ?? true`
 - [x] Optional wrapping `String?`
 
-### Runtime Features
+### Language Features
 - [ ] Full Unicode/UTF-8 support for String
   - [ ] Support for UTF-8 in source files (for variable names, etc)
 - [ ] Iterator support
@@ -98,6 +96,11 @@ export NIB_PATH=`pwd`/compiler
 - [ ] `for` statements
   - [ ] `for in` statements
 - [ ] `switch` statements
+
+#### Variables
+- [x] Variable declaration i.e. `let x = ...`
+- [x] Reassignment of a variable i.e. `x = ...`
+- [ ] Non-mutable variables
 
 #### Async Support
 - [x] `struct Promise` with async job scheduling

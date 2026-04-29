@@ -51,6 +51,7 @@ export NIB_PATH=`pwd`/compiler
 - [x] Structurally typed first-class `fn`
 - [x] Type unions `A | B`
 - [x] Nil-able Optional type `String?`
+- [x] `any` type
 - [ ] Runtime checked type-casts `foo as T` and `foo as? T`
 - [ ] Generic templates `Array[T]`
 - [ ] Extended Primitives `i64`, `f64`
@@ -59,22 +60,46 @@ export NIB_PATH=`pwd`/compiler
 - [x] Able to define `structs` with fields
 - [x] Automatically generated "constructor" functions
 - [ ] Private fields or methods
+- [ ] `trait` based inheritance
 
-### Function Support
+#### Function Support
 - [x] Standalone functions
 - [x] Passing functions by name (first class support)
 - [x] Methods on classes
   - [ ] Passing methods bound to an instance by name
   - [x] Static methods allowed on a class
 
-### Optional Support
+#### Optional Support
 - [x] Optional chaining `foo?.bar`
   - [x] With subscript access `foo?[idx]`
   - [x] With call access `foo?()`
 - [x] Nil coalescing `foo ?? true`
 - [x] Optional wrapping `String?`
 
-### Async Support
+### Runtime Features
+- [ ] Full Unicode/UTF-8 support for String
+  - [ ] Support for UTF-8 in source files (for variable names, etc)
+- [ ] Iterator support
+- [x] Map with dynamic keys/values
+  - [ ] Robust Map that scales with the number of entries
+- [x] Array which can grow dynamically
+- [ ] ArrayBuffer to abstract arbitrary memory
+
+#### Arithmetic / Logic
+- [x] +-/* operators for `i32` and `f32`
+- [ ] ^ to raise to a power
+- [ ] % to get the remainder
+- [ ] &|! for bitwise manipulation of `i32`
+- [x] &&/|| for logical AND/OR
+
+#### Control Flow
+- [x] `if/else` statments
+- [x] `while` statements
+- [ ] `for` statements
+  - [ ] `for in` statements
+- [ ] `switch` statements
+
+#### Async Support
 - [x] `struct Promise` with async job scheduling
   - [x] `Promise.then(fulfill, reject)`
   - [x] Support for chaining a returned `Promise`

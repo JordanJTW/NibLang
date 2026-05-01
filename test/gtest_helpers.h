@@ -137,7 +137,8 @@ void PrintTo(const vm_value_t& value, ::std::ostream* os) {
     case value_type_t::VALUE_TYPE_NULL:
       *os << "Nil";
       break;
+    default:
+      *os << "?";
+      break;
   }
-
-  __builtin_unreachable();  // All vm_value_t types MUST be handled above.
 }

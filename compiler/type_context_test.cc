@@ -18,10 +18,13 @@ using ::testing::Return;
 
 namespace {
 
+// Used for testing GetNameFromTypeId with variadic (extern) functions.
+constexpr std::array<std::string_view, 1> kExternalFunctions = {"log"};
+
 class TypeContextTest : public ::testing::Test {
  protected:
   ErrorCollector error_collector;
-  TypeContext type_context;
+  TypeContext type_context{kExternalFunctions};
 };
 
 TEST_F(TypeContextTest, GetTypeIdFor_BuiltInType) {
@@ -308,10 +311,10 @@ TEST_F(TypeContextTest, GetNameFromTypeId) {
 
   // Variadic function
   FunctionDeclaration variadic_fn{
-      .name = "variadic_fn",
+      .name = "log",
       .arguments = {{"arg1", ParsedType{"i32"}}},
       .return_type = ParsedType{"bool"},
-      .function_kind = FunctionKind::Free,
+      .function_kind = FunctionKind::Extern,
       .is_variadic = true,
       .body = std::make_unique<Block>(),
   };
@@ -338,7 +341,7 @@ TEST_F(TypeContextTest, GetNameFromTypeId) {
   auto union_id = type_context.GetTypeIdFor(ParsedType{union_type});
   ASSERT_TRUE(union_id.has_value());
   std::string union_name = type_context.GetNameFromTypeId(union_id.value());
-  EXPECT_EQ(union_name, "(i32, f32)");
+  EXPECT_EQ(union_name, "Union[i32, f32]");
 }
 
 TEST_F(TypeContextTest, GetFunctionDeclaration) {

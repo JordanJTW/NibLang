@@ -6,21 +6,32 @@
 
 # About
 
-NibLang is a statically typed, compiled language. It is designed to run in a custom virtual-machine on memory constrained microcontrollers (ESP32, NRF52, etc).
+NibLang is a statically typed, compiled language. It is designed to run in a custom virtual-machine on memory constrained microcontrollers (ESP32, NRF52, etc). The language takes inspriation from TypeScript, Swift, Rust and Jakt.
 
-The language offers:
-- A robust type system with concrete types with `Optional` 
+## Goals
+- Provide a robust type system with concrete types and a Nil-safe `Optional`
 - Memory management (automatic RC and a mark-sweep GC to clear cycles[^1])
-- Built-in primitive containers (Array, Map, String[^2])
+- Built-in containers (Array, Map, String[^2])
 - Promise based async task scheduling
+- Serve as a middle ground between MicroPython/embedded JS framework and C code
+- Easy to understand architecture which can be used for education
 
 [^1]: Only ARC is currently supported but the GC is planned.
 [^2]: Currently only supports ASCII but UTF-8 is planned.
 
+### AI Usage
+LLMs are used to compare features across various languages, brainstorm design ideas (rubber-duck style), to check code for errors, and to generate some tests.
+
+While AI and "vibecoding" can produce code quickly, I personally feel like it results in a much shallower understanding of what was produced and a more "design by committee" architecture. A goal of this project was to learn language and compiler design first-hand so AI usage has been kept to an absolute minimum.
+
+## Code Structure
+- The compiler lives in [compiler](compiler/) with the bulk of the pipeline being (in order) [Tokenizer](compiler/tokenizer.cc) => [Parser](compiler/parser.cc) => [SemanticAnalyzer](compiler/semantic_analyzer.cc) & [TypeContext](compiler/type_context.cc) => [BytecodeGenerator](compiler/bytecode_generator.cc) => [ProgramBuilder](compiler/program_builder.cc) & [Assembler](compiler/assembler.cc). All tests are inline within this directory with [compiler/golden_tests.cc](compiler/golden_tests.cc) providing end-to-end integration tests.
+- The VM lives in [src](src/) along-side its built-in container types ([Array](src/array.c)/[Map](src/map.c)/[String](src/strings.c)) and async support ([Promise](src/promise.c)). Tests for the VM specifically live in [test](test) since they are written in C++20 while the VM needs to compile under C11.
+
 # Build and Run
 
 > [!IMPORTANT]
-> You will need [CMake 3.5](https://cmake.org/download/) and *optionally [Ninja](https://ninja-build.org/)* to build.
+> You will need [CMake 3.18+](https://cmake.org/download/) and *optionally [Ninja](https://ninja-build.org/)* to build.
 
 ```console
 # To build the compiler and VM
@@ -41,6 +52,21 @@ export NIB_PATH=`pwd`/compiler
 ./build/compiler/compiler <input_path>  --dump
 ```
 
+## Debug Memory Leaks
+
+The macOS `leaks` command has been used as the primary means of chasing down RC leaks
+```console
+leaks --atExit -- ./build/src/run <path/to/inklet>
+```
+
+ASAN can be used on macOS or Linux to find signs of memory corruption
+> [!NOTE]
+> `leaks` will not work in conjunction with ASAN since ASAN relies on a custom allocator which conflicts with macOS diagnostics.
+```console
+cmake -DENABLE_ASAN=ON -GNinja -Bbuild
+ninja -C build
+```
+
 # Feature Plan
 
 ### Type System
@@ -48,17 +74,42 @@ export NIB_PATH=`pwd`/compiler
 - [x] Nominally typed `struct`
 - [x] Structurally typed first-class `fn`
 - [x] Type unions `A | B`
-- [x] Nil-able Optional type `String?`
+- [x] Nil-able `Optional` type `String?`
 - [x] `any` type
 - [ ] Runtime checked type-casts `foo as T` and `foo as? T`
 - [ ] Generic templates `Array[T]`
-- [ ] Extended Primitives `i64`, `f64`
+- [ ] Extended primitives `i64`, `f64`
+- [ ] Allow declaring a type alias `type T = A | B`
 
 #### Structs
+`structs` are always passed by reference and default to public field access.
+
+```
+struct Point {
+  x: i32;
+  y: i32;
+}
+
+// Constructor is automatically generated
+Point(x: i32, y: i32);
+```
+
 - [x] Able to define `structs` with fields
 - [x] Automatically generated "constructor" functions
 - [ ] Private fields or methods
 - [ ] `trait` based inheritance
+- [ ] Pass constructor arguments by name i.e. `Point(x: 13, y: 13)`
+
+Opaque `extern structs` are supported as an FFI mechanism. All methods in an `extern struct` are considered extern.
+```
+extern struct Array {
+  // static factory methods are used to construct `extern` types
+  static fn new() -> Array;
+
+  // This resolves to a native function `Array_length`.
+  fn length(self: Array) -> i32;
+}
+```
 
 #### Function Support
 - [x] Standalone functions
@@ -66,6 +117,14 @@ export NIB_PATH=`pwd`/compiler
 - [x] Methods on classes
   - [ ] Passing methods bound to an instance by name
   - [x] Static methods allowed on a class
+- [ ] Allow passing function arguments by name
+- [x] Support variadic arguments for `extern` functions i.e. `fn log(...)`
+
+Functions can be declared `extern` meaning they will be resolved during compilation to a native function.
+
+```
+extern fn to_string(value: i32) -> String;
+```
 
 #### Optional Support
 - [x] Optional chaining `foo?.bar`
@@ -82,6 +141,11 @@ export NIB_PATH=`pwd`/compiler
   - [ ] Robust Map that scales with the number of entries
 - [x] Array which can grow dynamically
 - [ ] ArrayBuffer to abstract arbitrary memory
+- [ ] Codegen FFI wrappers for C libraries
+- [ ] Allow different runtimes to have unique native functions
+  - [ ] Dynamically link functions at runtime?
+- [ ] Custom allocators to reduce heap fragmentation
+- [ ] Nib => C code generation (instead of generating bytecode)
 
 #### Arithmetic / Logic
 - [x] +-/* operators for `i32` and `f32`
@@ -89,6 +153,7 @@ export NIB_PATH=`pwd`/compiler
 - [ ] % to get the remainder
 - [ ] &|! for bitwise manipulation of `i32`
 - [x] &&/|| for logical AND/OR
+- [ ] standardize overflow (checked and unchecked)
 
 #### Control Flow
 - [x] `if/else` statments

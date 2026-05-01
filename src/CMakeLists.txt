@@ -12,6 +12,7 @@ target_include_directories(strings PRIVATE ${PROJECT_SOURCE_DIR})
 
 add_library(vm vm.c)
 target_link_libraries(vm PRIVATE array map promise strings)
+target_link_libraries(vm PRIVATE m) # -lm (Math)
 target_include_directories(vm PUBLIC ${PROJECT_SOURCE_DIR})
 
 add_executable(run main.c)

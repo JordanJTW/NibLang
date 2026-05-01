@@ -38,6 +38,9 @@ static const char* ToString(FunctionKind kind) {
     case Constructor:
       return "Constructor";
   }
+
+  __builtin_unreachable();  // All FunctionKinds MUST be handled above.
+  return "?";
 }
 
 std::ostream& operator<<(std::ostream& os,
@@ -52,6 +55,9 @@ std::ostream& operator<<(std::ostream& os,
     CASE(Nil);
   }
 #undef CASE
+
+  __builtin_unreachable();  // All Specializations MUST be handled above.
+  return os;
 }
 
 void print_resolved_call(const std::optional<ResolvedCall>& r, size_t indent) {

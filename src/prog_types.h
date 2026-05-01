@@ -25,7 +25,7 @@ typedef struct vm_prog_function_t {
 } vm_prog_function_t;
 
 typedef struct vm_section_t {
-  enum : uint8_t { CONST_STR, FUNCTION, DEBUG } type;
+  enum { CONST_STR, FUNCTION, DEBUG } type;
   uint32_t size;
   vm_prog_function_t fn;
 } vm_section_t;

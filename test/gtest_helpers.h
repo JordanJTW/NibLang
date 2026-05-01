@@ -39,7 +39,7 @@ MATCHER_P(StringType, expected, "is a String vm_value_t") {
 
 // Matches vm_value_t with VALUE_TYPE_NULL
 MATCHER(NilType, "is a Nil vm_value_t") {
-  return arg.type == vm_value_t::VALUE_TYPE_NULL;
+  return arg.type == value_type_t::VALUE_TYPE_NULL;
 }
 
 MATCHER_P(HasType, expected, "is a vm_value_t with type") {
@@ -50,7 +50,7 @@ MATCHER_P2(IsPromiseWithStateAndValue,
            expceted_state,
            value_matcher,
            "is promise with state and matching value") {
-  if (arg.type != vm_value::VALUE_TYPE_PROMISE) {
+  if (arg.type != value_type_t::VALUE_TYPE_PROMISE) {
     *result_listener << "value is not a promise";
     return false;
   }
@@ -86,14 +86,14 @@ MATCHER_P(IsRejectedWith,
 }
 
 ACTION(ReturnVoidType) {
-  return vm_value_t{.type = vm_value::VALUE_TYPE_VOID};
+  return vm_value_t{.type = value_type_t::VALUE_TYPE_VOID};
 }
 
 ACTION(FreeArgsAndReturnVoidType) {
   for (const auto& arg : arg0) {
     vm_free_ref(const_cast<vm_value_t*>(&arg));
   }
-  return vm_value_t{.type = vm_value::VALUE_TYPE_VOID};
+  return vm_value_t{.type = value_type_t::VALUE_TYPE_VOID};
 }
 
 using MockNativeFunc =
@@ -115,27 +115,29 @@ std::ostream& operator<<(std::ostream& os, Promise::state_t state) {
     case Promise::PROMISE_STATE_REJECTED:
       return os << "REJECTED";
   }
+
+  __builtin_unreachable();  // All Promise::state_t MUST be handled above.
+  return os;
 }
 
 void PrintTo(const vm_value_t& value, ::std::ostream* os) {
   switch (value.type) {
-    case vm_value_t::VALUE_TYPE_INT:
+    case value_type_t::VALUE_TYPE_INT:
       *os << value.as.i32 << "i";
       break;
-    case vm_value_t::VALUE_TYPE_FLOAT:
+    case value_type_t::VALUE_TYPE_FLOAT:
       *os << value.as.f32 << "f";
       break;
-    case vm_value_t::VALUE_TYPE_BOOL:
+    case value_type_t::VALUE_TYPE_BOOL:
       *os << (value.as.boolean ? "True" : "False");
       break;
-    case vm_value_t::VALUE_TYPE_STR:
+    case value_type_t::VALUE_TYPE_STR:
       *os << "\"" << value.as.str->c_str << "\"";
       break;
-    case vm_value_t::VALUE_TYPE_NULL:
+    case value_type_t::VALUE_TYPE_NULL:
       *os << "Nil";
       break;
-    default:
-      *os << "UnknownType(" << value.type << ")";
-      break;
   }
+
+  __builtin_unreachable();  // All vm_value_t types MUST be handled above.
 }

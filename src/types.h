@@ -13,7 +13,7 @@
 extern "C" {
 #endif
 
-typedef enum : uint8_t {
+typedef enum {
   // Variables
   OP_PUSH_CONST_REF,
   OP_PUSH_I32,
@@ -99,20 +99,22 @@ typedef struct vm_map_t {
   MapNode* buckets[];
 } Map;
 
+typedef enum {
+  VALUE_TYPE_VOID,  // Special return value for functions
+  VALUE_TYPE_NULL,
+  VALUE_TYPE_BOOL,
+  VALUE_TYPE_INT,
+  VALUE_TYPE_FLOAT,
+  VALUE_TYPE_STR,
+  VALUE_TYPE_MAP,
+  VALUE_TYPE_FUNCTION,
+  VALUE_TYPE_PROMISE,
+  VALUE_TYPE_ARRAY,
+  VALUE_TYPE_OPAQUE,
+} value_type_t;
+
 typedef struct vm_value {
-  enum type_t {
-    VALUE_TYPE_VOID,  // Special return value for functions
-    VALUE_TYPE_NULL,
-    VALUE_TYPE_BOOL,
-    VALUE_TYPE_INT,
-    VALUE_TYPE_FLOAT,
-    VALUE_TYPE_STR,
-    VALUE_TYPE_MAP,
-    VALUE_TYPE_FUNCTION,
-    VALUE_TYPE_PROMISE,
-    VALUE_TYPE_ARRAY,
-    VALUE_TYPE_OPAQUE,
-  } type;
+  value_type_t type;
   union {
     bool boolean;
     int32_t i32;
@@ -146,6 +148,24 @@ typedef struct vm_array_t {
   size_t capacity;
   vm_value_t* data;
 } Array;
+
+static inline vm_value_t vm_bool_value(bool v) {
+  vm_value_t result = {.type = VALUE_TYPE_BOOL};
+  result.as.boolean = v;
+  return result;
+}
+
+static inline vm_value_t vm_int_value(int32_t v) {
+  vm_value_t result = {.type = VALUE_TYPE_INT};
+  result.as.i32 = v;
+  return result;
+}
+
+static inline vm_value_t vm_float_value(float v) {
+  vm_value_t result = {.type = VALUE_TYPE_FLOAT};
+  result.as.f32 = v;
+  return result;
+}
 
 #ifdef __cplusplus
 }  // extern "C"

@@ -30,6 +30,9 @@ std::ostream& operator<<(std::ostream& os, Symbol::Kind kind) {
     case Symbol::Narrowed:
       return os << "Narrowed";
   }
+
+  __builtin_unreachable();  // All Symbol::Kind MUST be handled above.
+  return os;
 }
 
 }  // namespace

@@ -41,7 +41,7 @@ class Assembler {
   Assembler& Return();
   Assembler& StoreLocal(uint32_t idx);
   Assembler& Compare(op_t operation);
-  Assembler& Is(vm_value_t::type_t type);
+  Assembler& Is(value_type_t type);
   Assembler& JumpIfTrue(uint32_t pc);
   Assembler& JumpIfFalse(uint32_t pc);
   Assembler& Jump(uint32_t pc);

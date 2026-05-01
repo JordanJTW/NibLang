@@ -11,18 +11,18 @@
 #include "src/types.h"
 #include "src/vm.h"
 
-#define BYTECODE_FUNCTION($name, $argc, $assembler)                     \
-  Assembler::Metadata $name##_metadata;                                 \
-  auto $name##_bytecode = $assembler.Build(&$name##_metadata);          \
-  vm_function_t $name = {                                               \
-      .name = #$name,                                                   \
-      .argument_count = $argc,                                          \
-      .type = vm_function_t::VM_BYTECODE,                               \
-      .as.bytecode = {                                                  \
-          .data = $name##_bytecode.data(),                              \
-          .data_len = $name##_bytecode.size(),                          \
-          .local_count = std::max($name##_metadata.max_local_index + 1, \
-                                  static_cast<uint32_t>($argc))}}
+#define BYTECODE_FUNCTION($name, $argc, $assembler)                            \
+  Assembler::Metadata $name##_metadata;                                        \
+  auto $name##_bytecode = $assembler.Build(&$name##_metadata);                 \
+  vm_function_t $name = {                                                      \
+      .type = vm_function_t::VM_BYTECODE,                                      \
+      .argument_count = $argc,                                                 \
+      .name = #$name,                                                          \
+      .as = {.bytecode = {                                                     \
+                 .data = $name##_bytecode.data(),                              \
+                 .data_len = $name##_bytecode.size(),                          \
+                 .local_count = std::max($name##_metadata.max_local_index + 1, \
+                                         static_cast<uint32_t>($argc))}}};
 
 int main() {
   enum {
@@ -629,8 +629,9 @@ int main() {
       allocate_str_from_c("true"),
       allocate_str_from_c("false"),
       allocate_str_from_c("null"),
-      (vm_value_t){.type = vm_value_t::VALUE_TYPE_BOOL, .as.boolean = true},
-      (vm_value_t){.type = vm_value_t::VALUE_TYPE_BOOL, .as.boolean = false}};
+      vm_bool_value(true),
+      vm_bool_value(false),
+  };
 
   vm_t* vm = new_vm(constants, sizeof(constants) / sizeof(vm_value_t), funcs,
                     sizeof(funcs) / sizeof(vm_function_t));

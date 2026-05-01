@@ -21,7 +21,7 @@
 #include "src/types.h"
 
 #define LOG($fmt, ...) \
-  fprintf(stderr, "[%s:%d] " $fmt "\n", __FILE_NAME__, __LINE__, ##__VA_ARGS__)
+  fprintf(stderr, "[vm.c:%d] " $fmt "\n", __LINE__, ##__VA_ARGS__)
 
 #ifdef NDEBUG
 #define DEBUG_LOG($fmt, ...)

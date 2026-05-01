@@ -109,7 +109,7 @@ Assembler& Assembler::Compare(op_t operation) {
   data_.push_back(operation);
   return *this;
 }
-Assembler& Assembler::Is(vm_value_t::type_t type) {
+Assembler& Assembler::Is(value_type_t type) {
   data_.push_back(OP_IS);
   data_.push_back(type);
   return *this;

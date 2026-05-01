@@ -103,8 +103,7 @@ Token Tokenizer::next() {
   auto make_token = [&](TokenKind kind, std::string value = "") {
     size_t length = offset_ - start_idx;
     return Token{
-        .kind = kind,
-        .value = value.empty() ? data_.substr(start_idx, length) : value,
+        kind, value.empty() ? data_.substr(start_idx, length) : value,
         Metadata{TextRange{start_idx, offset_}, TextRange{line_, line_ + 1}}};
   };
 
@@ -289,6 +288,9 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kEndExpr);
     KIND_TO_NAME(kEndOfFile);
   }
+
+  __builtin_unreachable();  // All TokenKinds MUST be handled above.
+  return os;
 }
 
 // static

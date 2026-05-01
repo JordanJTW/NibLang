@@ -43,28 +43,28 @@ TEST(VM, CallFunc) {
   MockNativeFunc native_func;
 
   vm_function_t funcs[] = {
-      {.name = "main",
-       .type = vm_function_t::VM_BYTECODE,
+      {.type = vm_function_t::VM_BYTECODE,
        .argument_count = 0,
-       .as.bytecode =
-           {
-               .data = main_bytecode.data(),
-               .data_len = main_bytecode.size(),
-               .local_count = 1,
-           }},
-      {.name = "add",
-       .type = vm_function_t::VM_BYTECODE,
+       .name = "main",
+       .as = {.bytecode =
+                  {
+                      .data = main_bytecode.data(),
+                      .data_len = main_bytecode.size(),
+                      .local_count = 1,
+                  }}},
+      {.type = vm_function_t::VM_BYTECODE,
        .argument_count = 2,
-       .as.bytecode =
-           {
-               .data = add_bytecode.data(),
-               .data_len = add_bytecode.size(),
-               .local_count = 2,
-           }},
-      {.name = "result",
-       .type = vm_function_t::VM_NATIVE_FUNC,
+       .name = "add",
+       .as = {.bytecode =
+                  {
+                      .data = add_bytecode.data(),
+                      .data_len = add_bytecode.size(),
+                      .local_count = 2,
+                  }}},
+      {.type = vm_function_t::VM_NATIVE_FUNC,
        .argument_count = 1,
-       .as.native = {.fn = native_trampoline, .userdata = &native_func}}};
+       .name = "result",
+       .as = {.native = {.fn = native_trampoline, .userdata = &native_func}}}};
 
   EXPECT_CALL(native_func, Call(ElementsAre(Int32Type(10))))
       .WillOnce(ReturnVoidType());
@@ -84,19 +84,19 @@ TEST(VM, ConstantString) {
   MockNativeFunc native_func;
 
   vm_function_t funcs[] = {
-      {.name = "main",
-       .type = vm_function_t::VM_BYTECODE,
+      {.type = vm_function_t::VM_BYTECODE,
        .argument_count = 0,
-       .as.bytecode =
-           {
-               .data = main_bytecode.data(),
-               .data_len = main_bytecode.size(),
-               .local_count = 0,
-           }},
-      {.name = "print",
-       .type = vm_function_t::VM_NATIVE_FUNC,
+       .name = "main",
+       .as = {.bytecode =
+                  {
+                      .data = main_bytecode.data(),
+                      .data_len = main_bytecode.size(),
+                      .local_count = 0,
+                  }}},
+      {.type = vm_function_t::VM_NATIVE_FUNC,
        .argument_count = 1,
-       .as.native = {.fn = native_trampoline, .userdata = &native_func}}};
+       .name = "print",
+       .as = {.native = {.fn = native_trampoline, .userdata = &native_func}}}};
 
   EXPECT_CALL(native_func, Call(ElementsAre(StringType("hello world"))))
       .WillOnce(FreeArgsAndReturnVoidType());
@@ -132,19 +132,19 @@ TEST(VM, ForLoop) {
   MockNativeFunc native_func;
 
   vm_function_t funcs[] = {
-      {.name = "main",
-       .type = vm_function_t::VM_BYTECODE,
+      {.type = vm_function_t::VM_BYTECODE,
        .argument_count = 0,
-       .as.bytecode =
-           {
-               .data = main_bytecode.data(),
-               .data_len = main_bytecode.size(),
-               .local_count = 1,
-           }},
-      {.name = "native",
-       .type = vm_function_t::VM_NATIVE_FUNC,
+       .name = "main",
+       .as = {.bytecode =
+                  {
+                      .data = main_bytecode.data(),
+                      .data_len = main_bytecode.size(),
+                      .local_count = 1,
+                  }}},
+      {.type = vm_function_t::VM_NATIVE_FUNC,
        .argument_count = 1,
-       .as.native = {.fn = native_trampoline, .userdata = &native_func}}};
+       .name = "native",
+       .as = {.native = {.fn = native_trampoline, .userdata = &native_func}}}};
 
   ::testing::Sequence seq;
   for (int32_t expected_value = 0; expected_value < 5; ++expected_value) {
@@ -182,19 +182,19 @@ TEST(VM, RefCountString) {
   MockNativeFunc print_func;
 
   vm_function_t funcs[] = {
-      {.name = "main",
-       .type = vm_function_t::VM_BYTECODE,
+      {.type = vm_function_t::VM_BYTECODE,
        .argument_count = 0,
-       .as.bytecode =
-           {
-               .data = main_bytecode.data(),
-               .data_len = main_bytecode.size(),
-               .local_count = 2,
-           }},
-      {.name = "print",
-       .type = vm_function_t::VM_NATIVE_FUNC,
+       .name = "main",
+       .as = {.bytecode =
+                  {
+                      .data = main_bytecode.data(),
+                      .data_len = main_bytecode.size(),
+                      .local_count = 2,
+                  }}},
+      {.type = vm_function_t::VM_NATIVE_FUNC,
        .argument_count = 1,
-       .as.native = {.fn = native_trampoline, .userdata = &print_func}}};
+       .name = "print",
+       .as = {.native = {.fn = native_trampoline, .userdata = &print_func}}}};
 
   ::testing::Sequence seq;
   for (const auto& expected_str : {"ll", "rld"}) {
@@ -241,32 +241,33 @@ TEST(VM, CallBuiltInPromise) {
   MockNativeFunc verifyResult;
 
   vm_function_t funcs[] = {
-      {.name = "main",
-       .type = vm_function_t::VM_BYTECODE,
+      {.type = vm_function_t::VM_BYTECODE,
        .argument_count = 0,
-       .as.bytecode =
-           {
-               .data = main_bytecode.data(),
-               .data_len = main_bytecode.size(),
-               .local_count = 3,
-           }},
-      {.name = "returnValueByteCode",
-       .type = vm_function_t::VM_BYTECODE,
+       .name = "main",
+       .as = {.bytecode =
+                  {
+                      .data = main_bytecode.data(),
+                      .data_len = main_bytecode.size(),
+                      .local_count = 3,
+                  }}},
+      {.type = vm_function_t::VM_BYTECODE,
        .argument_count = 1,
-       .as.bytecode =
-           {
-               .data = returnValueByteCode.data(),
-               .data_len = returnValueByteCode.size(),
-               .local_count = 1,
-           }},
-      {.name = "getPromiseNative",
-       .type = vm_function_t::VM_NATIVE_FUNC,
+       .name = "returnValueByteCode",
+       .as = {.bytecode =
+                  {
+                      .data = returnValueByteCode.data(),
+                      .data_len = returnValueByteCode.size(),
+                      .local_count = 1,
+                  }}},
+      {.type = vm_function_t::VM_NATIVE_FUNC,
        .argument_count = 0,
-       .as.native = {.fn = native_trampoline, .userdata = &getPromiseNative}},
-      {.name = "verifyResult",
-       .type = vm_function_t::VM_NATIVE_FUNC,
+       .name = "getPromiseNative",
+       .as = {.native = {.fn = native_trampoline,
+                         .userdata = &getPromiseNative}}},
+      {.type = vm_function_t::VM_NATIVE_FUNC,
        .argument_count = 1,
-       .as.native = {.fn = native_trampoline, .userdata = &verifyResult}}};
+       .name = "verifyResult",
+       .as = {.native = {.fn = native_trampoline, .userdata = &verifyResult}}}};
 
   vm_t* vm = new_vm(NULL, 0, funcs, sizeof(funcs) / sizeof(vm_function_t));
 
@@ -280,7 +281,7 @@ TEST(VM, CallBuiltInPromise) {
       .WillOnce([&final_promise](std::vector<vm_value_t> args) {
         EXPECT_EQ(args.size(), 1);
         final_promise = args[0];
-        return (vm_value_t){.type = vm_value_t::VALUE_TYPE_NULL};
+        return (vm_value_t){.type = value_type_t::VALUE_TYPE_NULL};
       });
 
   vm_run(vm, /*entry_point_idx=*/0, false);
@@ -307,20 +308,20 @@ class TryCatchTest : public ::testing::TestWithParam<TryCatchParam> {
     TryCatchParam param = GetParam();
 
     main_bytecode_ = param.main.Build();
-    vm_function_t funcs[] = {
-        {.name = "main",
-         .type = vm_function_t::VM_BYTECODE,
-         .argument_count = 0,
-         .as.bytecode =
-             {
-                 .data = main_bytecode_.data(),
-                 .data_len = main_bytecode_.size(),
-                 .local_count = 0,
-             }},
-        {.name = "state",
-         .type = vm_function_t::VM_NATIVE_FUNC,
-         .argument_count = 1,
-         .as.native = {.fn = native_trampoline, .userdata = &state_func_}}};
+    vm_function_t funcs[] = {{.type = vm_function_t::VM_BYTECODE,
+                              .argument_count = 0,
+                              .name = "main",
+                              .as = {.bytecode =
+                                         {
+                                             .data = main_bytecode_.data(),
+                                             .data_len = main_bytecode_.size(),
+                                             .local_count = 0,
+                                         }}},
+                             {.type = vm_function_t::VM_NATIVE_FUNC,
+                              .argument_count = 1,
+                              .name = "state",
+                              .as = {.native = {.fn = native_trampoline,
+                                                .userdata = &state_func_}}}};
 
     vm_ = new_vm(NULL, 0, funcs, sizeof(funcs) / sizeof(vm_function_t));
   }

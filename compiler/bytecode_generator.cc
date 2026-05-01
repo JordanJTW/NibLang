@@ -216,10 +216,10 @@ void ByteCodeGenerator::EmitExpression(
               EmitExpression(target);
               switch (binary.op) {
                 case TokenKind::kCompareEq:
-                  builder_.GetCurrentCode().Is(vm_value_t::VALUE_TYPE_NULL);
+                  builder_.GetCurrentCode().Is(value_type_t::VALUE_TYPE_NULL);
                   break;
                 case TokenKind::kCompareNe:
-                  builder_.GetCurrentCode().Is(vm_value_t::VALUE_TYPE_NULL);
+                  builder_.GetCurrentCode().Is(value_type_t::VALUE_TYPE_NULL);
                   builder_.GetCurrentCode().Not();
                   break;
                 default:
@@ -371,7 +371,7 @@ void ByteCodeGenerator::EmitExpression(
 
             EmitExpression(coalescing.lhs);
             builder_.GetCurrentCode().StackDup();
-            builder_.GetCurrentCode().Is(vm_value_t::VALUE_TYPE_NULL);
+            builder_.GetCurrentCode().Is(value_type_t::VALUE_TYPE_NULL);
             builder_.GetCurrentCode().JumpIfFalse(not_null_label);
 
             EmitExpression(coalescing.rhs);
@@ -384,7 +384,7 @@ void ByteCodeGenerator::EmitExpression(
             CHECK(optional_chain_ctx.has_value())
                 << "Missing OptionalChainContext for OptionalAccessExpression";
             builder_.GetCurrentCode().StackDup();
-            builder_.GetCurrentCode().Is(vm_value_t::VALUE_TYPE_NULL);
+            builder_.GetCurrentCode().Is(value_type_t::VALUE_TYPE_NULL);
             builder_.GetCurrentCode().JumpIfTrue(
                 optional_chain_ctx->null_label);
           }},

@@ -120,8 +120,7 @@ class GoldenTest : public ::testing::Test {
         {.type = vm_function_t::VM_NATIVE_FUNC,
          .argument_count = 0,
          .name = "check",
-         .as.native = {.fn = native_trampoline, .userdata = &native_check_fn_}},
-    };
+         .as = {.native = {native_trampoline, &native_check_fn_}}}};
 
     vm_t* vm = init_vm(program.data(), program.size(), kExternalFunctions,
                        sizeof(kExternalFunctions) / sizeof(vm_function_t));

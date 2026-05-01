@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstring>
 
 #include "src/vm.h"
 
@@ -271,6 +272,7 @@ std::string GetOpName(op_t op) {
     CASE_OP_NAME(OP_DEBUG);
 #undef CASE_OP_NAME
   }
+  return "?";
 }
 
 void PrintTwoArgumentOp(const std::vector<uint8_t>& bytecode,

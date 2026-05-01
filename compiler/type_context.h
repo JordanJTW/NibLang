@@ -4,16 +4,23 @@
 
 #pragma once
 
+#include <cstddef>
 #include <map>
 #include <optional>
+#include <ostream>
 #include <set>
 #include <span>
+#include <string>
+#include <string_view>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 
 #include "compiler/error_collector.h"
 #include "compiler/logging.h"
 #include "compiler/types.h"
+
+class ErrorCollector;
 
 struct FunctionType {
   std::vector<TypeId> arg_types;

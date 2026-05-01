@@ -4,13 +4,20 @@
 
 #include "compiler/type_context.h"
 
-#include <iomanip>
-#include <iostream>
-#include <numeric>
+#include <algorithm>
+#include <functional>
+#include <iterator>
+#include <map>
+#include <memory>
+#include <set>
+#include <sstream>
 #include <string>
 #include <string_view>
+#include <utility>
 
+#include "compiler/error_collector.h"
 #include "compiler/logging.h"
+#include "compiler/tokenizer.h"
 #include "src/vm.h"
 
 namespace {

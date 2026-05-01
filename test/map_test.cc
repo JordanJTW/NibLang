@@ -4,12 +4,11 @@
 
 #include "src/map.h"
 
-#include <cstdint>
 #include <string>
+#include <string_view>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-
 #include "src/types.h"
 #include "src/vm.h"
 #include "test/gtest_helpers.h"
@@ -37,7 +36,7 @@ TEST(Map, StoreAndGet_IntKey) {
   vm_value_t* retrieved = map_get(map.as.map, key);
   ASSERT_NE(retrieved, nullptr);
   EXPECT_EQ(retrieved->type, vm_value::VALUE_TYPE_INT);
-  EXPECT_EQ(retrieved->as.i32, 99);  
+  EXPECT_EQ(retrieved->as.i32, 99);
 }
 
 TEST(Map, StoreAndGet_StringKey) {

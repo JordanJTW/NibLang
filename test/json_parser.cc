@@ -2,10 +2,13 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause
 
-#include <assert.h>
+#include <stdint.h>
+#include <algorithm>
+#include <string>
+#include <vector>
 
 #include "compiler/assembler.h"
-#include "src/map.h"
+#include "src/types.h"
 #include "src/vm.h"
 
 #define BYTECODE_FUNCTION($name, $argc, $assembler)                     \

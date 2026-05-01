@@ -4,11 +4,11 @@
 
 #include "compiler/tokenizer.h"
 
-#include <ctype.h>
 #include <array>
+#include <cctype>
 #include <optional>
-
-#include "compiler/logging.h"
+#include <string_view>
+#include <utility>
 
 namespace {
 

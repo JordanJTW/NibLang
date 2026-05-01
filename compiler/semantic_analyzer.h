@@ -4,13 +4,12 @@
 
 #pragma once
 
-#include <map>
+#include <memory>
 #include <optional>
-#include <set>
-#include <variant>
 #include <vector>
 
 #include "compiler/error_collector.h"
+#include "compiler/tokenizer.h"
 #include "compiler/type_context.h"
 #include "compiler/types.h"
 

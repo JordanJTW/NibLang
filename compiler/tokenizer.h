@@ -4,8 +4,10 @@
 
 #pragma once
 
+#include <cstddef>
 #include <deque>
 #include <iostream>
+#include <string>
 
 enum class TokenKind {
   kUnknown = 0,
@@ -72,6 +74,7 @@ struct TextRange {
 };
 
 struct Token;
+
 struct Metadata {
   TextRange column_range;
   TextRange line_range;

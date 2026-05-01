@@ -4,6 +4,8 @@
 
 #include "compiler/types.h"
 
+#include <ostream>
+
 namespace {
 
 template <class... Ts>

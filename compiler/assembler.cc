@@ -6,9 +6,11 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
-
-#include "src/vm.h"
+#include <string_view>
+#include <utility>
 
 Assembler& Assembler::PushConstRef(uint32_t idx) {
   PushOpAndArgs(OP_PUSH_CONST_REF, {idx});

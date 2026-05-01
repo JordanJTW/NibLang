@@ -4,13 +4,15 @@
 
 #include "src/vm.h"
 
-#include <cstdint>
+#include <initializer_list>
 #include <string>
-
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
+#include <string_view>
+#include <tuple>
+#include <vector>
 
 #include "compiler/assembler.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 #include "src/promise.h"
 #include "test/gtest_helpers.h"
 

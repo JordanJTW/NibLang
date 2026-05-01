@@ -4,6 +4,9 @@
 
 #pragma once
 
+#include <cstddef>
+#include <string>
+
 #include "compiler/type_context.h"
 #include "compiler/types.h"
 

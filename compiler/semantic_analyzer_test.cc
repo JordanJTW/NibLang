@@ -4,14 +4,15 @@
 
 #include "compiler/semantic_analyzer.h"
 
-#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <tuple>
+#include <variant>
 
+#include "compiler/error_collector.h"
 #include "compiler/gtest_helpers.h"
-#include "compiler/parser.h"
-#include "compiler/tokenizer.h"
+#include "compiler/type_context.h"
 #include "compiler/types.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"

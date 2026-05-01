@@ -4,9 +4,13 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
+#include <iosfwd>
+#include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 

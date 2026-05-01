@@ -5,12 +5,15 @@
 #include "compiler/parser.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <iomanip>
+#include <iostream>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <variant>
+#include <vector>
 
-#include "compiler/assembler.h"
-#include "compiler/logging.h"
 #include "compiler/tokenizer.h"
 #include "compiler/types.h"
 
@@ -875,7 +878,7 @@ std::optional<ParsedType> Parser::ParsePrimaryType() {
       return std::nullopt;
     result = std::move(func_type.value());
   }
-  // Handles type atoms i.e. String, i32, MyStruct, and Nil. 
+  // Handles type atoms i.e. String, i32, MyStruct, and Nil.
   else if (current_token_.kind == TokenKind::kIdent ||
            current_token_.kind == TokenKind::kKwNil) {
     Token type_token = current_token_;
@@ -886,7 +889,6 @@ std::optional<ParsedType> Parser::ParsePrimaryType() {
     HandleError("expected type");
     return std::nullopt;
   }
-
 
   // Handles wrapping types as an Optional i.e. String?, (fn() -> i32)?, etc.
   if (current_token_.kind == TokenKind::kQuestion) {

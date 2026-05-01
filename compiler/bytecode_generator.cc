@@ -4,7 +4,19 @@
 
 #include "compiler/bytecode_generator.h"
 
+#include <cstdint>
+#include <ostream>
+#include <utility>
+#include <variant>
+#include <vector>
+
+#include "compiler/assembler.h"
 #include "compiler/logging.h"
+#include "compiler/program_builder.h"
+#include "compiler/tokenizer.h"
+#include "compiler/type_context.h"
+#include "compiler/types.h"
+#include "src/types.h"
 #include "src/vm.h"
 
 namespace {

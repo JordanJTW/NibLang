@@ -4,11 +4,13 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <optional>
 #include <stack>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "compiler/assembler.h"

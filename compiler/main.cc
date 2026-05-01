@@ -2,21 +2,34 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause
 
-#include <cassert>
+#include <array>
+#include <cstdint>
 #include <cstdio>
+#include <cstdlib>
+#include <filesystem>
 #include <fstream>
+#include <functional>
+#include <iostream>
+#include <iterator>
+#include <memory>
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
 #include <unordered_set>
+#include <utility>
+#include <variant>
+#include <vector>
 
 #include "compiler/assembler.h"
 #include "compiler/bytecode_generator.h"
-#include "compiler/logging.h"
+#include "compiler/error_collector.h"
 #include "compiler/parser.h"
 #include "compiler/printer.h"
 #include "compiler/program_builder.h"
 #include "compiler/semantic_analyzer.h"
-#include "compiler/tokenizer.h"
 #include "compiler/type_context.h"
-#include "src/vm.h"
+#include "compiler/types.h"
 
 struct File {
   std::string resolved_path;

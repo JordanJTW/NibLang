@@ -4,19 +4,21 @@
 
 #include "compiler/program_builder.h"
 
-#include <cassert>
+#include <algorithm>
 #include <cstdint>
-#include <cstdlib>
+#include <cstdio>
+#include <cstring>
 #include <iostream>
 #include <map>
 #include <optional>
 #include <stack>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #include "compiler/logging.h"
 #include "src/prog_types.h"
-#include "src/vm.h"
 
 ProgramBuilder::ProgramBuilder() {
   EnterFunctionScope("<<main>>", 0, {}, {});

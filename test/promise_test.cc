@@ -4,13 +4,13 @@
 
 #include "src/promise.h"
 
-#include <cstdint>
-#include <memory>
 #include <string>
+#include <string_view>
+#include <tuple>
+#include <vector>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-
 #include "src/types.h"
 #include "src/vm.h"
 #include "test/gtest_helpers.h"

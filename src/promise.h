@@ -5,6 +5,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stddef.h>
 
 #include "src/types.h"
 #include "src/vm.h"

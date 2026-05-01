@@ -4,16 +4,20 @@
 
 #include "compiler/semantic_analyzer.h"
 
-#include <iomanip>
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <iostream>
-#include <numeric>
+#include <iterator>
 #include <string>
 #include <string_view>
+#include <unordered_map>
+#include <utility>
+#include <variant>
 
+#include "compiler/error_collector.h"
 #include "compiler/logging.h"
-#include "compiler/printer.h"
 #include "compiler/type_context.h"
-#include "src/vm.h"
 
 namespace {
 

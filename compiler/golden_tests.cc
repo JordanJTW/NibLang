@@ -2,21 +2,27 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
-#include <optional>
+#include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
+#include <vector>
 
+#include "compiler/assembler.h"
 #include "compiler/bytecode_generator.h"
+#include "compiler/error_collector.h"
 #include "compiler/gtest_helpers.h"
 #include "compiler/parser.h"
+#include "compiler/program_builder.h"
 #include "compiler/semantic_analyzer.h"
 #include "compiler/tokenizer.h"
 #include "compiler/type_context.h"
 #include "compiler/types.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "src/prog_types.h"
 #include "src/types.h"
 #include "src/vm.h"
 #include "test/gtest_helpers.h"

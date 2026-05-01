@@ -4,13 +4,15 @@
 
 #include "compiler/type_context.h"
 
-#include <cstdint>
+#include <algorithm>
+#include <array>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "compiler/error_collector.h"
-#include "compiler/tokenizer.h"
 #include "compiler/types.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"

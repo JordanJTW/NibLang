@@ -4,8 +4,11 @@
 
 #pragma once
 
+#include <string>
 #include <string_view>
+#include <vector>
 
+#include "compiler/tokenizer.h"
 #include "compiler/types.h"
 
 class ErrorCollector {

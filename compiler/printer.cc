@@ -4,9 +4,15 @@
 
 #include "compiler/printer.h"
 
-#include <iomanip>
+#include <cstdint>
 #include <iostream>
+#include <memory>
+#include <optional>
+#include <utility>
 #include <variant>
+#include <vector>
+
+#include "compiler/tokenizer.h"
 
 namespace {
 

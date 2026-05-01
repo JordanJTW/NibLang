@@ -2,7 +2,7 @@
 
 <img src="assets/logo.png?raw=true"/>
 
-![Build/Test](https://github.com/JordanJTW/NibLang/actions/workflows/cmake-single-platform.yml/badge.svg) 
+[![Build/Test](https://github.com/JordanJTW/NibLang/actions/workflows/cmake-single-platform.yml/badge.svg)](https://github.com/JordanJTW/NibLang/actions/workflows/cmake-single-platform.yml)
 
 </div>
 

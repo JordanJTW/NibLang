@@ -1,3 +1,6 @@
+// Copyright (c) 2026, Jordan Werthman <jordanwerthman@gmail.com>
+//
+// SPDX-License-Identifier: BSD-2-Clause
 
 #include <memory>
 #include <optional>

@@ -1,3 +1,7 @@
+// Copyright (c) 2026, Jordan Werthman <jordanwerthman@gmail.com>
+//
+// SPDX-License-Identifier: BSD-2-Clause
+
 #include "compiler/error_collector.h"
 
 #include <cstddef>

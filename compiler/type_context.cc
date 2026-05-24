@@ -503,11 +503,12 @@ std::optional<Symbol::Idx> TypeContext::GetCallIdxFor(const std::string& name,
       {"String_length", VM_BUILTIN_STRING_LENGTH},
       {"String_startsWith", VM_BUILTIN_STRINGS_STARTWITH},
       {"String_substr", VM_BUILTIN_STRINGS_SUBSTRING},
+      {"String_valueOf", VM_BUILTIN_STRINGS_VALUEOF},
   };
 
   // Since some built-in functions (i.e. Array_withSize) overload a single
   // native function, this count can differ from `kBuiltInCallIdx.size()`.
-  static constexpr size_t kBuiltInCallCount = 18;
+  static constexpr size_t kBuiltInCallCount = 19;
 
   if (auto it = kBuiltInCallIdx.find(name); it != kBuiltInCallIdx.end())
     return it->second;

@@ -33,7 +33,7 @@ static bool is_number_type(vm_value_t value) {
   return value.type == VALUE_TYPE_INT || value.type == VALUE_TYPE_FLOAT;
 }
 
-#define VM_BUILTIN_FUNCTION_COUNT 18
+#define VM_BUILTIN_FUNCTION_COUNT 19
 
 typedef struct vm_frame vm_frame_t;
 
@@ -880,6 +880,7 @@ static void install_builtins(vm_t* vm) {
   INSTALL(15, vm_array_push, 2);
   INSTALL(16, vm_map_get, 2);
   INSTALL(17, vm_array_length, 1);
+  INSTALL(18, vm_string_valueof, 1);
 }
 
 static void free_closure(void* self, bool should_free) {
@@ -1037,6 +1038,9 @@ bool vm_invoke(vm_t* vm, vm_function_t* fn, vm_value_t* argv, size_t argc) {
   assert(argc >= fn->argument_count && "not enough args");
   switch (fn->type) {
     case VM_BYTECODE: {
+      assert(argc <= fn->as.bytecode.local_count &&
+             "too many args for local storage");
+
       vm_frame_t* new_frame =
           calloc(1, sizeof(vm_frame_t) +
                         sizeof(vm_value_t) * fn->as.bytecode.local_count);

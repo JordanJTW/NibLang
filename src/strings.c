@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "src/vm.h"
@@ -87,4 +88,28 @@ vm_value_t vm_string_length(vm_value_t* argv, size_t argc, void* vm) {
   RC_AUTOFREE vm_value_t this = argv[0];
 
   return (vm_value_t){.type = VALUE_TYPE_INT, .as.i32 = this.as.str->len};
+}
+
+vm_value_t vm_string_valueof(vm_value_t* argv, size_t argc, void* vm) {
+  assert(argc == 1);
+
+  vm_value_t number = argv[0];
+
+  char buffer[12];
+  switch (number.type) {
+    case VALUE_TYPE_NULL:
+      return allocate_str_from_c("Nil");
+    case VALUE_TYPE_BOOL:
+      return allocate_str_from_c(number.as.boolean ? "true" : "false");
+    case VALUE_TYPE_FLOAT:
+      snprintf(buffer, sizeof(buffer), "%.1f", number.as.f32);
+      return allocate_str_from_c(buffer);
+    case VALUE_TYPE_INT:
+      snprintf(buffer, sizeof(buffer), "%d", number.as.i32);
+      return allocate_str_from_c(buffer);
+    case VALUE_TYPE_STR:
+      return number;
+    default:
+      return allocate_str_from_c("<non-primitive value>");
+  }
 }

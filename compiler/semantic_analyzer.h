@@ -21,14 +21,14 @@ class SemanticAnalyzer {
   void Check(Block& block);
 
   struct ScopeNarrowingInfo {
-    Symbol symbol;
+    NamedBinding symbol;
     TypeId if_branch_type;
     TypeId else_branch_type;
   };
 
   struct ExpressionResult {
     TypeId type_id;
-    std::optional<Symbol> symbol;
+    std::optional<NamedBinding> symbol;
     std::vector<ScopeNarrowingInfo> narrowing_info = {};
   };
 

@@ -18,7 +18,7 @@
 
 using TypeId = size_t;
 
-struct Symbol {
+struct NamedBinding {
   using Idx = size_t;
 
   enum Kind { Function, Struct, Field, Variable, Capture, Narrowed } kind;
@@ -27,12 +27,12 @@ struct Symbol {
   // Used for function table resolution, struct field ordering, etc.
   std::optional<Idx> idx;
 
-  inline bool operator==(const Symbol& other) const {
+  inline bool operator==(const NamedBinding& other) const {
     return kind == other.kind && type_id == other.type_id && idx == other.idx;
   }
 };
 
-std::ostream& operator<<(std::ostream& os, const Symbol& symbol);
+std::ostream& operator<<(std::ostream& os, const NamedBinding& symbol);
 
 struct Expression;
 struct Statement;
@@ -71,7 +71,7 @@ struct CodepointLiteral {
 using CallIdx = size_t;
 
 struct ResolvedIdentifier {
-  Symbol symbol;
+  NamedBinding symbol;
 };
 
 struct Identifier {
@@ -194,11 +194,11 @@ struct NilCoalescingExpression {
 };
 
 struct ResolvedFunction {
-  Symbol function_symbol;
-  std::vector<Symbol> variables_to_capture;
+  NamedBinding function_symbol;
+  std::vector<NamedBinding> variables_to_capture;
 
-  std::vector<Symbol> arguments;
-  std::vector<Symbol> capture_arguments;
+  std::vector<NamedBinding> arguments;
+  std::vector<NamedBinding> capture_arguments;
 };
 
 struct FunctionDeclaration {

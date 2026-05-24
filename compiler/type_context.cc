@@ -94,8 +94,8 @@ FunctionDeclaration& TypeContext::GetCurrentFunction() {
   return *scopes_[current_fn_scope_idx_].fn;
 }
 
-Symbol TypeContext::DeclareStructSymbol(std::string_view name) {
-  return InsertSymbol(name, Symbol::Struct, next_type_id_++);
+NamedBinding TypeContext::DeclareStructSymbol(std::string_view name) {
+  return InsertSymbol(name, NamedBinding::Struct, next_type_id_++);
 }
 
 void TypeContext::DefineStructType(TypeId self_id,
@@ -106,7 +106,7 @@ void TypeContext::DefineStructType(TypeId self_id,
   // "symbolic" information directly on the type (i.e. StructDeclaration).
   struct_type.struct_declaration = &decl;
 
-  Symbol::Idx field_idx = 0;
+  NamedBinding::Idx field_idx = 0;
   for (const auto& [name, type] : decl.fields) {
     auto type_id = GetTypeIdFor(type);
     if (!type_id.has_value()) {
@@ -123,7 +123,7 @@ void TypeContext::DefineStructType(TypeId self_id,
     }
 
     struct_type.member_symbols[name] =
-        Symbol{Symbol::Field, type_id.value(), name, field_idx++};
+        NamedBinding{NamedBinding::Field, type_id.value(), name, field_idx++};
     struct_type.field_types.push_back(type_id.value());
   }
 
@@ -139,7 +139,7 @@ void TypeContext::DefineStructType(TypeId self_id,
   type_lookup_[self_id] = struct_type;
 }
 
-std::optional<Symbol> TypeContext::DefineFunction(
+std::optional<NamedBinding> TypeContext::DefineFunction(
     FunctionDeclaration& fn,
     ErrorCollector* error_collector,
     std::optional<StructDeclaration*> object,
@@ -151,7 +151,7 @@ std::optional<Symbol> TypeContext::DefineFunction(
     is_function_extern = object.value()->is_extern && !fn.body;
   }
 
-  std::optional<Symbol::Idx> call_idx;
+  std::optional<NamedBinding::Idx> call_idx;
   // Extern (native) functions must have a hardcoded CallIdx already assigned.
   if (is_function_extern) {
     call_idx = GetCallIdxFor(qualified_name, CreateIfMissing::NO);
@@ -175,8 +175,8 @@ std::optional<Symbol> TypeContext::DefineFunction(
 
   if (std::optional<TypeId> type_id =
           DeclareFunctionType(fn, error_collector, self_id)) {
-    Symbol symbol = InsertSymbol(qualified_name, Symbol::Function,
-                                 type_id.value(), call_idx.value());
+    NamedBinding symbol = InsertSymbol(qualified_name, NamedBinding::Function,
+                                       type_id.value(), call_idx.value());
     function_lookup_[call_idx.value()] = &fn;
     fn.resolved = ResolvedFunction{symbol};
     return symbol;
@@ -184,36 +184,37 @@ std::optional<Symbol> TypeContext::DefineFunction(
   return std::nullopt;
 }
 
-Symbol TypeContext::DeclareVariableSymbol(std::string_view name,
-                                          TypeId type_id) {
-  return InsertSymbol(name, Symbol::Variable, type_id,
-                      scopes_[current_fn_scope_idx_].next_symbol_idx++);
+NamedBinding TypeContext::DeclareVariableSymbol(std::string_view name,
+                                                TypeId type_id) {
+  return InsertSymbol(name, NamedBinding::Variable, type_id,
+                      scopes_[current_fn_scope_idx_].next_binding_idx++);
 }
 
-Symbol TypeContext::DeclareCaptureSymbol(std::string_view name,
-                                         TypeId type_id) {
-  return InsertSymbol(name, Symbol::Capture, type_id,
-                      scopes_[current_fn_scope_idx_].next_symbol_idx++);
+NamedBinding TypeContext::DeclareCaptureSymbol(std::string_view name,
+                                               TypeId type_id) {
+  return InsertSymbol(name, NamedBinding::Capture, type_id,
+                      scopes_[current_fn_scope_idx_].next_binding_idx++);
 }
 
-Symbol TypeContext::DeclareNarrowedSymbol(Symbol symbol_to_narrow,
-                                          TypeId narrowed_type) {
+NamedBinding TypeContext::DeclareNarrowedSymbol(NamedBinding symbol_to_narrow,
+                                                TypeId narrowed_type) {
   // Narrowed symbols shadow existing symbols, so they get the same index.
-  return InsertSymbol(symbol_to_narrow.name, Symbol::Narrowed, narrowed_type,
-                      symbol_to_narrow.idx);
+  return InsertSymbol(symbol_to_narrow.name, NamedBinding::Narrowed,
+                      narrowed_type, symbol_to_narrow.idx);
 }
 
-Symbol TypeContext::InsertSymbol(std::string_view name,
-                                 Symbol::Kind kind,
-                                 TypeId type_id,
-                                 std::optional<Symbol::Idx> idx) {
-  Symbol symbol = {kind, type_id, name.data(), idx};
+NamedBinding TypeContext::InsertSymbol(std::string_view name,
+                                       NamedBinding::Kind kind,
+                                       TypeId type_id,
+                                       std::optional<NamedBinding::Idx> idx) {
+  NamedBinding symbol = {kind, type_id, name.data(), idx};
   scopes_.back().symbols[name.data()] = symbol;
   return symbol;
 }
 
-std::optional<Symbol> TypeContext::GetSymbolFor(std::string_view name,
-                                                ScopeToCheck scope) const {
+std::optional<NamedBinding> TypeContext::GetSymbolFor(
+    std::string_view name,
+    ScopeToCheck scope) const {
   bool encountered_first_function_scope = false;
   for (auto it = scopes_.rbegin(); it != scopes_.rend(); ++it) {
     if (auto found = it->symbols.find(name.data());
@@ -261,7 +262,7 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
             // Structure types are resolved nominally, while Functions would be
             // resolved structurally to allow for flexible callbacks, etc.
             if (auto symbol = GetSymbolFor(type_name);
-                symbol.has_value() && symbol->kind == Symbol::Struct) {
+                symbol.has_value() && symbol->kind == NamedBinding::Struct) {
               return symbol->type_id;
             }
             return std::nullopt;
@@ -480,9 +481,10 @@ bool TypeContext::IsTypeSubsetOf(TypeId sub_type_id, TypeId super_type_id) {
   return false;
 }
 
-std::optional<Symbol::Idx> TypeContext::GetCallIdxFor(const std::string& name,
-                                                      CreateIfMissing create) {
-  static const std::map<std::string, Symbol::Idx> kBuiltInCallIdx = {
+std::optional<NamedBinding::Idx> TypeContext::GetCallIdxFor(
+    const std::string& name,
+    CreateIfMissing create) {
+  static const std::map<std::string, NamedBinding::Idx> kBuiltInCallIdx = {
       {"Array_get", VM_BUILTIN_ARRAY_GET},
       {"Array_init", VM_BUILTIN_ARRAY_INIT},
       {"Array_length", VM_BUILTIN_ARRAY_LENGTH},

@@ -58,7 +58,7 @@ TEST_F(TypeContextTest, GetTypeIdFor_Function) {
 
   auto symbol = type_context.DefineFunction(fn_decl, &error_collector);
   ASSERT_TRUE(symbol.has_value());
-  EXPECT_EQ(symbol->kind, Symbol::Function);
+  EXPECT_EQ(symbol->kind, NamedBinding::Function);
 
   // Check that the function type is registered
   auto fn_type = type_context.GetTypeInfo<FunctionType>(symbol->type_id);
@@ -126,7 +126,7 @@ TEST_F(TypeContextTest, GetTypeIdFor_FunctionType_VoidReturn) {
 TEST_F(TypeContextTest, DeclareVariableSymbol) {
   auto symbol =
       type_context.DeclareVariableSymbol("test_var", TypeContext::i32);
-  EXPECT_EQ(symbol.kind, Symbol::Variable);
+  EXPECT_EQ(symbol.kind, NamedBinding::Variable);
   EXPECT_EQ(symbol.type_id, TypeContext::i32);
   EXPECT_TRUE(symbol.idx.has_value());
 }
@@ -134,7 +134,7 @@ TEST_F(TypeContextTest, DeclareVariableSymbol) {
 TEST_F(TypeContextTest, DeclareCaptureSymbol) {
   auto symbol =
       type_context.DeclareCaptureSymbol("test_capture", TypeContext::f32);
-  EXPECT_EQ(symbol.kind, Symbol::Capture);
+  EXPECT_EQ(symbol.kind, NamedBinding::Capture);
   EXPECT_EQ(symbol.type_id, TypeContext::f32);
   EXPECT_TRUE(symbol.idx.has_value());
 }
@@ -143,7 +143,7 @@ TEST_F(TypeContextTest, GetSymbolFor_Variable) {
   type_context.DeclareVariableSymbol("test_var", TypeContext::i32);
   auto symbol = type_context.GetSymbolFor("test_var");
   ASSERT_TRUE(symbol.has_value());
-  EXPECT_EQ(symbol->kind, Symbol::Variable);
+  EXPECT_EQ(symbol->kind, NamedBinding::Variable);
   EXPECT_EQ(symbol->type_id, TypeContext::i32);
 }
 
@@ -155,7 +155,7 @@ TEST_F(TypeContextTest, GetSymbolFor_NotFound) {
 TEST_F(TypeContextTest, DeclareStructSymbol) {
   auto symbol = type_context.DeclareStructSymbol("TestStruct");
   EXPECT_GT(symbol.type_id, TypeContext::LiteralType::kCount);
-  EXPECT_EQ(symbol.kind, Symbol::Struct);
+  EXPECT_EQ(symbol.kind, NamedBinding::Struct);
   EXPECT_FALSE(symbol.idx.has_value());  // Structs have no index
 }
 
@@ -181,9 +181,11 @@ TEST_F(TypeContextTest, DefineStructType) {
   ASSERT_TRUE(struct_info->member_symbols.count("field1"));
   ASSERT_TRUE(struct_info->member_symbols.count("field2"));
   EXPECT_EQ(struct_info->member_symbols.at("field1"),
-            (Symbol{Symbol::Field, TypeContext::i32, "field1", /*idx=*/0}));
+            (NamedBinding{NamedBinding::Field, TypeContext::i32, "field1",
+                          /*idx=*/0}));
   EXPECT_EQ(struct_info->member_symbols.at("field2"),
-            (Symbol{Symbol::Field, TypeContext::f32, "field2", /*idx=*/1}));
+            (NamedBinding{NamedBinding::Field, TypeContext::f32, "field2",
+                          /*idx=*/1}));
 }
 
 TEST_F(TypeContextTest, DefineFunction_Method) {
@@ -207,7 +209,7 @@ TEST_F(TypeContextTest, DefineFunction_Method) {
   auto symbol = type_context.DefineFunction(
       method_decl, &error_collector, &struct_decl, struct_symbol.type_id);
   ASSERT_TRUE(symbol.has_value());
-  EXPECT_EQ(symbol->kind, Symbol::Function);
+  EXPECT_EQ(symbol->kind, NamedBinding::Function);
 }
 
 TEST_F(TypeContextTest, DefineFunction_ExternMethod) {
@@ -229,7 +231,7 @@ TEST_F(TypeContextTest, DefineFunction_ExternMethod) {
   auto symbol = type_context.DefineFunction(
       method_decl, &error_collector, &struct_decl, struct_symbol.type_id);
   ASSERT_TRUE(symbol.has_value());
-  EXPECT_EQ(symbol->kind, Symbol::Function);
+  EXPECT_EQ(symbol->kind, NamedBinding::Function);
   ASSERT_TRUE(symbol->idx.has_value());
   EXPECT_EQ(symbol->idx.value(), VM_BUILTIN_STRING_LENGTH);
 }
@@ -260,7 +262,7 @@ TEST_F(TypeContextTest, IsTypeSubsetOf) {
   auto union_id = type_context.GetTypeIdFor(ParsedType{union_type});
   ASSERT_TRUE(union_id.has_value());
 
-  Symbol test_struct = type_context.DeclareStructSymbol("TestStruct");
+  NamedBinding test_struct = type_context.DeclareStructSymbol("TestStruct");
   StructDeclaration test_struct_decl;
   test_struct_decl.is_extern = true;
   type_context.DefineStructType(test_struct.type_id, test_struct_decl,
@@ -427,11 +429,13 @@ TEST_F(TypeContextTest, GetSymbolFor_ScopeChecks) {
 
 TEST_F(TypeContextTest, GetSymbolFor_Shadowing) {
   // Declare in current ("main") scope
-  Symbol outer = type_context.DeclareVariableSymbol("var", TypeContext::i32);
+  NamedBinding outer =
+      type_context.DeclareVariableSymbol("var", TypeContext::i32);
 
   // Enter block scope
   type_context.EnterScope(TypeContext::ScopeType::BlockScope);
-  Symbol inner = type_context.DeclareVariableSymbol("var", TypeContext::f32);
+  NamedBinding inner =
+      type_context.DeclareVariableSymbol("var", TypeContext::f32);
 
   // Should find inner symbol in current scope
   auto symbol_current =

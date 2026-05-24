@@ -171,7 +171,7 @@ void ByteCodeGenerator::EmitExpression(
                           << "Unresolved identifier: " << ident.name;
 
                       switch (ident.resolved->symbol.kind) {
-                        case Symbol::Function:
+                        case NamedBinding::Function:
                           CHECK(ident.resolved->symbol.idx.has_value())
                               << "Function symbol missing index: "
                               << ident.name;
@@ -179,9 +179,9 @@ void ByteCodeGenerator::EmitExpression(
                               ident.resolved->symbol.idx.value(),
                               /*argc=*/0);
                           break;
-                        case Symbol::Variable:
-                        case Symbol::Capture:
-                        case Symbol::Narrowed: {
+                        case NamedBinding::Variable:
+                        case NamedBinding::Capture:
+                        case NamedBinding::Narrowed: {
                           builder_.PushSymbol(ident.resolved->symbol);
                           break;
                         }

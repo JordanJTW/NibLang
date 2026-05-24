@@ -54,7 +54,7 @@ void SemanticAnalyzer::Check(Block& block) {
   // Collect user-defined type names to ensure they're available for function
   // signatures, field types, etc. This also allows for recursive types (e.g. a
   // struct that has a field of its own type).
-  std::vector<std::pair<Symbol, StructDeclaration*>> struct_decls;
+  std::vector<std::pair<NamedBinding, StructDeclaration*>> struct_decls;
   for (auto& statement : block.statements) {
     if (auto* struct_decl = std::get_if<StructDeclaration>(&statement->as)) {
       struct_decls.emplace_back(
@@ -92,7 +92,8 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement) {
             const auto& current_function = type_context_.GetCurrentFunction();
             CHECK(current_function.resolved.has_value());
 
-            Symbol function_symbol = current_function.resolved->function_symbol;
+            NamedBinding function_symbol =
+                current_function.resolved->function_symbol;
 
             const FunctionType* function_type =
                 type_context_.GetTypeInfo<FunctionType>(
@@ -181,7 +182,7 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement) {
             }
 
             // Register the variable's type within the current scope.
-            Symbol symbol = type_context_.DeclareVariableSymbol(
+            NamedBinding symbol = type_context_.DeclareVariableSymbol(
                 assign.name, parsed_type_id.value());
             assign.resolved = ResolvedIdentifier{symbol};
           },
@@ -224,8 +225,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                           ident.name, TypeContext::ScopeToCheck::Closure);
                       if (symbol) {
                         // Any value symbols found now must be captured.
-                        if (symbol->kind == Symbol::Variable ||
-                            symbol->kind == Symbol::Capture) {
+                        if (symbol->kind == NamedBinding::Variable ||
+                            symbol->kind == NamedBinding::Capture) {
                           FunctionDeclaration& fn =
                               type_context_.GetCurrentFunction();
                           fn.resolved->variables_to_capture.push_back(*symbol);
@@ -242,8 +243,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                       // Fallback seatch to ALL scopes for functions/structs.
                       symbol = type_context_.GetSymbolFor(
                           ident.name, TypeContext::ScopeToCheck::All);
-                      if (symbol && (symbol->kind == Symbol::Function ||
-                                     symbol->kind == Symbol::Struct)) {
+                      if (symbol && (symbol->kind == NamedBinding::Function ||
+                                     symbol->kind == NamedBinding::Struct)) {
                         ident.resolved = ResolvedIdentifier{*symbol};
                         return ExpressionResult{symbol->type_id, *symbol};
                       }
@@ -304,7 +305,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                        rhs->type_id == LiteralType::Nil) {
               resolved.specialization = ResolvedBinary::Specialization::Nil;
 
-              std::optional<Symbol> symbol_to_narrow;
+              std::optional<NamedBinding> symbol_to_narrow;
               if (lhs->type_id == LiteralType::Nil && rhs->symbol) {
                 symbol_to_narrow = rhs->symbol;
               } else if (rhs->type_id == LiteralType::Nil && lhs->symbol) {
@@ -668,7 +669,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
   if (const auto* const fn_type =
           type_context_.GetTypeInfo<FunctionType>(callee_result.type_id)) {
     if (callee_result.symbol.has_value() &&
-        callee_result.symbol->kind == Symbol::Function) {
+        callee_result.symbol->kind == NamedBinding::Function) {
       CHECK(callee_result.symbol->idx.has_value())
           << "Function symbol must have an index for call resolution";
       const auto& fn_declaration = type_context_.GetFunctionDeclaration(

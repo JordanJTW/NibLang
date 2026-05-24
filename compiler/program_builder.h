@@ -22,25 +22,25 @@ class ProgramBuilder {
 
   void EnterFunctionScope(const std::string& name,
                           size_t call_idx,
-                          std::vector<Symbol> arguments,
-                          std::vector<Symbol> capture_arguments);
+                          std::vector<NamedBinding> arguments,
+                          std::vector<NamedBinding> capture_arguments);
   void ExitFunctionScope();
 
   uint32_t GetIdForConstant(const std::string& value);
-  void PushSymbol(Symbol symbol);
-  void StoreSymbol(Symbol symbol);
+  void PushSymbol(NamedBinding symbol);
+  void StoreSymbol(NamedBinding symbol);
   Assembler& GetCurrentCode();
 
   std::vector<uint8_t> GenerateImage();
   static bool DumpImage(std::vector<uint8_t> program);
 
  private:
-  uint32_t GetIdFor(Symbol lookup);
+  uint32_t GetIdFor(NamedBinding lookup);
 
   struct Function {
     std::string name;
     size_t call_idx;
-    std::unordered_map<Symbol::Idx, size_t> symbol_to_local_idx;
+    std::unordered_map<NamedBinding::Idx, size_t> symbol_to_local_idx;
     uint16_t next_id{0};
     uint16_t argc{0};
     Assembler code;

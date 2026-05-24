@@ -15,19 +15,19 @@ struct Overloaded : Ts... {
 template <class... Ts>
 Overloaded(Ts...) -> Overloaded<Ts...>;
 
-std::ostream& operator<<(std::ostream& os, Symbol::Kind kind) {
+std::ostream& operator<<(std::ostream& os, NamedBinding::Kind kind) {
   switch (kind) {
-    case Symbol::Function:
+    case NamedBinding::Function:
       return os << "Function";
-    case Symbol::Struct:
+    case NamedBinding::Struct:
       return os << "Struct";
-    case Symbol::Field:
+    case NamedBinding::Field:
       return os << "Field";
-    case Symbol::Variable:
+    case NamedBinding::Variable:
       return os << "Variable";
-    case Symbol::Capture:
+    case NamedBinding::Capture:
       return os << "Capture";
-    case Symbol::Narrowed:
+    case NamedBinding::Narrowed:
       return os << "Narrowed";
   }
 
@@ -37,7 +37,7 @@ std::ostream& operator<<(std::ostream& os, Symbol::Kind kind) {
 
 }  // namespace
 
-std::ostream& operator<<(std::ostream& os, const Symbol& symbol) {
+std::ostream& operator<<(std::ostream& os, const NamedBinding& symbol) {
   os << "{kind=" << symbol.kind << ", type_id=" << symbol.type_id;
   if (symbol.idx.has_value())
     os << ", idx=" << symbol.idx.value();

@@ -24,10 +24,11 @@ ProgramBuilder::ProgramBuilder() {
   EnterFunctionScope("<<main>>", 0, {}, {});
 }
 
-void ProgramBuilder::EnterFunctionScope(const std::string& name,
-                                        size_t call_idx,
-                                        std::vector<Symbol> arguments,
-                                        std::vector<Symbol> capture_arguments) {
+void ProgramBuilder::EnterFunctionScope(
+    const std::string& name,
+    size_t call_idx,
+    std::vector<NamedBinding> arguments,
+    std::vector<NamedBinding> capture_arguments) {
   size_t fn_id = next_func_id_++;
   function_decl_stack_.push(fn_id);
 
@@ -48,17 +49,17 @@ void ProgramBuilder::ExitFunctionScope() {
   function_decl_stack_.pop();
 }
 
-void ProgramBuilder::PushSymbol(Symbol symbol) {
+void ProgramBuilder::PushSymbol(NamedBinding symbol) {
   uint32_t local_idx = GetIdFor(symbol);
   GetCurrentCode().PushLocal(local_idx);
 }
 
-void ProgramBuilder::StoreSymbol(Symbol symbol) {
+void ProgramBuilder::StoreSymbol(NamedBinding symbol) {
   uint32_t local_idx = GetIdFor(symbol);
   GetCurrentCode().StoreLocal(local_idx);
 }
 
-uint32_t ProgramBuilder::GetIdFor(Symbol lookup) {
+uint32_t ProgramBuilder::GetIdFor(NamedBinding lookup) {
   auto& current_scope_symbols = GetCurrentScope().symbol_to_local_idx;
   if (auto it = current_scope_symbols.find(lookup.idx.value());
       it != current_scope_symbols.end())

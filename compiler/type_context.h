@@ -38,7 +38,7 @@ struct StructType {
   // A separate _ordered_ list of field types used for constructors.
   std::vector<TypeId> field_types;
   // Allows looking up fields/methods Symbol by name.
-  std::unordered_map<std::string, Symbol> member_symbols;
+  std::unordered_map<std::string, NamedBinding> member_symbols;
   // Structs are nominally typed, so type == Symbolic information.
   const StructDeclaration* struct_declaration;
 };
@@ -58,7 +58,6 @@ struct OptionalType {
 };
 
 // Stores context for structural and nominal typing through-out the compiler.
-// Lowers identifiers to Symbols with unique indexes per SymbolKind.
 class TypeContext {
  public:
   enum LiteralType : TypeId {
@@ -91,7 +90,7 @@ class TypeContext {
   // nominally typed, this will create a new TypeId as well. This is split from
   // `DefineStructType` to allow for forward references to the struct type
   // within its own declaration (e.g. for recursive types).
-  Symbol DeclareStructSymbol(std::string_view name);
+  NamedBinding DeclareStructSymbol(std::string_view name);
   // Defines StructType for `self_id` by type checking `decl` and registering
   // field/member types. Returns false if any errors were encountered.
   void DefineStructType(TypeId self_id,
@@ -104,26 +103,27 @@ class TypeContext {
   // checking on `decl` and, if successful, returns the declared Symbol. Errors
   // are logged from within this function. `self_struct` and `self_id` MUST be
   // provided for method declarations.
-  std::optional<Symbol> DefineFunction(
+  std::optional<NamedBinding> DefineFunction(
       FunctionDeclaration& decl,
       ErrorCollector* error_collector,
       std::optional<StructDeclaration*> self_struct = std::nullopt,
       std::optional<TypeId> self_id = std::nullopt);
 
   // Declares a Symbol of type VARIABLE in the current scope and returns it.
-  Symbol DeclareVariableSymbol(std::string_view name, TypeId type_id);
+  NamedBinding DeclareVariableSymbol(std::string_view name, TypeId type_id);
   // Declares a Symbol of type CAPTURE in the current scope and returns it.
-  Symbol DeclareCaptureSymbol(std::string_view name, TypeId type_id);
+  NamedBinding DeclareCaptureSymbol(std::string_view name, TypeId type_id);
   // Declares a Symbol of type NARROWED in the current scope and returns it.
-  Symbol DeclareNarrowedSymbol(Symbol symbol_to_narrow, TypeId narrowed_type);
+  NamedBinding DeclareNarrowedSymbol(NamedBinding symbol_to_narrow,
+                                     TypeId narrowed_type);
 
   // Looks up a symbol by name within the given scope. By default, searches the
   // current scope and all parent scopes. If `scope` is Function, it will search
   // all parent scopes up to the nearest FunctionScope. If `scope` is Current,
   // it will only search the current scope.
   enum ScopeToCheck { Current, Function, Closure, All };
-  std::optional<Symbol> GetSymbolFor(std::string_view name,
-                                     ScopeToCheck scope = All) const;
+  std::optional<NamedBinding> GetSymbolFor(std::string_view name,
+                                           ScopeToCheck scope = All) const;
 
   // Returns the TypeId for a given ParsedType if it can be resolved.
   std::optional<TypeId> GetTypeIdFor(const ParsedType& type);
@@ -152,7 +152,8 @@ class TypeContext {
     return std::get_if<T>(&it->second);
   }
 
-  const FunctionDeclaration& GetFunctionDeclaration(Symbol::Idx fn_idx) const {
+  const FunctionDeclaration& GetFunctionDeclaration(
+      NamedBinding::Idx fn_idx) const {
     auto it = function_lookup_.find(fn_idx);
     CHECK(it != function_lookup_.end())
         << "FunctionDeclaration not registered for index: " << fn_idx;
@@ -174,17 +175,18 @@ class TypeContext {
       ErrorCollector* error_collector,
       std::optional<TypeId> self_id = std::nullopt);
 
-  Symbol InsertSymbol(std::string_view name,
-                      Symbol::Kind kind,
-                      TypeId type_id,
-                      std::optional<Symbol::Idx> idx = std::nullopt);
+  NamedBinding InsertSymbol(
+      std::string_view name,
+      NamedBinding::Kind kind,
+      TypeId type_id,
+      std::optional<NamedBinding::Idx> idx = std::nullopt);
 
   struct Scope {
     ScopeType scope_type;
     FunctionDeclaration* fn;
 
-    std::unordered_map<std::string, Symbol> symbols;
-    Symbol::Idx next_symbol_idx{0};  // All variables are indexed within scope
+    std::unordered_map<std::string, NamedBinding> symbols;
+    NamedBinding::Idx next_binding_idx{0};  // Unique ID for each binding
   };
   std::vector<Scope> scopes_;
   size_t current_fn_scope_idx_{0};  // index into `scopes_`
@@ -205,7 +207,8 @@ class TypeContext {
   std::unordered_map<TypeId, TypeInfo> type_lookup_;
 
   // Function declarations can be looked up by CallIdx since they are 1:1.
-  std::unordered_map<Symbol::Idx, const FunctionDeclaration*> function_lookup_;
+  std::unordered_map<NamedBinding::Idx, const FunctionDeclaration*>
+      function_lookup_;
 
   std::vector<std::string> external_functions_;
 };

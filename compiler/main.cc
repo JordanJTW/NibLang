@@ -239,57 +239,5 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  // std::ifstream file(opts.input_path);
-  // if (!file) {
-  //   fprintf(stderr, "Error opening: %s\n", opts.input_path.c_str());
-  //   return 1;
-  // }
-
-  // std::string contents{std::istreambuf_iterator<char>(file),
-  //                      std::istreambuf_iterator<char>()};
-
-  // Parser parser(contents);
-
-  // Block root = parser.Parse();
-
-  // ProgramBuilder builder;
-
-  // auto error_collector = DefaultErrorCollector(contents);
-
-  // TypeContext type_context;
-  // SemanticAnalyzer analyzer(type_context, *error_collector);
-  // analyzer.Check(root);
-
-  // if (error_collector->HasErrors()) {
-  //   error_collector->PrintAllErrors();
-  //   return 1;
-  // }
-
-  // if (opts.mode == OutputMode::Ast) {
-  //   Printer(&type_context).Print(root);
-  //   return 0;
-  // }
-
-  // compile(root, builder, type_context);
-  // builder.GetCurrentCode().Return();
-
-  // std::vector<uint8_t> program_image = builder.GenerateImage();
-
-  // if (opts.mode == OutputMode::DumpImage) {
-  //   return DumpImage(program_image.data(), program_image.size());
-  // }
-
-  // if (opts.output_path.empty()) {
-  //   std::cout.write(reinterpret_cast<const char*>(program_image.data()),
-  //                   program_image.size());
-  //   std::cout.flush();
-  // } else {
-  //   std::ofstream out(opts.output_path, std::ios::binary);
-  //   if (out.is_open()) {
-  //     out.write(reinterpret_cast<const char*>(program_image.data()),
-  //               program_image.size());
-  //     out.close();
-  //   }
-  // }
   return 0;
 }

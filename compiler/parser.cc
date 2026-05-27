@@ -640,6 +640,27 @@ std::unique_ptr<Expression> Parser::ParsePostFix() {
     if (current_token_.kind == TokenKind::kDot) {
       AdvanceToken();  // consume '.'
 
+      if (current_token_.kind == TokenKind::kKwTypeOf) {
+        AdvanceToken();  // consume 'of'
+
+        if (!ExpectNextToken(TokenKind::kOpenParen,
+                             "expect template arguments")) {
+          return nullptr;
+        }
+
+        std::vector<ParsedType> template_types =
+            ParseTypeList(TokenKind::kCloseParen);
+
+        if (template_types.empty())
+          return nullptr;
+
+        expr = std::make_unique<Expression>(Expression{
+            TemplateInstantiationExpression{std::move(expr),
+                                            std::move(template_types)},
+            Metadata::fromTokens(post_fix_start_token, current_token_)});
+        continue;
+      }
+
       if (current_token_.kind != TokenKind::kIdent) {
         HandleError("expected identifier after '.'");
         return nullptr;
@@ -879,12 +900,27 @@ std::optional<ParsedType> Parser::ParsePrimaryType() {
     result = std::move(func_type.value());
   }
   // Handles type atoms i.e. String, i32, MyStruct, and Nil.
+  // Nil will NEVER be parameterized as a generic but neither will i32...
+  // validation will be done in SemanticAnalyzer not here.
   else if (current_token_.kind == TokenKind::kIdent ||
            current_token_.kind == TokenKind::kKwNil) {
-    Token type_token = current_token_;
-    AdvanceToken();
+    result = ParsedType{current_token_.value, current_token_.meta};
+    AdvanceToken();  // consume identifer (or Nil)
 
-    result = ParsedType{type_token.value, type_token.meta};
+    if (current_token_.kind == TokenKind::kSquareOpen) {
+      AdvanceToken();  // consume [
+
+      std::vector<ParsedType> parameters =
+          ParseTypeList(TokenKind::kSquareClose);
+
+      if (parameters.empty())
+        return std::nullopt;
+
+      result = ParsedType{ParsedParameterizedType{
+                              std::make_shared<ParsedType>(std::move(result)),
+                              std::move(parameters)},
+                          Metadata::fromTokens(start_token, current_token_)};
+    }
   } else {
     HandleError("expected type");
     return std::nullopt;
@@ -900,6 +936,29 @@ std::optional<ParsedType> Parser::ParsePrimaryType() {
 
   return result;
 }
+
+std::vector<ParsedType> Parser::ParseTypeList(TokenKind end_of_list_token) {
+  std::vector<ParsedType> return_types;
+  while (true) {
+    auto type = ParseType();
+    if (!type)
+      return {};
+
+    return_types.push_back(std::move(type.value()));
+
+    if (current_token_.kind == TokenKind::kComma) {
+      AdvanceToken();  // consume ,
+      continue;
+    }
+
+    if (current_token_.kind == end_of_list_token) {
+      AdvanceToken();  // consume `end_of_list_token`
+      break;
+    }
+  }
+  return return_types;
+}
+
 std::optional<StructDeclaration> Parser::ParseStructDeclaration(
     ExternStruct is_extern) {
   ExpectNextToken(TokenKind::kKwStruct, "expected 'struct'");
@@ -912,6 +971,34 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
   Token struct_name = current_token_;
   AdvanceToken();  // consume struct name
 
+  std::vector<std::string> template_names;
+  if (current_token_.kind == TokenKind::kSquareOpen) {
+    AdvanceToken();  // consume [
+
+    while (true) {
+      std::optional<Token> template_name =
+          ExpectNextToken(TokenKind::kIdent, "expected template name");
+
+      if (!template_name)
+        return std::nullopt;
+
+      template_names.push_back(template_name->value);
+
+      if (current_token_.kind == TokenKind::kComma) {
+        AdvanceToken();  // consume ,
+        continue;
+      }
+
+      if (current_token_.kind == TokenKind::kSquareClose) {
+        AdvanceToken();  // consume ]
+        break;
+      }
+
+      HandleError("expected ',' or ']'");
+      break;
+    }
+  }
+
   if (current_token_.kind != TokenKind::kOpenBrace) {
     HandleError("expected '{' after struct name");
     return std::nullopt;
@@ -920,6 +1007,7 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
   StructDeclaration struct_decl;
   struct_decl.name = struct_name.value;
   struct_decl.is_extern = is_extern == ExternStruct::YES;
+  struct_decl.template_names = std::move(template_names);
 
   AdvanceToken();  // consume '{'
   while (current_token_.kind != TokenKind::kCloseBrace &&
@@ -991,6 +1079,7 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
   ExpectNextToken(TokenKind::kKwFn, "expected 'fn'");
 
   std::string function_name;
+  std::vector<std::string> template_names;
   if (function_kind == FunctionKind::Anonymous) {
     // Perform single-token deletion recovery to try to keep parsing happy.
     if (current_token_.kind == TokenKind::kIdent) {
@@ -1006,6 +1095,33 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
     }
     function_name = name.value;
     AdvanceToken();  // after function name
+
+    if (current_token_.kind == TokenKind::kSquareOpen) {
+      AdvanceToken();  // consume [
+
+      while (true) {
+        std::optional<Token> template_param =
+            ExpectNextToken(TokenKind::kIdent, "expected template param");
+
+        if (!template_param)
+          return std::nullopt;
+
+        template_names.push_back(template_param->value);
+
+        if (current_token_.kind == TokenKind::kComma) {
+          AdvanceToken();  // consume ,
+          continue;
+        }
+
+        if (current_token_.kind == TokenKind::kSquareClose) {
+          AdvanceToken();  // consume ]
+          break;
+        }
+
+        HandleError("expected ',' or ']'");
+        break;
+      }
+    }
   }
 
   if (current_token_.kind != TokenKind::kOpenParen) {
@@ -1092,6 +1208,7 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
                          std::move(return_type.value()),
                          function_kind,
                          is_variadic,
+                         std::move(template_names),
                          Metadata::fromTokens(start_of_arguments_token,
                                               missing_return_type_token)};
 

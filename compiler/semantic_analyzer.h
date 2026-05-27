@@ -16,6 +16,7 @@
 class SemanticAnalyzer {
  public:
   explicit SemanticAnalyzer(TypeContext& type_context,
+                            ScopeManager& scope_manager,
                             ErrorCollector& error_collector);
 
   void Check(Block& block);
@@ -27,7 +28,15 @@ class SemanticAnalyzer {
   };
 
   struct ExpressionResult {
-    TypeId type_id;
+    ExpressionResult(TypeId id) : type_id(id) {}
+    ExpressionResult(NamedBinding binding)
+        : type_id(binding.realized_type_id), symbol(std::move(binding)) {}
+    ExpressionResult(TypeId id, std::optional<NamedBinding> binding)
+        : type_id(id), symbol(std::move(binding)) {}
+
+    bool has_type_id() const { return type_id.has_value(); }
+
+    std::optional<TypeId> type_id;
     std::optional<NamedBinding> symbol;
     std::vector<ScopeNarrowingInfo> narrowing_info = {};
   };
@@ -39,7 +48,6 @@ class SemanticAnalyzer {
 
  private:
   void CheckStatement(std::unique_ptr<Statement>& statement);
-  void CheckFunctionBody(FunctionDeclaration& fn);
 
   struct ArgumentResult {
     SemanticAnalyzer::Result result;
@@ -52,10 +60,18 @@ class SemanticAnalyzer {
       const Metadata& debug_metadata,
       bool is_variadic_function = false);
 
+  std::optional<TypeId> InstantiateType(
+      const std::vector<std::pair<std::string, ParsedType>>& parsed_types,
+      const std::vector<ArgumentResult>& arugment_results,
+      const std::vector<std::string>& template_names,
+      SymbolId symbol_id,
+      std::string_view symbol_name);
+
   Result TypeCheckCallExpr(CallExpression& call_expr,
                            ExpressionResult callee_result,
                            Metadata debug_metdata);
 
   TypeContext& type_context_;
+  ScopeManager& scope_manager_;
   ErrorCollector& error_collector_;
 };

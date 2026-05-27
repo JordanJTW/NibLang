@@ -187,12 +187,13 @@ int main(int argc, char* argv[]) {
   std::vector<File> files =
       CalculateImportsFor(opts.input_path, env_search_path);
 
-  TypeContext type_context(kRuntimeFunctions);
+  ScopeManager scope_manager;
+  TypeContext type_context(scope_manager, kRuntimeFunctions);
 
   bool any_errors = false;
   for (File& file : files) {
     ErrorCollector error_collector;
-    SemanticAnalyzer analyzer(type_context, error_collector);
+    SemanticAnalyzer analyzer(type_context, scope_manager, error_collector);
     analyzer.Check(file.root_block);
 
     if (error_collector.HasErrors()) {

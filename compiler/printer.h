@@ -12,7 +12,7 @@
 
 class Printer {
  public:
-  Printer(TypeContext* type_context) : type_context_(type_context) {}
+  Printer(const TypeContext* type_context) : type_context_(type_context) {}
 
   void Print(const Block& block);
   void Print(const Statement& stmt, size_t indent = 0);
@@ -20,7 +20,7 @@ class Printer {
   void Print(const FunctionDeclaration& fn, size_t indent = 0);
 
  private:
-  TypeContext* const type_context_;
+  const TypeContext* const type_context_;
 
   std::string GetTypeName(TypeId type_id) const {
     return type_context_ ? type_context_->GetNameFromTypeId(type_id)

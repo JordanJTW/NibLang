@@ -29,6 +29,8 @@ std::ostream& operator<<(std::ostream& os, NamedBinding::Kind kind) {
       return os << "Capture";
     case NamedBinding::Narrowed:
       return os << "Narrowed";
+    case NamedBinding::Template:
+      return os << "Template";
   }
 
   __builtin_unreachable();  // All Symbol::Kind MUST be handled above.
@@ -38,7 +40,11 @@ std::ostream& operator<<(std::ostream& os, NamedBinding::Kind kind) {
 }  // namespace
 
 std::ostream& operator<<(std::ostream& os, const NamedBinding& symbol) {
-  os << "{kind=" << symbol.kind << ", type_id=" << symbol.type_id;
+  os << "{kind=" << symbol.kind << ", type_id="
+     << (symbol.realized_type_id ? std::to_string(*symbol.realized_type_id)
+                                 : "?")
+     << ", symbol_id="
+     << (symbol.symbol_id ? std::to_string(*symbol.symbol_id) : "?");
   if (symbol.idx.has_value())
     os << ", idx=" << symbol.idx.value();
   os << "}";
@@ -46,29 +52,42 @@ std::ostream& operator<<(std::ostream& os, const NamedBinding& symbol) {
 }
 
 std::ostream& operator<<(std::ostream& os, const ParsedType& type) {
-  std::visit(Overloaded{[&](const std::string& type_name) { os << type_name; },
-                        [&](const ParsedUnionType& type) {
-                          for (const auto& name : type.names) {
-                            for (size_t i = 0; i < type.names.size(); ++i) {
-                              if (i > 0) {
-                                os << "|";
-                              }
-                              os << type.names[i];
-                            }
-                          }
-                        },
-                        [&](const ParsedFunctionType& type) {
-                          os << "fn (";
-                          for (const auto& arg : type.arguments)
-                            os << arg;
-                          if (type.return_value)
-                            os << ") -> " << *type.return_value;
-                          else
-                            os << ")";
-                        },
-                        [&](const ParsedOptionalType& type) {
-                          os << *type.wrapped_type << "?";
-                        }},
-             type.type);
+  std::visit(
+      Overloaded{[&](const std::string& type_name) { os << "#" << type_name; },
+                 [&](const ParsedUnionType& type) {
+                   os << "#";
+                   for (size_t i = 0; i < type.names.size(); ++i) {
+                     if (i > 0) {
+                       os << "|";
+                     }
+                     os << type.names[i];
+                   }
+                 },
+                 [&](const ParsedFunctionType& type) {
+                   os << "#fn (";
+                   for (size_t i = 0; i < type.arguments.size(); ++i) {
+                     if (i > 0)
+                       os << ", ";
+                     os << type.arguments[i];
+                   }
+                   if (type.return_value)
+                     os << ") -> " << *type.return_value;
+                   else
+                     os << ")";
+                 },
+                 [&](const ParsedOptionalType& type) {
+                   os << "#" << *type.wrapped_type << "?";
+                 },
+                 [&](const ParsedParameterizedType& type) {
+                   os << *type.type << "[";
+                   for (size_t i = 0; i < type.parameters.size(); ++i) {
+                     if (i > 0) {
+                       os << ", ";
+                     }
+                     os << type.parameters[i];
+                   }
+                   os << "]";
+                 }},
+      type.type);
   return os;
 }

@@ -181,11 +181,9 @@ TEST_F(TypeContextTest, DefineStructType) {
   ASSERT_TRUE(struct_info->member_symbols.count("field1"));
   ASSERT_TRUE(struct_info->member_symbols.count("field2"));
   EXPECT_EQ(struct_info->member_symbols.at("field1"),
-            (NamedBinding{NamedBinding::Field, TypeContext::i32, "field1",
-                          /*idx=*/0}));
+            (NamedBinding{NamedBinding::Field, TypeContext::i32, "field1", /*idx=*/0}));
   EXPECT_EQ(struct_info->member_symbols.at("field2"),
-            (NamedBinding{NamedBinding::Field, TypeContext::f32, "field2",
-                          /*idx=*/1}));
+            (NamedBinding{NamedBinding::Field, TypeContext::f32, "field2", /*idx=*/1}));
 }
 
 TEST_F(TypeContextTest, DefineFunction_Method) {
@@ -429,13 +427,11 @@ TEST_F(TypeContextTest, GetSymbolFor_ScopeChecks) {
 
 TEST_F(TypeContextTest, GetSymbolFor_Shadowing) {
   // Declare in current ("main") scope
-  NamedBinding outer =
-      type_context.DeclareVariableSymbol("var", TypeContext::i32);
+  NamedBinding outer = type_context.DeclareVariableSymbol("var", TypeContext::i32);
 
   // Enter block scope
   type_context.EnterScope(TypeContext::ScopeType::BlockScope);
-  NamedBinding inner =
-      type_context.DeclareVariableSymbol("var", TypeContext::f32);
+  NamedBinding inner = type_context.DeclareVariableSymbol("var", TypeContext::f32);
 
   // Should find inner symbol in current scope
   auto symbol_current =

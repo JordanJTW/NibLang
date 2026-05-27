@@ -31,6 +31,7 @@ enum class TokenKind {
   kKwLet,             // let
   kKwStatic,          // static
   kKwAs,              // as
+  kKwTypeOf,          // of
   kKwNil,             // Nil
   kKwImport,          // @import
   kVariadic,          // ...

@@ -12,6 +12,7 @@
 
 #include "compiler/assembler.h"
 #include "compiler/logging.h"
+#include "compiler/printer.h"
 #include "compiler/program_builder.h"
 #include "compiler/tokenizer.h"
 #include "compiler/type_context.h"
@@ -130,16 +131,23 @@ void ByteCodeGenerator::EmitBlock(const Block& block,
 void ByteCodeGenerator::EmitFunctionBlock(
     const FunctionDeclaration& fn,
     std::optional<std::string> override_name) {
+  CHECK(fn.resolved) << "Function must be resolved: " << fn.name;
+  CHECK(fn.resolved->function_symbol.idx)
+      << "Function does not have an assigned CallIdx: " << fn.name;
+
+
   builder_.EnterFunctionScope(
       override_name.value_or(fn.name), fn.resolved->function_symbol.idx.value(),
       fn.resolved->arguments, fn.resolved->capture_arguments);
   EmitBlock(*fn.body);
 
-  const auto& type = type_context_.GetTypeInfo<FunctionType>(
-      fn.resolved->function_symbol.type_id);
+  // CHECK(fn.resolved->function_symbol.realized_type_id);
+  // const auto& type = type_context_.GetTypeInfo<FunctionType>(
+  //     *fn.resolved->function_symbol.realized_type_id);
 
   // Insert an return; to unwind the stack
-  if (type->return_type == TypeContext::LiteralType::Void)
+  if (auto* string = std::get_if<std::string>(&fn.return_type.type);
+      string && (*string == "Void"))
     builder_.GetCurrentCode().Return();
   builder_.ExitFunctionScope();
 }
@@ -186,8 +194,8 @@ void ByteCodeGenerator::EmitExpression(
                           break;
                         }
                         default:
-                          LOG(ERROR) << "Unsupported identifier kind: "
-                                     << ident.resolved->symbol.kind;
+                          NOTREACHED() << "Unsupported identifier kind: "
+                                       << ident.resolved->symbol.kind;
                           break;
                       }
                     },
@@ -387,7 +395,11 @@ void ByteCodeGenerator::EmitExpression(
             builder_.GetCurrentCode().Is(value_type_t::VALUE_TYPE_NULL);
             builder_.GetCurrentCode().JumpIfTrue(
                 optional_chain_ctx->null_label);
-          }},
+          },
+          [&](TemplateInstantiationExpression& template_expr) {
+            EmitExpression(template_expr.generic_target);
+          },
+      },
       expr->as);
 }
 

@@ -111,7 +111,7 @@ Token Tokenizer::next() {
     return make_token(TokenKind::kEndOfFile);
 
   // Handle keywords
-  static constexpr std::array<std::pair<std::string_view, TokenKind>, 17>
+  static constexpr std::array<std::pair<std::string_view, TokenKind>, 18>
       kKeywordToToken{{{"if", TokenKind::kKwIf},
                        {"else", TokenKind::kKwElse},
                        {"fn", TokenKind::kKwFn},
@@ -127,6 +127,7 @@ Token Tokenizer::next() {
                        {"let", TokenKind::kKwLet},
                        {"static", TokenKind::kKwStatic},
                        {"as", TokenKind::kKwAs},
+                       {"of", TokenKind::kKwTypeOf},
                        {"Nil", TokenKind::kKwNil},
                        {"@import", TokenKind::kKwImport}}};
 
@@ -194,7 +195,7 @@ Token Tokenizer::next() {
     return make_string_token(TokenKind::kChar, '\'');
   }
 
-  if (std::string_view{data_.data() + offset_, 3} == "...") {
+  if (data_.substr(offset_, 3) == "...") {
     offset_ += 3;
     return make_token(TokenKind::kVariadic);
   }
@@ -251,6 +252,7 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kKwLet);
     KIND_TO_NAME(kKwStatic);
     KIND_TO_NAME(kKwAs);
+    KIND_TO_NAME(kKwTypeOf);
     KIND_TO_NAME(kKwNil);
     KIND_TO_NAME(kKwImport);
     KIND_TO_NAME(kVariadic);

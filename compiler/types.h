@@ -9,6 +9,7 @@
 #include <iosfwd>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <utility>
 #include <variant>
@@ -16,19 +17,65 @@
 
 #include "compiler/tokenizer.h"
 
+using SymbolId = size_t;
+using ScopeId = size_t;
 using TypeId = size_t;
+
+struct FunctionDeclaration;
+struct StructDeclaration;
+
+struct InstanceHash {
+  std::size_t operator()(const std::vector<TypeId>& argument_type_ids) const {
+    std::size_t seed = argument_type_ids.size();
+    for (const auto& id : argument_type_ids) {
+      seed ^= std::hash<TypeId>{}(id) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+    }
+    return seed;
+  }
+};
+
+using InstanceCache =
+    std::unordered_map<std::vector<TypeId>, TypeId, InstanceHash>;
+
+struct FunctionSymbol {
+  FunctionDeclaration& declaration;
+  std::optional<TypeId> parent_type_id;
+  ScopeId scope_id;
+
+  InstanceCache instances;
+};
+
+struct StructSymbol {
+  StructDeclaration& declaration;
+
+  InstanceCache instances;
+};
 
 struct NamedBinding {
   using Idx = size_t;
 
-  enum Kind { Function, Struct, Field, Variable, Capture, Narrowed } kind;
-  TypeId type_id;
+  enum Kind {
+    Function,
+    Struct,
+    Field,
+    Variable,
+    Capture,
+    Narrowed,
+    Template
+  } kind;
+  std::optional<TypeId> realized_type_id;
+  std::optional<SymbolId> symbol_id;
+
+  inline bool IsRealized() { return realized_type_id.has_value(); }
+
   std::string name;
   // Used for function table resolution, struct field ordering, etc.
   std::optional<Idx> idx;
 
   inline bool operator==(const NamedBinding& other) const {
-    return kind == other.kind && type_id == other.type_id && idx == other.idx;
+    return kind == other.kind && realized_type_id == other.realized_type_id &&
+           symbol_id == other.symbol_id && name == other.name &&
+           idx == other.idx;
   }
 };
 
@@ -164,11 +211,17 @@ struct ParsedOptionalType {
   std::shared_ptr<ParsedType> wrapped_type;
 };
 
+struct ParsedParameterizedType {
+  std::shared_ptr<ParsedType> type;
+  std::vector<ParsedType> parameters;
+};
+
 struct ParsedType {
   std::variant<std::string,
                ParsedUnionType,
                ParsedFunctionType,
-               ParsedOptionalType>
+               ParsedOptionalType,
+               ParsedParameterizedType>
       type;
   Metadata metadata;
 };
@@ -208,6 +261,7 @@ struct FunctionDeclaration {
   ParsedType return_type;
   FunctionKind function_kind;
   bool is_variadic = false;
+  std::vector<std::string> template_names;
 
   Metadata argument_range;
 
@@ -224,6 +278,11 @@ struct OptionalChainExpression {
   std::unique_ptr<Expression> root;
 };
 
+struct TemplateInstantiationExpression {
+  std::unique_ptr<Expression> generic_target;
+  std::vector<ParsedType> template_types;
+};
+
 struct Expression {
   std::variant<PrimaryExpression,
                BinaryExpression,
@@ -238,7 +297,8 @@ struct Expression {
                TypeCastExpression,
                OptionalChainExpression,
                NilCoalescingExpression,
-               OptionalAccessExpression>
+               OptionalAccessExpression,
+               TemplateInstantiationExpression>
       as;
 
   Metadata meta;
@@ -269,9 +329,12 @@ struct ContinueStatement {};
 
 struct StructDeclaration {
   std::string name;
+  std::vector<std::string> template_names;
   std::vector<std::pair<std::string, ParsedType>> fields;
   std::vector<std::pair<std::string, FunctionDeclaration>> methods;
   bool is_extern;
+
+  bool IsTemplate() const { return !template_names.empty(); }
 };
 
 struct AssignStatement {

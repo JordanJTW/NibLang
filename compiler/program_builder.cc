@@ -63,11 +63,11 @@ uint32_t ProgramBuilder::GetIdFor(NamedBinding lookup) {
   auto& current_scope_symbols = GetCurrentScope().symbol_to_local_idx;
   if (auto it = current_scope_symbols.find(lookup.idx.value());
       it != current_scope_symbols.end())
-    return it->second;
+    return lookup.idx.value();
 
   uint32_t id = GetCurrentScope().next_id++;
   current_scope_symbols[lookup.idx.value()] = id;
-  return id;
+  return lookup.idx.value();
 }
 
 uint32_t ProgramBuilder::GetIdForConstant(const std::string& value) {

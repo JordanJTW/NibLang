@@ -394,7 +394,21 @@ void Printer::Print(const Expression& expr, size_t indent) {
                       << "OptionalAccessExpression(type: "
                       << GetTypeName(expr.type) << "): " << std::endl;
             Print(*optional_access.target, indent + 2);
-          }},
+          },
+          [&](const TemplateInstantiationExpression& temp) {
+            std::cout << std::string(indent, ' ')
+                      << "TemplateInstantiationExpression: " << std::endl;
+            Print(*temp.generic_target, indent + 2);
+            std::cout << std::string(indent + 2, ' ') << "Types: ";
+            for (size_t i = 0; i < temp.template_types.size(); ++i) {
+              if (i > 0) {
+                std::cout << ", ";
+              }
+              std::cout << temp.template_types[i];
+            }
+            std::cout << std::endl;
+          },
+      },
       expr.as);
 }
 

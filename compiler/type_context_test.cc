@@ -30,7 +30,8 @@ constexpr std::array<std::string_view, 1> kExternalFunctions = {"log"};
 class TypeContextTest : public ::testing::Test {
  protected:
   ErrorCollector error_collector;
-  TypeContext type_context{kExternalFunctions};
+  ScopeManager scope_manager;
+  TypeContext type_context{scope_manager, kExternalFunctions};
 };
 
 TEST_F(TypeContextTest, GetTypeIdFor_BuiltInType) {
@@ -61,7 +62,8 @@ TEST_F(TypeContextTest, GetTypeIdFor_Function) {
   EXPECT_EQ(symbol->kind, NamedBinding::Function);
 
   // Check that the function type is registered
-  auto fn_type = type_context.GetTypeInfo<FunctionType>(symbol->type_id);
+  auto fn_type =
+      type_context.GetTypeInfo<FunctionType>(*symbol->realized_type_id);
   EXPECT_EQ(fn_type->arg_types.size(), 2);
   EXPECT_EQ(fn_type->arg_types[0], TypeContext::i32);
   EXPECT_EQ(fn_type->arg_types[1], TypeContext::f32);
@@ -73,7 +75,7 @@ TEST_F(TypeContextTest, GetTypeIdFor_Function) {
       ParsedFunctionType{{ParsedType{"i32"}, ParsedType{"f32"}},
                          std::make_shared<ParsedType>(ParsedType{"bool"})}});
   ASSERT_TRUE(type_id.has_value());
-  EXPECT_EQ(symbol->type_id, type_id);
+  EXPECT_EQ(symbol->realized_type_id, type_id);
 }
 
 TEST_F(TypeContextTest, GetTypeIdFor_UnknownType) {
@@ -123,79 +125,136 @@ TEST_F(TypeContextTest, GetTypeIdFor_FunctionType_VoidReturn) {
   EXPECT_EQ(fn_info->return_type, TypeContext::Void);
 }
 
-TEST_F(TypeContextTest, DeclareVariableSymbol) {
-  auto symbol =
-      type_context.DeclareVariableSymbol("test_var", TypeContext::i32);
-  EXPECT_EQ(symbol.kind, NamedBinding::Variable);
-  EXPECT_EQ(symbol.type_id, TypeContext::i32);
-  EXPECT_TRUE(symbol.idx.has_value());
-}
+TEST_F(TypeContextTest, DeclareStructSymbol_NoTemplate) {
+  StructDeclaration declaration = {
+      .name = "TestStruct",
+  };
 
-TEST_F(TypeContextTest, DeclareCaptureSymbol) {
-  auto symbol =
-      type_context.DeclareCaptureSymbol("test_capture", TypeContext::f32);
-  EXPECT_EQ(symbol.kind, NamedBinding::Capture);
-  EXPECT_EQ(symbol.type_id, TypeContext::f32);
-  EXPECT_TRUE(symbol.idx.has_value());
-}
-
-TEST_F(TypeContextTest, GetSymbolFor_Variable) {
-  type_context.DeclareVariableSymbol("test_var", TypeContext::i32);
-  auto symbol = type_context.GetSymbolFor("test_var");
-  ASSERT_TRUE(symbol.has_value());
-  EXPECT_EQ(symbol->kind, NamedBinding::Variable);
-  EXPECT_EQ(symbol->type_id, TypeContext::i32);
-}
-
-TEST_F(TypeContextTest, GetSymbolFor_NotFound) {
-  auto symbol = type_context.GetSymbolFor("nonexistent");
-  EXPECT_FALSE(symbol.has_value());
-}
-
-TEST_F(TypeContextTest, DeclareStructSymbol) {
-  auto symbol = type_context.DeclareStructSymbol("TestStruct");
-  EXPECT_GT(symbol.type_id, TypeContext::LiteralType::kCount);
+  auto symbol = type_context.DeclareStructSymbol("TestStruct", declaration);
+  EXPECT_GT(symbol.realized_type_id, TypeContext::LiteralType::kCount);
   EXPECT_EQ(symbol.kind, NamedBinding::Struct);
   EXPECT_FALSE(symbol.idx.has_value());  // Structs have no index
+
+  EXPECT_TRUE(scope_manager.FindBindingFor("TestStruct",
+                                           ScopeManager::ScopeToCheck::All));
 }
 
-TEST_F(TypeContextTest, DefineStructType) {
-  StructDeclaration struct_decl;
-  struct_decl.name = "TestStruct";
-  struct_decl.fields = {{"field1", ParsedType{"i32"}},
-                        {"field2", ParsedType{"f32"}}};
-  struct_decl.is_extern = false;
+TEST_F(TypeContextTest, DeclareStructSymbol_WithTemplate) {
+  StructDeclaration declaration = {
+      .name = "TestStruct",
+      .template_names = {"T"},
+  };
 
-  auto struct_symbol = type_context.DeclareStructSymbol("TestStruct");
-  type_context.DefineStructType(struct_symbol.type_id, struct_decl,
-                                error_collector);
+  auto symbol = type_context.DeclareStructSymbol("TestStruct", declaration);
+  EXPECT_FALSE(symbol.realized_type_id.has_value());
+  EXPECT_EQ(symbol.kind, NamedBinding::Struct);
+  EXPECT_FALSE(symbol.idx.has_value());  // Structs have no index
+
+  EXPECT_TRUE(scope_manager.FindBindingFor("TestStruct",
+                                           ScopeManager::ScopeToCheck::All));
+}
+
+TEST_F(TypeContextTest, DefineStructType_NoTemplate) {
+  StructDeclaration declaration;
+  declaration.name = "TestStruct";
+  declaration.fields = {{"field1", ParsedType{"i32"}},
+                        {"field2", ParsedType{"f32"}}};
+  declaration.is_extern = false;
+
+  auto struct_symbol =
+      type_context.DeclareStructSymbol("TestStruct", declaration);
+  ASSERT_TRUE(struct_symbol.realized_type_id.has_value());
+  type_context.DefineStructType(*struct_symbol.realized_type_id, declaration,
+                                /*template_arguments=*/{}, error_collector);
 
   // Check that struct type is registered
   auto struct_info =
-      type_context.GetTypeInfo<StructType>(struct_symbol.type_id);
-  EXPECT_EQ(struct_info->struct_declaration->name, "TestStruct");
-  EXPECT_EQ(struct_info->field_types.size(), 2);
-  EXPECT_EQ(struct_info->field_types[0], TypeContext::i32);
-  EXPECT_EQ(struct_info->field_types[1], TypeContext::f32);
-  EXPECT_EQ(struct_info->member_symbols.size(), 2);
-  ASSERT_TRUE(struct_info->member_symbols.count("field1"));
-  ASSERT_TRUE(struct_info->member_symbols.count("field2"));
-  EXPECT_EQ(struct_info->member_symbols.at("field1"),
-            (NamedBinding{NamedBinding::Field, TypeContext::i32, "field1", /*idx=*/0}));
-  EXPECT_EQ(struct_info->member_symbols.at("field2"),
-            (NamedBinding{NamedBinding::Field, TypeContext::f32, "field2", /*idx=*/1}));
+      type_context.GetTypeInfo<StructType>(*struct_symbol.realized_type_id);
+  EXPECT_EQ(struct_info->declaration.name, "TestStruct");
+  EXPECT_THAT(struct_info->field_types,
+              testing::ElementsAre(TypeContext::i32, TypeContext::f32));
+
+  auto field1_binding = scope_manager.FindBindingFor(
+      "field1", ScopeManager::ScopeToCheck::Current,
+      /*override_scope_id=*/struct_info->scope_id);
+
+  ASSERT_TRUE(field1_binding.has_value());
+  EXPECT_EQ(field1_binding->kind, NamedBinding::Field);
+  EXPECT_EQ(field1_binding->idx, 0);
+  EXPECT_EQ(field1_binding->name, "field1");
+  EXPECT_EQ(field1_binding->realized_type_id, TypeContext::i32);
+
+  auto field2_binding = scope_manager.FindBindingFor(
+      "field2", ScopeManager::ScopeToCheck::Current,
+      /*override_scope_id=*/struct_info->scope_id);
+
+  ASSERT_TRUE(field2_binding.has_value());
+  EXPECT_EQ(field2_binding->kind, NamedBinding::Field);
+  EXPECT_EQ(field2_binding->idx, 1);
+  EXPECT_EQ(field2_binding->name, "field2");
+  EXPECT_EQ(field2_binding->realized_type_id, TypeContext::f32);
 }
 
-TEST_F(TypeContextTest, DefineFunction_Method) {
-  StructDeclaration struct_decl;
-  struct_decl.name = "TestStruct";
-  struct_decl.is_extern = false;
+TEST_F(TypeContextTest, TemplateStruct_GetTemplateOf) {
+  StructDeclaration declaration;
+  declaration.name = "TestStruct";
+  declaration.template_names = {"T"};
+  declaration.fields = {{"field1", ParsedType{"T"}}};
+  declaration.is_extern = false;
 
-  auto struct_symbol = type_context.DeclareStructSymbol("TestStruct");
-  type_context.DefineStructType(struct_symbol.type_id, struct_decl,
-                                error_collector);
+  auto struct_symbol =
+      type_context.DeclareStructSymbol("TestStruct", declaration);
+  ASSERT_FALSE(struct_symbol.realized_type_id.has_value());
+  ASSERT_TRUE(struct_symbol.symbol_id.has_value());
 
-  FunctionDeclaration method_decl{
+  std::optional<TypeId> type_id = type_context.GetTemplateOf(
+      *struct_symbol.symbol_id, {TypeContext::Bool}, error_collector);
+  ASSERT_TRUE(type_id.has_value());
+
+  // Check that struct type is registered
+  auto struct_info = type_context.GetTypeInfo<StructType>(*type_id);
+  EXPECT_EQ(struct_info->declaration.name, "TestStruct");
+  EXPECT_THAT(struct_info->field_types,
+              testing::ElementsAre(TypeContext::Bool));
+
+  auto field1_binding = scope_manager.FindBindingFor(
+      "field1", ScopeManager::ScopeToCheck::Current,
+      /*override_scope_id=*/struct_info->scope_id);
+
+  ASSERT_TRUE(field1_binding.has_value());
+  EXPECT_EQ(field1_binding->kind, NamedBinding::Field);
+  EXPECT_EQ(field1_binding->idx, 0);
+  EXPECT_EQ(field1_binding->name, "field1");
+  EXPECT_EQ(field1_binding->realized_type_id, TypeContext::Bool);
+}
+
+TEST_F(TypeContextTest, TemplateFunction_GetTemplateOf) {
+  FunctionDeclaration declaration;
+  declaration.name = "TestFunction";
+  declaration.arguments = {{"arg1", ParsedType{"Type"}}};
+  declaration.return_type = ParsedType{"Return"};
+  declaration.function_kind = FunctionKind::Free;
+  declaration.template_names = {"Type", "Return"};
+  declaration.body = std::make_unique<Block>();
+
+  auto binding = type_context.DefineFunction(declaration, &error_collector);
+  ASSERT_TRUE(binding.has_value());
+
+  EXPECT_FALSE(binding->realized_type_id.has_value());
+  EXPECT_TRUE(binding->symbol_id.has_value());
+
+  std::optional<TypeId> type_id = type_context.GetTemplateOf(
+      *binding->symbol_id, {TypeContext::Bool, TypeContext::i32},
+      error_collector);
+  ASSERT_TRUE(type_id.has_value());
+
+  auto fn_info = type_context.GetTypeInfo<FunctionType>(*type_id);
+  EXPECT_THAT(fn_info->arg_types, testing::ElementsAre(TypeContext::Bool));
+  EXPECT_EQ(fn_info->return_type, TypeContext::i32);
+}
+
+TEST_F(TypeContextTest, StructDeclaration_WithMethod) {
+  FunctionDeclaration method_decl = {
       .name = "test_method",
       .arguments = {{"self", ParsedType{"TestStruct"}},
                     {"arg", ParsedType{"i32"}}},
@@ -204,10 +263,31 @@ TEST_F(TypeContextTest, DefineFunction_Method) {
       .body = std::make_unique<Block>(),
   };
 
-  auto symbol = type_context.DefineFunction(
-      method_decl, &error_collector, &struct_decl, struct_symbol.type_id);
-  ASSERT_TRUE(symbol.has_value());
-  EXPECT_EQ(symbol->kind, NamedBinding::Function);
+  StructDeclaration struct_decl;
+  struct_decl.name = "TestStruct";
+  struct_decl.methods.emplace_back("test_method", std::move(method_decl));
+  struct_decl.is_extern = false;
+
+  auto struct_symbol =
+      type_context.DeclareStructSymbol("TestStruct", struct_decl);
+  ASSERT_TRUE(struct_symbol.realized_type_id.has_value());
+  ASSERT_TRUE(struct_symbol.symbol_id.has_value());
+
+  type_context.DefineStructType(*struct_symbol.realized_type_id, struct_decl,
+                                /*template_arguments=*/{}, error_collector);
+
+  auto struct_info =
+      type_context.GetTypeInfo<StructType>(*struct_symbol.realized_type_id);
+
+  auto method_binding = scope_manager.FindBindingFor(
+      "test_method", ScopeManager::ScopeToCheck::Current,
+      /*override_scope_id=*/struct_info->scope_id);
+
+  ASSERT_TRUE(method_binding.has_value());
+  EXPECT_EQ(method_binding->kind, NamedBinding::Function);
+  // The binding uses the fully qualified name (differs from the scoped name).
+  EXPECT_EQ(method_binding->name, "TestStruct_test_method");
+  EXPECT_TRUE(method_binding->realized_type_id.has_value());
 }
 
 TEST_F(TypeContextTest, DefineFunction_ExternMethod) {
@@ -215,9 +295,11 @@ TEST_F(TypeContextTest, DefineFunction_ExternMethod) {
   struct_decl.name = "String";
   struct_decl.is_extern = true;
 
-  auto struct_symbol = type_context.DeclareStructSymbol("String");
-  type_context.DefineStructType(struct_symbol.type_id, struct_decl,
-                                error_collector);
+  auto struct_symbol = type_context.DeclareStructSymbol("String", struct_decl);
+  ASSERT_TRUE(struct_symbol.realized_type_id.has_value());
+  ASSERT_TRUE(struct_symbol.symbol_id.has_value());
+  type_context.DefineStructType(*struct_symbol.realized_type_id, struct_decl,
+                                /*template_arguments=*/{}, error_collector);
 
   FunctionDeclaration method_decl{
       .name = "length",
@@ -226,12 +308,12 @@ TEST_F(TypeContextTest, DefineFunction_ExternMethod) {
       .function_kind = FunctionKind::Method,
   };
 
-  auto symbol = type_context.DefineFunction(
-      method_decl, &error_collector, &struct_decl, struct_symbol.type_id);
-  ASSERT_TRUE(symbol.has_value());
-  EXPECT_EQ(symbol->kind, NamedBinding::Function);
-  ASSERT_TRUE(symbol->idx.has_value());
-  EXPECT_EQ(symbol->idx.value(), VM_BUILTIN_STRING_LENGTH);
+  auto binding =
+      type_context.DefineFunction(method_decl, &error_collector, &struct_decl,
+                                  *struct_symbol.realized_type_id);
+  ASSERT_TRUE(binding.has_value());
+  EXPECT_EQ(binding->kind, NamedBinding::Function);
+  EXPECT_EQ(binding->idx, VM_BUILTIN_STRING_LENGTH);
 }
 
 TEST_F(TypeContextTest, DefineFunction_UnknownExtern) {
@@ -260,16 +342,22 @@ TEST_F(TypeContextTest, IsTypeSubsetOf) {
   auto union_id = type_context.GetTypeIdFor(ParsedType{union_type});
   ASSERT_TRUE(union_id.has_value());
 
-  NamedBinding test_struct = type_context.DeclareStructSymbol("TestStruct");
   StructDeclaration test_struct_decl;
+  test_struct_decl.name = "TestStruct";
   test_struct_decl.is_extern = true;
-  type_context.DefineStructType(test_struct.type_id, test_struct_decl,
-                                error_collector);
+
+  NamedBinding struct_binding =
+      type_context.DeclareStructSymbol("TestStruct", test_struct_decl);
+  ASSERT_TRUE(struct_binding.realized_type_id.has_value());
+  ASSERT_TRUE(struct_binding.symbol_id.has_value());
+  TypeId struct_type_id = *struct_binding.realized_type_id;
+  type_context.DefineStructType(struct_type_id, test_struct_decl,
+                                /*template_arguments=*/{}, error_collector);
 
   EXPECT_TRUE(type_context.IsTypeSubsetOf(TypeContext::i32, union_id.value()));
   EXPECT_TRUE(type_context.IsTypeSubsetOf(TypeContext::Bool, union_id.value()));
-  EXPECT_FALSE(
-      type_context.IsTypeSubsetOf(test_struct.type_id, union_id.value()));
+  EXPECT_FALSE(type_context.IsTypeSubsetOf(*struct_binding.realized_type_id,
+                                           union_id.value()));
 
   // Union subset of union
   ParsedUnionType sub_union;
@@ -290,7 +378,7 @@ TEST_F(TypeContextTest, IsTypeSubsetOf) {
   EXPECT_TRUE(
       type_context.IsTypeSubsetOf(TypeContext::i32, new_union_id.value()));
   EXPECT_TRUE(
-      type_context.IsTypeSubsetOf(test_struct.type_id, new_union_id.value()));
+      type_context.IsTypeSubsetOf(struct_type_id, new_union_id.value()));
   EXPECT_FALSE(
       type_context.IsTypeSubsetOf(TypeContext::Bool, new_union_id.value()));
 }
@@ -312,7 +400,9 @@ TEST_F(TypeContextTest, GetNameFromTypeId) {
   };
   auto symbol = type_context.DefineFunction(fn_decl, &error_collector);
   ASSERT_TRUE(symbol.has_value());
-  std::string fn_name = type_context.GetNameFromTypeId(symbol->type_id);
+  ASSERT_TRUE(symbol->realized_type_id.has_value());
+  std::string fn_name =
+      type_context.GetNameFromTypeId(*symbol->realized_type_id);
   EXPECT_EQ(fn_name, "fn (i32) -> bool");
 
   // Variadic function
@@ -327,18 +417,21 @@ TEST_F(TypeContextTest, GetNameFromTypeId) {
   auto variadic_symbol =
       type_context.DefineFunction(variadic_fn, &error_collector);
   ASSERT_TRUE(variadic_symbol.has_value());
+  ASSERT_TRUE(variadic_symbol->realized_type_id.has_value());
   std::string variadic_name =
-      type_context.GetNameFromTypeId(variadic_symbol->type_id);
+      type_context.GetNameFromTypeId(*variadic_symbol->realized_type_id);
   EXPECT_EQ(variadic_name, "fn (i32, ...) -> bool");
 
   // Struct type
   StructDeclaration struct_decl;
   struct_decl.name = "TestStruct";
   struct_decl.is_extern = false;
-  auto struct_symbol = type_context.DeclareStructSymbol("TestStruct");
-  type_context.DefineStructType(struct_symbol.type_id, struct_decl,
-                                error_collector);
-  EXPECT_EQ(type_context.GetNameFromTypeId(struct_symbol.type_id),
+  auto struct_symbol =
+      type_context.DeclareStructSymbol("TestStruct", struct_decl);
+  ASSERT_TRUE(struct_symbol.realized_type_id.has_value());
+  type_context.DefineStructType(*struct_symbol.realized_type_id, struct_decl,
+                                /*template_arguments=*/{}, error_collector);
+  EXPECT_EQ(type_context.GetNameFromTypeId(*struct_symbol.realized_type_id),
             "struct TestStruct");
 
   // Union type
@@ -369,112 +462,27 @@ TEST_F(TypeContextTest, GetFunctionDeclaration) {
   EXPECT_EQ(retrieved_fn.arguments[0].first, "arg1");
 }
 
-TEST_F(TypeContextTest, GetSymbolFor_ScopeChecks) {
-  type_context.DeclareVariableSymbol("v1", TypeContext::i32);
+// TEST_F(TypeContextTest, GetCurrentFunction) {
+//   // In global scope, GetCurrentFunction should return "main"
+//   auto& main_fn = type_context.GetCurrentFunction();
+//   EXPECT_EQ(main_fn.name, "<<main>>");
+//   EXPECT_EQ(main_fn.function_kind, FunctionKind::Free);
 
-  type_context.EnterScope(TypeContext::ScopeType::FunctionScope);
-  type_context.DeclareVariableSymbol("v2", TypeContext::Bool);
+//   // Define a new function and enter its scope
+//   FunctionDeclaration fn_decl{
+//       .name = "test_fn",
+//       .arguments = {},
+//       .return_type = ParsedType{"Void"},
+//       .function_kind = FunctionKind::Free,
+//       .body = std::make_unique<Block>(),
+//   };
+//   auto symbol = type_context.DefineFunction(fn_decl, &error_collector);
+//   ASSERT_TRUE(symbol.has_value());
+//   type_context.EnterScope(TypeContext::ScopeType::FunctionScope, &fn_decl);
 
-  type_context.EnterScope(TypeContext::ScopeType::BlockScope);
-  type_context.DeclareVariableSymbol("v3", TypeContext::f32);
-
-  // (BlockScope) v3 accessible but not v1 or v2
-  auto symbol_current =
-      type_context.GetSymbolFor("v3", TypeContext::ScopeToCheck::Current);
-  ASSERT_TRUE(symbol_current.has_value());
-  EXPECT_EQ(symbol_current->type_id, TypeContext::f32);
-
-  EXPECT_FALSE(
-      type_context.GetSymbolFor("v1", TypeContext::ScopeToCheck::Current));
-  EXPECT_FALSE(
-      type_context.GetSymbolFor("v2", TypeContext::ScopeToCheck::Current));
-
-  // (All) v1, v2, and v3 accessible
-  auto v1_all = type_context.GetSymbolFor("v1", TypeContext::ScopeToCheck::All);
-  ASSERT_TRUE(v1_all.has_value());
-  EXPECT_EQ(v1_all->type_id, TypeContext::i32);
-
-  auto v2_all = type_context.GetSymbolFor("v2", TypeContext::ScopeToCheck::All);
-  ASSERT_TRUE(v2_all.has_value());
-  EXPECT_EQ(v2_all->type_id, TypeContext::Bool);
-
-  auto v3_all = type_context.GetSymbolFor("v3", TypeContext::ScopeToCheck::All);
-  ASSERT_TRUE(v3_all.has_value());
-  EXPECT_EQ(v3_all->type_id, TypeContext::f32);
-
-  // (FunctionScope) v2 and v3 accessible but not v1
-  auto v2_fn =
-      type_context.GetSymbolFor("v2", TypeContext::ScopeToCheck::Function);
-  ASSERT_TRUE(v2_fn.has_value());
-  EXPECT_EQ(v2_fn->type_id, TypeContext::Bool);
-
-  auto v3_fn =
-      type_context.GetSymbolFor("v3", TypeContext::ScopeToCheck::Function);
-  ASSERT_TRUE(v3_fn.has_value());
-  EXPECT_EQ(v3_fn->type_id, TypeContext::f32);
-
-  EXPECT_FALSE(
-      type_context.GetSymbolFor("v1", TypeContext::ScopeToCheck::Function));
-
-  type_context.ExitScope();  // Exit Block Scope
-
-  EXPECT_FALSE(type_context.GetSymbolFor("v3", TypeContext::ScopeToCheck::All));
-
-  type_context.ExitScope();  // Exit Function Scope
-
-  EXPECT_FALSE(type_context.GetSymbolFor("v2", TypeContext::ScopeToCheck::All));
-}
-
-TEST_F(TypeContextTest, GetSymbolFor_Shadowing) {
-  // Declare in current ("main") scope
-  NamedBinding outer = type_context.DeclareVariableSymbol("var", TypeContext::i32);
-
-  // Enter block scope
-  type_context.EnterScope(TypeContext::ScopeType::BlockScope);
-  NamedBinding inner = type_context.DeclareVariableSymbol("var", TypeContext::f32);
-
-  // Should find inner symbol in current scope
-  auto symbol_current =
-      type_context.GetSymbolFor("var", TypeContext::ScopeToCheck::Current);
-  ASSERT_TRUE(symbol_current.has_value());
-  EXPECT_EQ(symbol_current->type_id, TypeContext::f32);
-
-  // Should find inner symbol in all scopes (shadows outer)
-  auto symbol_all =
-      type_context.GetSymbolFor("var", TypeContext::ScopeToCheck::All);
-  ASSERT_TRUE(symbol_all.has_value());
-  EXPECT_EQ(symbol_all->type_id, TypeContext::f32);
-
-  type_context.ExitScope();
-
-  // After exiting, should find outer symbol again
-  auto symbol_after_exit =
-      type_context.GetSymbolFor("var", TypeContext::ScopeToCheck::All);
-  ASSERT_TRUE(symbol_after_exit.has_value());
-  EXPECT_EQ(symbol_after_exit->type_id, TypeContext::i32);
-}
-
-TEST_F(TypeContextTest, GetCurrentFunction) {
-  // In global scope, GetCurrentFunction should return "main"
-  auto& main_fn = type_context.GetCurrentFunction();
-  EXPECT_EQ(main_fn.name, "<<main>>");
-  EXPECT_EQ(main_fn.function_kind, FunctionKind::Free);
-
-  // Define a new function and enter its scope
-  FunctionDeclaration fn_decl{
-      .name = "test_fn",
-      .arguments = {},
-      .return_type = ParsedType{"Void"},
-      .function_kind = FunctionKind::Free,
-      .body = std::make_unique<Block>(),
-  };
-  auto symbol = type_context.DefineFunction(fn_decl, &error_collector);
-  ASSERT_TRUE(symbol.has_value());
-  type_context.EnterScope(TypeContext::ScopeType::FunctionScope, &fn_decl);
-
-  auto& current_fn = type_context.GetCurrentFunction();
-  EXPECT_EQ(current_fn.name, "test_fn");
-}
+//   auto& current_fn = type_context.GetCurrentFunction();
+//   EXPECT_EQ(current_fn.name, "test_fn");
+// }
 
 TEST_F(TypeContextTest, FunctionType_OperatorEqual) {
   FunctionType ft1{

@@ -101,7 +101,8 @@ class GoldenTest : public ::testing::Test {
     std::string full_program_text = kPreamble + program_text;
     Block root_block = Parser{full_program_text}.Parse();
 
-    SemanticAnalyzer{type_context_, error_collector_}.Check(root_block);
+    SemanticAnalyzer{type_context_, scope_manager_, error_collector_}.Check(
+        root_block);
 
     if (error_collector_.HasErrors()) {
       error_collector_.PrintAllErrors(full_program_text);
@@ -131,7 +132,8 @@ class GoldenTest : public ::testing::Test {
   }
 
   MockNativeFunc native_check_fn_;
-  TypeContext type_context_{kExternalFunctionNames};
+  ScopeManager scope_manager_;
+  TypeContext type_context_{scope_manager_, kExternalFunctionNames};
   MockErrorCollector error_collector_;
 };
 
@@ -342,19 +344,19 @@ TEST_F(GoldenTest, DISABLED_ClosureMethod) {
   RunProgram(program);
 }
 
-TEST_F(GoldenTest, DISABLED_TemplateStruct) {
+TEST_F(GoldenTest, TemplateStruct) {
   error_collector_.DelegateToFake();
 
   auto program = BuildProgram(R"(
-    struct Test<T> {
+    struct Test[T] {
       value: T;
 
-      fn foo(self: Test<T>) -> T {
-        return value;
+      fn foo(self: Test[T]) -> T {
+        return self.value;
       }
     }
 
-    let x = Test::[i32](109);
+    let x = Test.of(i32)(109);
     check(x.foo());
   )");
 

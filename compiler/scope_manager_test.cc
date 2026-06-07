@@ -122,4 +122,125 @@ TEST_F(ScopeManagerTest, NonLinearLookupViaOverrideScopeId) {
   EXPECT_FALSE(isolation_lookup.has_value());
 }
 
+TEST_F(ScopeManagerTest, DeclareVariableBinding) {
+  auto binding =
+      scope_manager.DeclareVariableBinding("test_var", TypeContext::i32);
+  EXPECT_EQ(binding.kind, NamedBinding::Variable);
+  EXPECT_EQ(binding.realized_type_id, TypeContext::i32);
+  EXPECT_TRUE(binding.idx.has_value());
+}
+
+TEST_F(ScopeManagerTest, DeclareCaptureBinding) {
+  auto binding =
+      scope_manager.DeclareCaptureBinding("test_capture", TypeContext::f32);
+  EXPECT_EQ(binding.kind, NamedBinding::Capture);
+  EXPECT_EQ(binding.realized_type_id, TypeContext::f32);
+  EXPECT_TRUE(binding.idx.has_value());
+}
+
+TEST_F(ScopeManagerTest, FindBindingFor_Variable) {
+  scope_manager.DeclareVariableBinding("test_var", TypeContext::i32);
+  auto binding =
+      scope_manager.FindBindingFor("test_var", ScopeManager::ScopeToCheck::All);
+  ASSERT_TRUE(binding.has_value());
+  EXPECT_EQ(binding->kind, NamedBinding::Variable);
+  EXPECT_EQ(binding->realized_type_id, TypeContext::i32);
+}
+
+TEST_F(ScopeManagerTest, FindBindingFor_NotFound) {
+  auto binding = scope_manager.FindBindingFor("nonexistent",
+                                              ScopeManager::ScopeToCheck::All);
+  EXPECT_FALSE(binding.has_value());
+}
+
+TEST_F(ScopeManagerTest, FindBindingFor_Shadowing) {
+  auto outer_binding =
+      scope_manager.DeclareVariableBinding("var", TypeContext::i32);
+
+  // Enter block scope
+  scope_manager.EnterScope(ScopeManager::ScopeType::BlockScope, "block");
+  auto inner = scope_manager.DeclareVariableBinding("var", TypeContext::f32);
+
+  // Should find inner symbol in current scope
+  auto symbol_current =
+      scope_manager.FindBindingFor("var", ScopeManager::ScopeToCheck::Current);
+  ASSERT_TRUE(symbol_current.has_value());
+  EXPECT_EQ(symbol_current->realized_type_id, TypeContext::f32);
+
+  // Should find inner symbol in all scopes (shadows outer)
+  auto symbol_all =
+      scope_manager.FindBindingFor("var", ScopeManager::ScopeToCheck::All);
+  ASSERT_TRUE(symbol_all.has_value());
+  EXPECT_EQ(symbol_all->realized_type_id, TypeContext::f32);
+
+  scope_manager.ExitScope();
+
+  // After exiting, should find outer symbol again
+  auto symbol_after_exit =
+      scope_manager.FindBindingFor("var", ScopeManager::ScopeToCheck::All);
+  ASSERT_TRUE(symbol_after_exit.has_value());
+  EXPECT_EQ(symbol_after_exit->realized_type_id, TypeContext::i32);
+}
+
+TEST_F(ScopeManagerTest, FindBindingFor_ScopeChecks) {
+  scope_manager.DeclareVariableBinding("v1", TypeContext::i32);
+
+  scope_manager.EnterScope(ScopeManager::ScopeType::FunctionScope, "fn");
+  scope_manager.DeclareVariableBinding("v2", TypeContext::Bool);
+
+  scope_manager.EnterScope(ScopeManager::ScopeType::BlockScope, "block");
+  scope_manager.DeclareVariableBinding("v3", TypeContext::f32);
+
+  // (BlockScope) v3 accessible but not v1 or v2
+  auto symbol_current =
+      scope_manager.FindBindingFor("v3", ScopeManager::ScopeToCheck::Current);
+  ASSERT_TRUE(symbol_current.has_value());
+  EXPECT_EQ(symbol_current->realized_type_id, TypeContext::f32);
+
+  EXPECT_FALSE(
+      scope_manager.FindBindingFor("v1", ScopeManager::ScopeToCheck::Current));
+  EXPECT_FALSE(
+      scope_manager.FindBindingFor("v2", ScopeManager::ScopeToCheck::Current));
+
+  // (All) v1, v2, and v3 accessible
+  auto v1_all =
+      scope_manager.FindBindingFor("v1", ScopeManager::ScopeToCheck::All);
+  ASSERT_TRUE(v1_all.has_value());
+  EXPECT_EQ(v1_all->realized_type_id, TypeContext::i32);
+
+  auto v2_all =
+      scope_manager.FindBindingFor("v2", ScopeManager::ScopeToCheck::All);
+  ASSERT_TRUE(v2_all.has_value());
+  EXPECT_EQ(v2_all->realized_type_id, TypeContext::Bool);
+
+  auto v3_all =
+      scope_manager.FindBindingFor("v3", ScopeManager::ScopeToCheck::All);
+  ASSERT_TRUE(v3_all.has_value());
+  EXPECT_EQ(v3_all->realized_type_id, TypeContext::f32);
+
+  // (FunctionScope) v2 and v3 accessible but not v1
+  auto v2_fn =
+      scope_manager.FindBindingFor("v2", ScopeManager::ScopeToCheck::Function);
+  ASSERT_TRUE(v2_fn.has_value());
+  EXPECT_EQ(v2_fn->realized_type_id, TypeContext::Bool);
+
+  auto v3_fn =
+      scope_manager.FindBindingFor("v3", ScopeManager::ScopeToCheck::Function);
+  ASSERT_TRUE(v3_fn.has_value());
+  EXPECT_EQ(v3_fn->realized_type_id, TypeContext::f32);
+
+  EXPECT_FALSE(
+      scope_manager.FindBindingFor("v1", ScopeManager::ScopeToCheck::Function));
+
+  scope_manager.ExitScope();  // Exit Block Scope
+
+  EXPECT_FALSE(
+      scope_manager.FindBindingFor("v3", ScopeManager::ScopeToCheck::All));
+
+  scope_manager.ExitScope();  // Exit Function Scope
+
+  EXPECT_FALSE(
+      scope_manager.FindBindingFor("v2", ScopeManager::ScopeToCheck::All));
+}
+
 }  // namespace

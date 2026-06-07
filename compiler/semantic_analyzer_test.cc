@@ -12,6 +12,7 @@
 
 #include "compiler/error_collector.h"
 #include "compiler/gtest_helpers.h"
+#include "compiler/scope_manager.h"
 #include "compiler/type_context.h"
 #include "compiler/types.h"
 #include "gmock/gmock.h"
@@ -28,8 +29,10 @@ namespace {
 class SemanticAnalyzerTest : public ::testing::Test {
  protected:
   ErrorCollector error_collector;
-  TypeContext type_context;
-  SemanticAnalyzer semantic_analyzer{type_context, error_collector};
+  ScopeManager scope_manager;
+  TypeContext type_context{scope_manager};
+  SemanticAnalyzer semantic_analyzer{type_context, scope_manager,
+                                     error_collector};
 };
 
 TEST_F(SemanticAnalyzerTest, Expression_PrimaryExpr_BuiltInValue) {

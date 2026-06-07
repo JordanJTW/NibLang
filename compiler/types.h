@@ -47,6 +47,7 @@ struct FunctionSymbol {
 
 struct StructSymbol {
   StructDeclaration& declaration;
+  ScopeId scope_id;
 
   InstanceCache instances;
 };

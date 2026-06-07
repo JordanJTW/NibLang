@@ -126,12 +126,6 @@ NamedBinding ScopeManager::DeclareTemplateBinding(std::string_view name,
                              /*symbol_id=*/std::nullopt);
 }
 
-void ScopeManager::DeclareBindingInScope(std::string_view name,
-                                         NamedBinding binding,
-                                         ScopeId scope_id) {
-  scopes_[scope_id].symbols.emplace(name, binding);
-}
-
 void ScopeManager::PrintScopeTree(std::ostream& os,
                                   ScopeId current_id,
                                   size_t indent_level) const {

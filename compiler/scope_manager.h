@@ -60,10 +60,6 @@ class ScopeManager {
       std::optional<SymbolId> symbol_id,
       std::optional<NamedBinding::Idx> idx = std::nullopt);
 
-  void DeclareBindingInScope(std::string_view name,
-                             NamedBinding binding,
-                             ScopeId scope_id);
-
  private:
   friend std::ostream& operator<<(std::ostream&, const ScopeManager&);
 

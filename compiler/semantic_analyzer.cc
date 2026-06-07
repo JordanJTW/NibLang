@@ -431,7 +431,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             }
 
             if (!lhs->symbol.has_value() ||
-                lhs->symbol->kind != NamedBinding::Kind::Variable ||
+                !(lhs->symbol->kind == NamedBinding::Kind::Variable ||
+                  lhs->symbol->kind == NamedBinding::Kind::Field) ||
                 !lhs->has_type_id()) {
               error_collector_.Add("Unable to assign to invalid LHS expression",
                                    assign.rhs->meta);

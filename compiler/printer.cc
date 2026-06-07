@@ -224,9 +224,12 @@ void Printer::Print(const Statement& stmt, size_t indent) {
                       << "AssignStatement: " << assign.name;
             if (assign.type.has_value())
               std::cout << " Declared Type: " << assign.type.value()
+                        << " Type: " << GetTypeName(assign.value->type)
                         << std::endl;
             else
-              std::cout << " Declared Type: ?" << std::endl;
+              std::cout << " Declared Type: ?"
+                        << " Type: " << GetTypeName(assign.value->type)
+                        << std::endl;
 
             std::cout << std::string(indent + 2, ' ') << "Value:" << std::endl;
             Print(*assign.value, indent + 4);

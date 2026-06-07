@@ -789,10 +789,15 @@ std::optional<TypeId> SemanticAnalyzer::InstantiateType(
     const std::vector<std::pair<std::string, ParsedType>>& parsed_types,
     const std::vector<ArgumentResult>& argument_results,
     const std::vector<std::string>& template_names,
+    const std::vector<std::string>& parent_template_names,
     SymbolId symbol_id,
     std::string_view symbol_name) {
   TypeResolver::Bindings bindings;
   TypeResolver resolver(type_context_, error_collector_);
+
+  std::vector<std::string> resolve_names = template_names;
+  resolve_names.insert(resolve_names.end(), parent_template_names.begin(),
+                       parent_template_names.end());
 
   for (size_t i = 0; i < parsed_types.size(); ++i) {
     const auto& [name, pattern_type] = parsed_types[i];
@@ -812,7 +817,7 @@ std::optional<TypeId> SemanticAnalyzer::InstantiateType(
 
     auto concrete_type = type_context_.GetParsedTypeFromId(*type_id);
 
-    if (!resolver.Resolve(pattern_type, concrete_type, template_names,
+    if (!resolver.Resolve(pattern_type, concrete_type, resolve_names,
                           bindings)) {
       LOG(ERROR) << "Failed to resolve bindings for: " << symbol_name
                  << " concrete: " << concrete_type
@@ -864,17 +869,27 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
         arg_results.insert(arg_results.begin(), ArgumentResult{callee_result});
       }
 
+      std::vector<std::string> parent_template_names;
+      if (symbol->parent_type_id) {
+        const auto* parent_type =
+            type_context_.GetTypeInfo<StructType>(*symbol->parent_type_id);
+        CHECK(parent_type) << "TypeId: " << *symbol->parent_type_id
+                           << " does not resolve to a StructType";
+        parent_template_names = parent_type->declaration.template_names;
+      }
+
       callable_type_id = InstantiateType(
           symbol->declaration.arguments, arg_results,
-          symbol->declaration.template_names, *callee_result.symbol->symbol_id,
-          "fn " + symbol->declaration.name);
+          symbol->declaration.template_names, std::move(parent_template_names),
+          *callee_result.symbol->symbol_id, "fn " + symbol->declaration.name);
     }
 
     else if (const auto* symbol = type_context_.GetSymbol<StructSymbol>(
                  *callee_result.symbol->symbol_id)) {
       callable_type_id = InstantiateType(
           symbol->declaration.fields, argument_results,
-          symbol->declaration.template_names, *callee_result.symbol->symbol_id,
+          symbol->declaration.template_names, /*parent_template_names=*/{},
+          *callee_result.symbol->symbol_id,
           "struct " + symbol->declaration.name);
     }
 

@@ -64,6 +64,7 @@ class SemanticAnalyzer {
       const std::vector<std::pair<std::string, ParsedType>>& parsed_types,
       const std::vector<ArgumentResult>& arugment_results,
       const std::vector<std::string>& template_names,
+      const std::vector<std::string>& parent_template_names,
       SymbolId symbol_id,
       std::string_view symbol_name);
 

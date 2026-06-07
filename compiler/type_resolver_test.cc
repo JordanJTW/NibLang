@@ -129,14 +129,34 @@ TEST_F(TypeResolverTest, FunctionReturnMatch) {
   EXPECT_THAT(*p.type, IsType("Array"));
 }
 
-TEST_F(TypeResolverTest, FunctionMultiMatch) {
-  // Pattern: fn (Type) -> U, Concrete: fn (i32) -> String
-  auto pattern = MakeFunction({{"Type"}}, {"U"});
+TEST_F(TypeResolverTest, FunctionWithTemplateArgAndReturn) {
+  // Pattern: fn (T)->RT, Concrete: fn (i32)->String;
+  auto pattern = MakeFunction({{"T"}}, {"RT"});
   auto concrete = MakeFunction({{"i32"}}, {"String"});
 
-  EXPECT_TRUE(type_resolver.Resolve(pattern, concrete, {"U"}, bindings));
+  EXPECT_TRUE(type_resolver.Resolve(pattern, concrete, {"T", "RT"}, bindings));
+  EXPECT_THAT(bindings["T"], IsType("i32"));
+  EXPECT_THAT(bindings["RT"], IsType("String"));
+}
 
-  LOG(INFO) << "type: " << bindings["U"];
+TEST_F(TypeResolverTest, OptionalWithNil) {
+  // Pattern: T?, Concrete: Nil;
+  auto pattern = MakeOptional({"T"});
+  auto concrete = ParsedType{"Nil"};
+
+  EXPECT_TRUE(type_resolver.Resolve(pattern, concrete, {"T"}, bindings));
+  EXPECT_THAT(bindings["T"], IsType("Nil"));
+}
+
+// It is valid to make the type more specific i.e. narrowed from Optional.
+// This allows for optional parameters to functions.
+TEST_F(TypeResolverTest, OptionalWithNonOptionalType) {
+  // Pattern: T?, Concrete: String;
+  auto pattern = MakeOptional({"T"});
+  auto concrete = ParsedType{"String"};
+
+  EXPECT_TRUE(type_resolver.Resolve(pattern, concrete, {"T"}, bindings));
+  EXPECT_THAT(bindings["T"], IsType("String"));
 }
 
 }  // namespace

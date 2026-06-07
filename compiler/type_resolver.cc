@@ -45,6 +45,14 @@ bool TypeResolver::Resolve(const ParsedType& pattern_type,
     }
   }
 
+  // Allows binding concrete-types to an optional pattern T? -- handles Nil.
+  if (std::holds_alternative<ParsedOptionalType>(pattern_type.type) &&
+      !std::holds_alternative<ParsedOptionalType>(concrete_type.type)) {
+    return Resolve(
+        *std::get<ParsedOptionalType>(pattern_type.type).wrapped_type,
+        concrete_type, template_names, bindings);
+  }
+
   if (pattern_type.type.index() != concrete_type.type.index())
     return false;
 
@@ -53,7 +61,6 @@ bool TypeResolver::Resolve(const ParsedType& pattern_type,
           [&](const std::string& p, const std::string& c) { return p == c; },
           [&](const ParsedUnionType& p, const ParsedUnionType& c) {
             if (p.names.size() != c.names.size()) {
-              LOG(ERROR) << __FILE__ << ": " << __LINE__;
               return false;
             }
             for (size_t i = 0; i < p.names.size(); ++i) {

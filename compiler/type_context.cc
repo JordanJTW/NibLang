@@ -172,7 +172,7 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
     return binding;
   }
 
-  LOG(INFO) << "Failed to declare funciton type";
+  LOG(INFO) << "Failed to declare function type";
   return std::nullopt;
 }
 
@@ -188,7 +188,9 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
                     {"f32", LiteralType::f32},
                     {"bool", LiteralType::Bool},
                     {"any", LiteralType::Any},
-                    {"Nil", LiteralType::Nil},
+                    {"never", LiteralType::Never},
+                    // Nil is used with Optional types (T?), NEVER standalone
+                    // {"Nil", LiteralType::Nil},
                 };
 
             // Fast path for built-in type names which are used frequently.
@@ -333,6 +335,12 @@ TypeId TypeContext::GetUnionOf(const std::vector<TypeId>& types) {
     }
   }
 
+  // Never represents an impossible value, so T | Never simplifies to T.
+  normalized_types.erase(LiteralType::Never);
+  // If all members collapsed away, the result is Never.
+  if (normalized_types.empty())
+    return LiteralType::Never;
+
   // If after normalization the union is just a single type, then return it.
   if (normalized_types.size() == 1) {
     return *normalized_types.begin();
@@ -412,7 +420,10 @@ std::optional<TypeId> TypeContext::DeclareFunctionType(
 }
 
 bool TypeContext::IsTypeSubsetOf(TypeId sub_type_id, TypeId super_type_id) {
-  if (sub_type_id == super_type_id || super_type_id == LiteralType::Any)
+  if (sub_type_id == super_type_id)
+    return true;
+
+  if (sub_type_id == LiteralType::Never || super_type_id == LiteralType::Any)
     return true;
 
   const TypeInfo& sub_type = type_lookup_.at(sub_type_id);
@@ -561,6 +572,7 @@ std::string TypeContext::GetNameFromTypeId(TypeId type_id) const {
                            {LiteralType::Codepoint, "Codepoint"},
                            {LiteralType::Bool, "bool"},
                            {LiteralType::Any, "any"},
+                           {LiteralType::Never, "never"},
                            {LiteralType::Nil, "Nil"},
                        };
                    return kBuiltInTypeNames.at(type_id);

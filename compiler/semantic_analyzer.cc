@@ -255,6 +255,9 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                       return std::nullopt;
                     },
                     [&](Identifier& ident) -> SemanticAnalyzer::Result {
+                      if (ident.name == "Nil")
+                        return ExpressionResult(TypeContext::Nil);
+
                       // Search within the current function scope for value.
                       auto binding = scope_manager_.FindBindingFor(
                           ident.name, ScopeManager::Function);
@@ -289,7 +292,6 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                           ident.name, ScopeManager::All);
                       if (binding && (binding->kind == NamedBinding::Function ||
                                       binding->kind == NamedBinding::Struct)) {
-                        LOG(INFO) << "Binding: " << *binding;
                         ident.resolved = ResolvedIdentifier{*binding};
                         return ExpressionResult(*binding);
                       }

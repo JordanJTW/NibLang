@@ -75,6 +75,7 @@ class TypeContext {
     Codepoint,
     Bool,
     Any,
+    Never,
     Nil,
     kCount
   };

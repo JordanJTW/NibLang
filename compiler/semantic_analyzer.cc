@@ -97,10 +97,9 @@ void SemanticAnalyzer::Check(Block& block) {
       if (!realized_function.delcaration.body)
         continue;
 
-      ScopeId current_scope_id = scope_manager_.GetActiveScopeId();
-      scope_manager_.SetActiveScopeId(realized_function.scope_id);
-      Check(*realized_function.delcaration.body);
-      scope_manager_.SetActiveScopeId(current_scope_id);
+      scope_manager_.WithScope(realized_function.scope_id, [&]() {
+        Check(*realized_function.delcaration.body);
+      });
     }
 
     function_bodies = type_context_.GetRealizedFunctions();
@@ -790,16 +789,21 @@ void SemanticAnalyzer::TypeCheckCallArguments(
 std::optional<TypeId> SemanticAnalyzer::InstantiateType(
     const std::vector<std::pair<std::string, ParsedType>>& parsed_types,
     const std::vector<ArgumentResult>& argument_results,
-    const std::vector<std::string>& template_names,
-    const std::vector<std::string>& parent_template_names,
+    const std::vector<TemplateArgument>& template_arguments,
+    const std::vector<TemplateArgument>& self_template_arguments,
     SymbolId symbol_id,
-    std::string_view symbol_name) {
+    std::string_view symbol_name,
+    std::unordered_map<std::string, TypeId> default_template_type_ids) {
   TypeResolver::Bindings bindings;
   TypeResolver resolver(type_context_, error_collector_);
 
-  std::vector<std::string> resolve_names = template_names;
-  resolve_names.insert(resolve_names.end(), parent_template_names.begin(),
-                       parent_template_names.end());
+  std::vector<std::string> template_names;
+  {
+    template_names.reserve(template_arguments.size());
+    std::transform(template_arguments.begin(), template_arguments.end(),
+                   std::back_inserter(template_names),
+                   [](auto& arg) { return arg.name; });
+  }
 
   for (size_t i = 0; i < parsed_types.size(); ++i) {
     const auto& [name, pattern_type] = parsed_types[i];
@@ -819,23 +823,35 @@ std::optional<TypeId> SemanticAnalyzer::InstantiateType(
 
     auto concrete_type = type_context_.GetParsedTypeFromId(*type_id);
 
-    if (!resolver.Resolve(pattern_type, concrete_type, resolve_names,
+    if (!resolver.Resolve(pattern_type, concrete_type, template_names,
                           bindings)) {
-      LOG(ERROR) << "Failed to resolve bindings for: " << symbol_name
-                 << " concrete: " << concrete_type
-                 << " pattern: " << pattern_type;
-      return std::nullopt;
+      LOG(WARNING) << "Failed to resolve bindings for: " << symbol_name
+                   << " concrete: " << concrete_type
+                   << " pattern: " << pattern_type;
     }
   }
 
+  for (const auto& [name, type_id] : default_template_type_ids) {
+    LOG(INFO) << name << " = " << type_context_.GetNameFromTypeId(type_id);
+  }
+
   std::vector<TypeId> argument_type_ids;
-  argument_type_ids.reserve(template_names.size());
-  for (size_t i = 0; i < template_names.size(); ++i) {
-    const auto& inferred_type = bindings[template_names[i]];
-    if (auto type_id = type_context_.GetTypeIdFor(inferred_type)) {
-      argument_type_ids.push_back(type_id.value());
+  argument_type_ids.reserve(self_template_arguments.size());
+  for (size_t i = 0; i < self_template_arguments.size(); ++i) {
+    if (bindings.contains(self_template_arguments[i].name)) {
+      const auto& inferred_type = bindings[self_template_arguments[i].name];
+      if (auto type_id = type_context_.GetTypeIdFor(inferred_type)) {
+        argument_type_ids.push_back(type_id.value());
+      } else {
+        LOG(ERROR) << "Template argument has unknown TypeId: "
+                   << self_template_arguments[i].name;
+        return std::nullopt;
+      }
+    } else if (default_template_type_ids.contains(template_names[i])) {
+      argument_type_ids.push_back(default_template_type_ids[template_names[i]]);
     } else {
-      LOG(ERROR) << "Failed to parse Type!";
+      LOG(ERROR) << "Failed to infer template argument with no default: "
+                 << self_template_arguments[i].name;
       return std::nullopt;
     }
   }
@@ -871,28 +887,38 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
         arg_results.insert(arg_results.begin(), ArgumentResult{callee_result});
       }
 
-      std::vector<std::string> parent_template_names;
+      std::vector<TemplateArgument> template_arguments =
+          symbol->declaration.template_arguments;
+
+      // If this function has a parent i.e. is a method, then we must take in to
+      // account the parent's template arguments as well for template resolution
       if (symbol->parent_type_id) {
         const auto* parent_type =
             type_context_.GetTypeInfo<StructType>(*symbol->parent_type_id);
         CHECK(parent_type) << "TypeId: " << *symbol->parent_type_id
                            << " does not resolve to a StructType";
-        parent_template_names = parent_type->declaration.template_names;
+        template_arguments.insert(
+            template_arguments.end(),
+            parent_type->declaration.template_arguments.begin(),
+            parent_type->declaration.template_arguments.end());
       }
 
       callable_type_id = InstantiateType(
           symbol->declaration.arguments, arg_results,
-          symbol->declaration.template_names, std::move(parent_template_names),
-          *callee_result.symbol->symbol_id, "fn " + symbol->declaration.name);
+          std::move(template_arguments), symbol->declaration.template_arguments,
+          *callee_result.symbol->symbol_id, "fn " + symbol->declaration.name,
+          symbol->default_template_type_ids);
     }
 
     else if (const auto* symbol = type_context_.GetSymbol<StructSymbol>(
                  *callee_result.symbol->symbol_id)) {
-      callable_type_id = InstantiateType(
-          symbol->declaration.fields, argument_results,
-          symbol->declaration.template_names, /*parent_template_names=*/{},
-          *callee_result.symbol->symbol_id,
-          "struct " + symbol->declaration.name);
+      callable_type_id =
+          InstantiateType(symbol->declaration.fields, argument_results,
+                          symbol->declaration.template_arguments,
+                          symbol->declaration.template_arguments,
+                          *callee_result.symbol->symbol_id,
+                          "struct " + symbol->declaration.name,
+                          /*default_template_type_ids=*/{});
     }
 
     else {

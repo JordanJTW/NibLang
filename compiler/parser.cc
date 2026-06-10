@@ -971,18 +971,26 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
   Token struct_name = current_token_;
   AdvanceToken();  // consume struct name
 
-  std::vector<std::string> template_names;
+  std::vector<TemplateArgument> template_arguments;
   if (current_token_.kind == TokenKind::kSquareOpen) {
     AdvanceToken();  // consume [
 
     while (true) {
-      std::optional<Token> template_name =
-          ExpectNextToken(TokenKind::kIdent, "expected template name");
+      std::optional<Token> template_argument_token =
+          ExpectNextToken(TokenKind::kIdent, "expected template argument");
 
-      if (!template_name)
+      if (!template_argument_token)
         return std::nullopt;
 
-      template_names.push_back(template_name->value);
+      std::optional<ParsedType> default_type;
+      if (current_token_.kind == TokenKind::kAssign) {
+        AdvanceToken();  // consume =
+        // TODO: Should errors with `default_type` be handled explicitly here
+        default_type = ParseType();
+      }
+
+      template_arguments.emplace_back(template_argument_token->value,
+                                      default_type);
 
       if (current_token_.kind == TokenKind::kComma) {
         AdvanceToken();  // consume ,
@@ -1007,7 +1015,7 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
   StructDeclaration struct_decl;
   struct_decl.name = struct_name.value;
   struct_decl.is_extern = is_extern == ExternStruct::YES;
-  struct_decl.template_names = std::move(template_names);
+  struct_decl.template_arguments = std::move(template_arguments);
 
   AdvanceToken();  // consume '{'
   while (current_token_.kind != TokenKind::kCloseBrace &&
@@ -1079,7 +1087,7 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
   ExpectNextToken(TokenKind::kKwFn, "expected 'fn'");
 
   std::string function_name;
-  std::vector<std::string> template_names;
+  std::vector<TemplateArgument> template_arguments;
   if (function_kind == FunctionKind::Anonymous) {
     // Perform single-token deletion recovery to try to keep parsing happy.
     if (current_token_.kind == TokenKind::kIdent) {
@@ -1106,7 +1114,14 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
         if (!template_param)
           return std::nullopt;
 
-        template_names.push_back(template_param->value);
+        std::optional<ParsedType> default_type;
+        if (current_token_.kind == TokenKind::kAssign) {
+          AdvanceToken();  // consume =
+          // TODO: Should errors with `default_type` be handled explicitly here
+          default_type = ParseType();
+        }
+
+        template_arguments.emplace_back(template_param->value, default_type);
 
         if (current_token_.kind == TokenKind::kComma) {
           AdvanceToken();  // consume ,
@@ -1207,8 +1222,8 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
                          std::move(arguments),
                          std::move(return_type.value()),
                          function_kind,
+                         std::move(template_arguments),
                          is_variadic,
-                         std::move(template_names),
                          Metadata::fromTokens(start_of_arguments_token,
                                               missing_return_type_token)};
 

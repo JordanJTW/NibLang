@@ -41,6 +41,7 @@ struct FunctionSymbol {
   FunctionDeclaration& declaration;
   std::optional<TypeId> parent_type_id;
   ScopeId scope_id;
+  std::unordered_map<std::string, TypeId> default_template_type_ids;
 
   InstanceCache instances;
 };
@@ -255,14 +256,19 @@ struct ResolvedFunction {
   std::vector<NamedBinding> capture_arguments;
 };
 
+struct TemplateArgument {
+  std::string name;
+  std::optional<ParsedType> default_type;
+};
+
 struct FunctionDeclaration {
   // Function name is expected to be empty for `Anonymous` functions.
   std::string name;
   std::vector<std::pair<std::string, ParsedType>> arguments;
   ParsedType return_type;
   FunctionKind function_kind;
+  std::vector<TemplateArgument> template_arguments;
   bool is_variadic = false;
-  std::vector<std::string> template_names;
 
   Metadata argument_range;
 
@@ -330,12 +336,12 @@ struct ContinueStatement {};
 
 struct StructDeclaration {
   std::string name;
-  std::vector<std::string> template_names;
+  std::vector<TemplateArgument> template_arguments;
   std::vector<std::pair<std::string, ParsedType>> fields;
   std::vector<std::pair<std::string, FunctionDeclaration>> methods;
   bool is_extern;
 
-  bool IsTemplate() const { return !template_names.empty(); }
+  bool IsTemplate() const { return !template_arguments.empty(); }
 };
 
 struct AssignStatement {

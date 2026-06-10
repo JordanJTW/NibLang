@@ -142,7 +142,7 @@ TEST_F(TypeContextTest, DeclareStructSymbol_NoTemplate) {
 TEST_F(TypeContextTest, DeclareStructSymbol_WithTemplate) {
   StructDeclaration declaration = {
       .name = "TestStruct",
-      .template_names = {"T"},
+      .template_arguments = {{"T"}},
   };
 
   auto symbol = type_context.DeclareStructSymbol("TestStruct", declaration);
@@ -198,7 +198,7 @@ TEST_F(TypeContextTest, DefineStructType_NoTemplate) {
 TEST_F(TypeContextTest, TemplateStruct_GetTemplateOf) {
   StructDeclaration declaration;
   declaration.name = "TestStruct";
-  declaration.template_names = {"T"};
+  declaration.template_arguments = {{"T"}};
   declaration.fields = {{"field1", ParsedType{"T"}}};
   declaration.is_extern = false;
 
@@ -234,7 +234,7 @@ TEST_F(TypeContextTest, TemplateFunction_GetTemplateOf) {
   declaration.arguments = {{"arg1", ParsedType{"Type"}}};
   declaration.return_type = ParsedType{"Return"};
   declaration.function_kind = FunctionKind::Free;
-  declaration.template_names = {"Type", "Return"};
+  declaration.template_arguments = {{"Type"}, {"Return"}};
   declaration.body = std::make_unique<Block>();
 
   auto binding = type_context.DefineFunction(declaration, &error_collector);
@@ -285,8 +285,7 @@ TEST_F(TypeContextTest, StructDeclaration_WithMethod) {
 
   ASSERT_TRUE(method_binding.has_value());
   EXPECT_EQ(method_binding->kind, NamedBinding::Function);
-  // The binding uses the fully qualified name (differs from the scoped name).
-  EXPECT_EQ(method_binding->name, "TestStruct_test_method");
+  EXPECT_EQ(method_binding->name, "test_method");
   EXPECT_TRUE(method_binding->realized_type_id.has_value());
 }
 
@@ -460,6 +459,32 @@ TEST_F(TypeContextTest, GetFunctionDeclaration) {
   EXPECT_EQ(retrieved_fn.name, "test_fn");
   EXPECT_EQ(retrieved_fn.arguments.size(), 1);
   EXPECT_EQ(retrieved_fn.arguments[0].first, "arg1");
+}
+
+TEST_F(TypeContextTest, GetTypeIdFor_Never) {
+  std::optional<TypeId> type_id =
+      type_context.GetTypeIdFor(ParsedType{"never"});
+  ASSERT_TRUE(type_id.has_value());
+  EXPECT_EQ(type_id, TypeContext::Never);
+
+  std::optional<TypeId> union_type_id = type_context.GetTypeIdFor(
+      ParsedType{ParsedUnionType{{{"bool"}, {"i32"}}}});
+  ASSERT_TRUE(union_type_id.has_value());
+
+  std::optional<TypeId> union_type_id_with_never = type_context.GetTypeIdFor(
+      ParsedType{ParsedUnionType{{{"bool"}, {"i32"}, {"never"}}}});
+  ASSERT_TRUE(union_type_id_with_never.has_value());
+
+  EXPECT_EQ(union_type_id, union_type_id_with_never);
+}
+
+TEST_F(TypeContextTest, GetTypeIdFor_Nil) {
+  std::optional<TypeId> type_id = type_context.GetTypeIdFor(ParsedType{"Nil"});
+  EXPECT_FALSE(type_id.has_value());
+
+  std::optional<TypeId> union_type_id = type_context.GetTypeIdFor(
+      ParsedType{ParsedUnionType{{{"bool"}, {"Nil"}}}});
+  EXPECT_FALSE(union_type_id.has_value());
 }
 
 // TEST_F(TypeContextTest, GetCurrentFunction) {

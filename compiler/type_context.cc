@@ -149,11 +149,25 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
 
   FunctionSymbol symbol{fn, self_id, scope_manager_.GetActiveScopeId()};
   SymbolId symbol_id = next_symbol_id_++;
-  symbol_table_.emplace(symbol_id, std::move(symbol));
 
   fn.resolved = ResolvedFunction{};
 
-  if (!fn.template_names.empty()) {
+  if (!fn.template_arguments.empty()) {
+    for (const auto& argument : fn.template_arguments) {
+      if (!argument.default_type.has_value())
+        continue;
+
+      auto type_id = GetTypeIdFor(*argument.default_type);
+      if (!type_id.has_value() && error_collector) {
+        error_collector->Add("unknown type provided as template argument",
+                             argument.default_type->metadata);
+        continue;
+      }
+
+      symbol.default_template_type_ids[argument.name] = *type_id;
+    }
+    symbol_table_.emplace(symbol_id, std::move(symbol));
+
     function_lookup_[call_idx.value()] = &fn;
     NamedBinding binding = scope_manager_.InsertNameIntoScope(
         fn.name, NamedBinding::Function,
@@ -164,6 +178,7 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
 
   if (std::optional<TypeId> type_id =
           DeclareFunctionType(fn, error_collector, self_id)) {
+    symbol_table_.emplace(symbol_id, std::move(symbol));
     NamedBinding binding = scope_manager_.InsertNameIntoScope(
         fn.name, NamedBinding::Function, type_id.value(), symbol_id,
         call_idx.value());
@@ -651,40 +666,35 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
     LOG(INFO) << "New Struct.TemplateOf(" << symbol->declaration.name << ") + ["
               << ss.str() << "] => " << self_id;
 
-    const auto& template_names = symbol->declaration.template_names;
+    const auto& template_arguments = symbol->declaration.template_arguments;
 
-    if (argument_type_ids.size() != template_names.size()) {
+    if (argument_type_ids.size() < template_arguments.size()) {
       error_collector.Add(
           "Template struct " + symbol->declaration.name + " requires " +
-              std::to_string(template_names.size()) +
+              std::to_string(template_arguments.size()) +
               " template arguments but only " +
               std::to_string(argument_type_ids.size()) + " were provided",
           {});
       return std::nullopt;
     }
 
-    ScopeId original_scope_id = scope_manager_.GetActiveScopeId();
-    scope_manager_.SetActiveScopeId(symbol->scope_id);
+    return scope_manager_.WithScope(
+        symbol->scope_id, [&]() -> std::optional<TypeId> {
+          // TODO: Ensure scope stacking does not cause bugs since unrelated
+          //       templates would inherit this scope environment if a type is
+          //       processed later
+          return scope_manager_.NewScope(
+              ScopeManager::TemplateScope, "struct " + symbol->declaration.name,
+              [&]() {
+                for (size_t i = 0; i < template_arguments.size(); ++i)
+                  scope_manager_.DeclareTemplateBinding(
+                      template_arguments[i].name, argument_type_ids[i]);
 
-    // TODO: Ensure scope stacking does not cause bugs since unrelated templates
-    //       would inherrit this scope environment if a type is processed later
-    scope_manager_.EnterScope(ScopeManager::TemplateScope,
-                              "struct " + symbol->declaration.name);
-    std::unordered_map<std::string, TypeId> bindings;
-    for (size_t i = 0; i < template_names.size(); ++i) {
-      scope_manager_.InsertNameIntoScope(
-          template_names[i], NamedBinding::Kind::Template, argument_type_ids[i],
-          /*symbol=*/std::nullopt);
-      bindings[template_names[i]] = argument_type_ids[i];
-    }
-
-    DefineStructType(self_id, symbol->declaration, argument_type_ids,
-                     error_collector);
-
-    scope_manager_.ExitScope();
-    scope_manager_.SetActiveScopeId(original_scope_id);
-
-    return self_id;
+                DefineStructType(self_id, symbol->declaration,
+                                 argument_type_ids, error_collector);
+                return self_id;
+              });
+        });
   }
 
   if (FunctionSymbol* symbol = std::get_if<FunctionSymbol>(&it->second)) {
@@ -693,46 +703,44 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
       return it->second;
     }
 
-    const auto& template_names = symbol->declaration.template_names;
+    const auto& template_arguments = symbol->declaration.template_arguments;
 
-    if (argument_type_ids.size() != template_names.size()) {
+    if (argument_type_ids.size() < template_arguments.size()) {
       error_collector.Add(
           "Template fn " + symbol->declaration.name + " requires " +
-              std::to_string(template_names.size()) +
+              std::to_string(template_arguments.size()) +
               " template arguments but only " +
               std::to_string(argument_type_ids.size()) + " were provided",
           {});
       return std::nullopt;
     }
 
-    ScopeId original_scope_id = scope_manager_.GetActiveScopeId();
-    scope_manager_.SetActiveScopeId(symbol->scope_id);
+    return scope_manager_.WithScope(
+        symbol->scope_id, [&]() -> std::optional<TypeId> {
+          // TODO: Ensure scope stacking does not cause bugs since unrelated
+          //       templates would inherit this scope environment if a type is
+          //       processed later
+          // TODO: Handle `self_id` better. Define it early to prevent cycles.
+          auto self_id = scope_manager_.NewScope(
+              ScopeManager::TemplateScope, "fn " + symbol->declaration.name,
+              [&]() {
+                for (size_t i = 0; i < template_arguments.size(); ++i)
+                  scope_manager_.DeclareTemplateBinding(
+                      template_arguments[i].name, argument_type_ids[i]);
 
-    // TODO: Ensure scope stacking does not cause bugs since unrelated templates
-    //       would inherrit this scope environment if a type is processed later
-    scope_manager_.EnterScope(ScopeManager::TemplateScope,
-                              "fn " + symbol->declaration.name);
-    for (size_t i = 0; i < template_names.size(); ++i) {
-      scope_manager_.InsertNameIntoScope(
-          template_names[i], NamedBinding::Kind::Template, argument_type_ids[i],
-          /*symbol=*/std::nullopt);
-    }
+                return DeclareFunctionType(symbol->declaration,
+                                           &error_collector,
+                                           symbol->parent_type_id);
+              });
 
-    // TODO: Handle `self_id` better. Define it early to prevent cycles.
-    std::optional<TypeId> self_id = DeclareFunctionType(
-        symbol->declaration, &error_collector, symbol->parent_type_id);
+          if (self_id) {
+            symbol->instances[argument_type_ids] = *self_id;
 
-    if (self_id) {
-      symbol->instances[argument_type_ids] = *self_id;
-
-      LOG(INFO) << "New Function.TemplateOf(" << symbol->declaration.name
-                << ") + [" << ss.str() << "] => " << *self_id;
-    }
-
-    scope_manager_.ExitScope();
-    scope_manager_.SetActiveScopeId(original_scope_id);
-
-    return self_id;
+            LOG(INFO) << "New Function.TemplateOf(" << symbol->declaration.name
+                      << ") + [" << ss.str() << "] => " << *self_id;
+          }
+          return self_id;
+        });
   }
 
   NOTREACHED() << "Do not know how to realize SymbolId: " << symbol_id;

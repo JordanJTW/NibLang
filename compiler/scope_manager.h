@@ -29,9 +29,8 @@ class ScopeManager {
   // Exits the current scope, setting the active scope to its parent scope.
   void ExitScope();
 
-  // Allows getting the current scope and restoring to that active scope ID.
+  // Allows getting the current scope ID (allowing it to be restored).
   ScopeId GetActiveScopeId() const { return active_scope_id_; }
-  void SetActiveScopeId(ScopeId scope_id);
 
   // Looks up a symbol by name within the given scope. By default, searches the
   // current scope and all parent scopes. If `scope` is Function, it will search
@@ -60,8 +59,38 @@ class ScopeManager {
       std::optional<SymbolId> symbol_id,
       std::optional<NamedBinding::Idx> idx = std::nullopt);
 
+  template <typename Fn>
+  auto WithScope(ScopeId scope_id, Fn&& block) {
+    using Result = std::invoke_result_t<Fn>; 
+
+    ScopeId current_scope_id = GetActiveScopeId(); 
+    SetActiveScopeId(scope_id); 
+
+    if constexpr (std::is_void_v<Result>) {
+      block();
+      SetActiveScopeId(current_scope_id);
+    } else {
+      Result result = block();
+      SetActiveScopeId(current_scope_id);
+      return result;
+    }
+  }
+
+  template <typename Fn>
+  auto NewScope(ScopeType type, std::string_view name, Fn&& block) {
+    using Result = std::invoke_result_t<Fn>;
+
+    EnterScope(type, name);
+    Result result = block();
+    ExitScope();
+    return result;
+  }
+
  private:
   friend std::ostream& operator<<(std::ostream&, const ScopeManager&);
+
+  // Restores a previous `scope_id` as the currently active scope.
+  void SetActiveScopeId(ScopeId scope_id);
 
   struct Scope {
     ScopeType scope_type;

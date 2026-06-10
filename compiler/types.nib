@@ -1,220 +1,219 @@
-extern struct String{
-  fn length(self: String) -> i32;
-  static fn valueOf(value: any) -> String;
-  fn charAt(s: String, idx: i32) -> Codepoint;
-}
+@import "std/types.nib"
 
-// struct Box[A] {
-//   value: A;
+// // struct Box[A] {
+// //   value: A;
 
-//   fn foo(self: Box[A]) -> A {
-//     return self.value;
-//   }
-// }
+// //   fn foo(self: Box[A]) -> A {
+// //     return self.value;
+// //   }
+// // }
 
-extern struct Array[Type] {
-  static fn init(...) -> Array[Type];
-  static fn withSize(size: i32) -> Array[Type];
-  fn get(self: Array[Type], idx: i32) -> Type;
-  fn set(self: Array[Type], idx: i32, value: Type) -> Type;
-  fn length(self: Array[Type]) -> i32;
+// // let x = Array.of(i32).withSize(16);
+// // let y = Array.of(Array[i32]).withSize(24);
 
-  fn map[Type, U](self: Array[Type], foo: fn(Type)->U) -> Array[U] {
-    let values = Array.of(U).withSize(self.length());
-    let i=0;
-    while (i < self.length()) {
-      values.set(i, foo(self.get(i)));
-      i = i + 1;
-    }
-    return values;
-  }
-}
+// // y.set(0, x);
+// // return y;
 
-// let x = Array.of(i32).withSize(16);
-// let y = Array.of(Array[i32]).withSize(24);
+// // struct Foo {
+// //   fn bar(self: Foo) -> Foo {
+// //     return Foo();
+// //   }
+// // }
 
-// y.set(0, x);
-// return y;
-
-// struct Foo {
-//   fn bar(self: Foo) -> Foo {
-//     return Foo();
-//   }
-// }
-
-// let x = Foo();
-// x.bar();
-// return x;
+// // let x = Foo();
+// // x.bar();
+// // return x;
 
 
 // extern fn log(...);
 
-// let box = Box(Box((5)));
-// let box2 = Box.of(bool)(true);
-// // let box3 = Box("hello");
+// // let box = Box(Box((5)));
+// // let box2 = Box.of(bool)(true);
+// // // let box3 = Box("hello");
 
-// let x = Array.of(Box[i32]).withSize(2);
-// x.set(0, Box(5));
+// // let x = Array.of(Box[i32]).withSize(2);
+// // x.set(0, Box(5));
 
 
-// struct Foo[J] {
-//   bar: fn()->Box[J];
+// // struct Foo[J] {
+// //   bar: fn()->Box[J];
 
-//   fn gar(self: Foo[J]) -> J {
-//     return self.bar().foo(); 
+// //   fn gar(self: Foo[J]) -> J {
+// //     return self.bar().foo(); 
+// //   }
+// // }
+
+// // let y= Foo(fn() -> Box[Array[i32]] {
+// //   return Box(Array.of(i32).init(666));
+// // });
+
+// let sortable = Array.of(i32).init(10, 66, 369, 109, 3087, 2, 4, 21, 42);
+// let sortable2 = sortable.map(fn (x: i32) -> String { return String.valueOf(x); });
+// sort(sortable, fn(v1: i32, v2: i32) -> i32 { return v1 - v2; });
+// sort(sortable2, fn(v1: String, v2: String) -> i32 { return v1.length() - v2.length(); });
+
+// let sortable3 = Array.of(String).init("A", "BB", "B", "Werthman", "Dr.", "Jordan","Rabbi", "CCC");
+// sort(sortable3, fn(v1: String, v2: String) -> i32 { return v1.charAt(0) - v2.charAt(0); });// v1.length() - v2.length(); });
+// return Array.of(Array[any]).init(sortable, sortable2, sortable3);
+
+// fn sort[T](array: Array[T], compare: fn(T, T) -> i32) {
+//   if (array.length() > 1) {
+//     quicksort(array, 0, array.length() - 1, compare);
 //   }
 // }
 
-// let y= Foo(fn() -> Box[Array[i32]] {
-//   return Box(Array.of(i32).init(666));
-// });
+// fn quicksort[T](
+//   array: Array[T],
+//   low: i32,
+//   high: i32,
+//   compare: fn(T, T) -> i32
+// ) {
+//   if (low < high) {
+//     let pivot_index = partition(array, low, high, compare);
 
-let sortable = Array.of(i32).init(10, 66, 369, 109, 3087, 2, 4, 21, 42);
-let sortable2 = sortable.map(fn (x: i32) -> String { return String.valueOf(x); });
-sort(sortable, fn(v1: i32, v2: i32) -> i32 { return v1 - v2; });
-sort(sortable2, fn(v1: String, v2: String) -> i32 { return v1.length() - v2.length(); });
+//     quicksort(array, low, pivot_index - 1, compare);
+//     quicksort(array, pivot_index + 1, high, compare);
+//   }
+// }
 
-let sortable3 = Array.of(String).init("A", "BB", "B", "Werthman", "Dr.", "Jordan","Rabbi", "CCC");
-sort(sortable3, fn(v1: String, v2: String) -> i32 { return v1.charAt(0) - v2.charAt(0); });// v1.length() - v2.length(); });
-return Array.of(Array[any]).init(sortable, sortable2, sortable3);
+// fn partition[T](
+//   array: Array[T],
+//   low: i32,
+//   high: i32,
+//   compare: fn(T, T) -> i32
+// ) -> i32 {
+//   let pivot = array.get(high);
+//   let i = low;
 
-
-fn sort[T](array: Array[T], compare: fn(T, T) -> i32) {
-  if (array.length() > 1) {
-    quicksort(array, 0, array.length() - 1, compare);
-  }
-}
-
-fn quicksort[T](
-  array: Array[T],
-  low: i32,
-  high: i32,
-  compare: fn(T, T) -> i32
-) {
-  if (low < high) {
-    let pivot_index = partition(array, low, high, compare);
-
-    quicksort(array, low, pivot_index - 1, compare);
-    quicksort(array, pivot_index + 1, high, compare);
-  }
-}
-
-fn partition[T](
-  array: Array[T],
-  low: i32,
-  high: i32,
-  compare: fn(T, T) -> i32
-) -> i32 {
-  let pivot = array.get(high);
-  let i = low;
-
-  let j = low;
-  while (j < high) {
-    if (compare(array.get(j), pivot) <= 0) {
-      swap(array, i, j);
-      i = i + 1;
-    }
-
-    j = j + 1;
-  }
-
-  swap(array, i, high);
-
-  return i;
-}
-
-fn swap[T](array: Array[T], a: i32, b: i32) {
-  let tmp = array.get(a);
-  array.set(a, array.get(b));
-  array.set(b, tmp);
-}
-
-// log(box2.foo());
-//return  y.gar().get(0) + x.get(0).value;
-
-// struct Foo {
-//   bar: Foo?;
-//   tar: String?;
-
-//   fn far(self: Foo) -> Foo {
-//     if (self.bar != Nil) {
-//       return self.bar;
+//   let j = low;
+//   while (j < high) {
+//     if (compare(array.get(j), pivot) <= 0) {
+//       swap(array, i, j);
+//       i = i + 1;
 //     }
-//     return Foo(Nil, Nil);
+
+//     j = j + 1;
 //   }
 
-//   fn gar(self: Foo) -> String {
-//     if (self.tar != Nil) {
-//       return self.tar;
-//     }
-//     return "World";
-//   }
+//   swap(array, i, high);
+
+//   return i;
 // }
 
-// let x = Foo(Foo(Foo(Nil, "Hello"), Nil), Nil);
-// return x.far().far().gar();
-
-// (2 + 2)();
-
-// fn foo(i: i32) {
-//   2 + i;
+// fn swap[T](array: Array[T], a: i32, b: i32) {
+//   let tmp = array.get(a);
+//   array.set(a, array.get(b));
+//   array.set(b, tmp);
 // }
 
-// foo(3);
+// // log(box2.foo());
+// //return  y.gar().get(0) + x.get(0).value;
 
-// struct Box[T] {
-//   value: T;
-// }
+// // struct Foo {
+// //   bar: Foo?;
+// //   tar: String?;
 
-// let x = Box[String]("hello");
-// return x.value;
+// //   fn far(self: Foo) -> Foo {
+// //     if (self.bar != Nil) {
+// //       return self.bar;
+// //     }
+// //     return Foo(Nil, Nil);
+// //   }
 
-// fn add(x: i32, y: i32) -> i32 {
-//   return x + y;
-// }
+// //   fn gar(self: Foo) -> String {
+// //     if (self.tar != Nil) {
+// //       return self.tar;
+// //     }
+// //     return "World";
+// //   }
+// // }
 
-// fn createDog() -> Dog {
-//   return Dog(42);
-// }
+// // let x = Foo(Foo(Foo(Nil, "Hello"), Nil), Nil);
+// // return x.far().far().gar();
 
-// struct Dog { foo: i32; }
+// // (2 + 2)();
 
-// let x = Dog(42);
-// return x.bark("hello");
+// // fn foo(i: i32) {
+// //   2 + i;
+// // }
 
-// struct Dog {
-//   foo: i32;
+// // foo(3);
 
-//   fn bark(self: Dog, str: String) -> i32 {
-//     let x: i32 = 0;
-//     while (x < str.length()) {
-//       x = x + 1;
-//     }
-//     return x + self.foo + self.bar();
-//   }
+// // struct Box[T] {
+// //   value: T;
+// // }
 
-//   fn bar(self: Dog) -> i32 {
-//     return 36;
-//   }
-// }
+// // let x = Box[String]("hello");
+// // return x.value;
 
-// // let x = 3 + add(4, 2);
-// // let y: i32 = 1 + x + "hello world".length();
+// // fn add(x: i32, y: i32) -> i32 {
+// //   return x + y;
+// // }
 
-// let dog: Dog = createDog();
-// return dog.bark("who let the dogs out");
+// // fn createDog() -> Dog {
+// //   return Dog(42);
+// // }
 
-// struct Box[T] {
-//   foo: T;
-// }
+// // struct Dog { foo: i32; }
 
-// fn access[T](box: Box[T]) -> T {
-//   return box.foo;
-// }
+// // let x = Dog(42);
+// // return x.bark("hello");
 
-// fn access2[T](box: Box[T])-> T {
-//   return access(box);
-// }
+// // struct Dog {
+// //   foo: i32;
 
-// let x = Box(32);
-// access2(x);
+// //   fn bark(self: Dog, str: String) -> i32 {
+// //     let x: i32 = 0;
+// //     while (x < str.length()) {
+// //       x = x + 1;
+// //     }
+// //     return x + self.foo + self.bar();
+// //   }
+
+// //   fn bar(self: Dog) -> i32 {
+// //     return 36;
+// //   }
+// // }
+
+// // // let x = 3 + add(4, 2);
+// // // let y: i32 = 1 + x + "hello world".length();
+
+// // let dog: Dog = createDog();
+// // return dog.bark("who let the dogs out");
+
+// // struct Box[T] {
+// //   foo: T;
+// // }
+
+// // fn access[T](box: Box[T]) -> T {
+// //   return box.foo;
+// // }
+
+// // fn access2[T](box: Box[T])-> T {
+// //   return access(box);
+// // }
+
+// // let x = Box(32);
+// // access2(x);
+
+
+let x = Promise.of(i32).new();
+// let z = Promise.of(i32).new();
+
+let y = x.then(
+    fn (value: i32) -> bool {
+      return true;
+    },
+    fn (error: any) -> String {
+      return "oh fuck!";
+    });
+
+let j: (String? | i32 | Promise[bool | String?]) = 0;
+
+x.fulfill(69);
+return y.then(
+  Nil, fn (error: any) -> i32 {
+    return 69;
+  }
+);
+

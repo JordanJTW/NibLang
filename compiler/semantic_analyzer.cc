@@ -471,8 +471,9 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                 member_access.resolved = ResolvedAccess{binding->idx.value()};
                 return ExpressionResult(*binding);
               } else {
-                LOG(ERROR) << "No member '" << member_name << "' on "
-                           << struct_type->declaration.name;
+                error_collector_.Add("No member '" + member_name + "' on " +
+                                         struct_type->declaration.name,
+                                     expression->meta);
               }
             } else {
               if (auto unwrapped_type_id = type_context_.UnwrapOptionalTypeId(
@@ -829,10 +830,6 @@ std::optional<TypeId> SemanticAnalyzer::InstantiateType(
                    << " concrete: " << concrete_type
                    << " pattern: " << pattern_type;
     }
-  }
-
-  for (const auto& [name, type_id] : default_template_type_ids) {
-    LOG(INFO) << name << " = " << type_context_.GetNameFromTypeId(type_id);
   }
 
   std::vector<TypeId> argument_type_ids;

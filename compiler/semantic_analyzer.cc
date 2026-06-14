@@ -123,6 +123,14 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement) {
             if (!return_result.has_value())
               return;
 
+            if (return_result->binding && return_result->binding->IsType()) {
+              NamedBinding binding = return_result->binding.value();
+              error_collector_.Add(
+                  "Expected a variable or value, but found type '" +
+                      binding.name + "'",
+                  ret.value->meta);
+              return;
+            }
             // const auto& current_function =
             // type_context_.GetCurrentFunction();
             // CHECK(current_function.resolved.has_value());
@@ -446,7 +454,11 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             }
 
             if (!type_context_.IsTypeSubsetOf(*rhs->type_id, *lhs->type_id)) {
-              error_collector_.Add("Mismatched assignment", expression->meta);
+              error_collector_.Add(
+                  "Mismatched assignment: " +
+                      type_context_.GetNameFromTypeId(*lhs->type_id) + " vs. " +
+                      type_context_.GetNameFromTypeId(*rhs->type_id),
+                  expression->meta);
               return std::nullopt;
             }
             return rhs;
@@ -816,8 +828,11 @@ std::optional<TypeId> SemanticAnalyzer::InstantiateType(
   for (size_t i = 0; i < parsed_types.size(); ++i) {
     const auto& [name, pattern_type] = parsed_types[i];
 
-    if (i >= argument_results.size() || !argument_results[i].result.has_value())
+    if (i >= argument_results.size() ||
+        !argument_results[i].result.has_value()) {
+      error_collector_.Add("Missing argument", pattern_type.metadata);
       return std::nullopt;
+    }
 
     if (!argument_results[i].metadata)
       continue;

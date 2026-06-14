@@ -30,14 +30,14 @@ class SemanticAnalyzer {
   struct ExpressionResult {
     ExpressionResult(TypeId id) : type_id(id) {}
     ExpressionResult(NamedBinding binding)
-        : type_id(binding.realized_type_id), symbol(std::move(binding)) {}
+        : type_id(binding.realized_type_id), binding(std::move(binding)) {}
     ExpressionResult(TypeId id, std::optional<NamedBinding> binding)
-        : type_id(id), symbol(std::move(binding)) {}
+        : type_id(id), binding(std::move(binding)) {}
 
     bool has_type_id() const { return type_id.has_value(); }
 
     std::optional<TypeId> type_id;
-    std::optional<NamedBinding> symbol;
+    std::optional<NamedBinding> binding;
     std::vector<ScopeNarrowingInfo> narrowing_info = {};
   };
 
@@ -65,7 +65,7 @@ class SemanticAnalyzer {
       const std::vector<ArgumentResult>& arugment_results,
       const std::vector<TemplateArgument>& template_arguments,
       const std::vector<TemplateArgument>& self_template_arguments,
-      SymbolId symbol_id,
+      NamedBinding binding,
       std::string_view symbol_name,
       std::unordered_map<std::string, TypeId> default_template_type_ids);
 

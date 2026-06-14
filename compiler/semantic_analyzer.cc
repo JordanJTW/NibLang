@@ -61,24 +61,28 @@ void SemanticAnalyzer::Check(Block& block) {
   std::vector<std::pair<NamedBinding, StructDeclaration*>> struct_decls;
   for (auto& statement : block.statements) {
     if (auto* declaration = std::get_if<StructDeclaration>(&statement->as)) {
-      struct_decls.emplace_back(
-          type_context_.DeclareStructSymbol(declaration->name, *declaration),
-          declaration);
+      struct_decls.emplace_back(type_context_.DeclareStructSymbol(*declaration),
+                                declaration);
     }
   }
 
   // Type check the full struct bodies (and functions) once all types are known.
   // Errors are logged from within `DefineStructType` and `DefineFunction`.
   for (auto& [self, declaration] : struct_decls) {
-    if (!self.realized_type_id)
+    if (!self.realized_type_id)  // Only handle non-template (concrete) types
       continue;
 
-    type_context_.DefineStructType(*self.realized_type_id, *declaration,
+    CHECK(self.symbol_id.has_value());  // DeclareStructSymbol MUST provide one
+    auto* symbol = type_context_.GetSymbol<StructSymbol>(*self.symbol_id);
+    CHECK(symbol);  // DeclareStructSymbol MUST create a StructSymbol
+
+    type_context_.DefineStructType(*self.realized_type_id, *symbol,
                                    /*template_arguments=*/{}, error_collector_);
   }
   for (auto& statement : block.statements) {
     if (auto* declaration = std::get_if<FunctionDeclaration>(&statement->as)) {
-      type_context_.DefineFunction(*declaration, &error_collector_);
+      SymbolId symbol_id = type_context_.DeclareFunctionSymbol(*declaration);
+      type_context_.DefineFunction(symbol_id, &error_collector_);
     }
   }
 
@@ -363,11 +367,12 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
 
               // TODO: Ensure that NamedBinding is referring to a Variable.
               std::optional<NamedBinding> symbol_to_narrow;
-              if (lhs->type_id == LiteralType::Nil && rhs->symbol.has_value()) {
-                symbol_to_narrow = rhs->symbol.value();
+              if (lhs->type_id == LiteralType::Nil &&
+                  rhs->binding.has_value()) {
+                symbol_to_narrow = rhs->binding.value();
               } else if (rhs->type_id == LiteralType::Nil &&
-                         lhs->symbol.has_value()) {
-                symbol_to_narrow = lhs->symbol.value();
+                         lhs->binding.has_value()) {
+                symbol_to_narrow = lhs->binding.value();
               }
 
               if (symbol_to_narrow) {
@@ -431,9 +436,9 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
               return std::nullopt;
             }
 
-            if (!lhs->symbol.has_value() ||
-                !(lhs->symbol->kind == NamedBinding::Kind::Variable ||
-                  lhs->symbol->kind == NamedBinding::Kind::Field) ||
+            if (!lhs->binding.has_value() ||
+                !(lhs->binding->kind == NamedBinding::Kind::Variable ||
+                  lhs->binding->kind == NamedBinding::Kind::Field) ||
                 !lhs->has_type_id()) {
               error_collector_.Add("Unable to assign to invalid LHS expression",
                                    assign.rhs->meta);
@@ -547,8 +552,10 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             return result;
           },
           [&](ClosureExpression& closure) -> SemanticAnalyzer::Result {
+            SymbolId symbol_id =
+                type_context_.DeclareFunctionSymbol(closure.fn);
             if (auto binding = type_context_.DefineFunction(
-                    closure.fn, &error_collector_)) {
+                    symbol_id, &error_collector_)) {
               return ExpressionResult(*binding);
             }
             CHECK(false) << "Failed to declare symbol for closure";
@@ -616,7 +623,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                   type_context_.WrapTypeIdAsOptional(as_type.value());
             }
 
-            return ExpressionResult(result_type_id, original_result->symbol);
+            return ExpressionResult(result_type_id, original_result->binding);
           },
           [&](OptionalChainExpression& optional_chain) -> Result {
             // OptionalChainExpression is a "pseudo-AST node" which represents
@@ -635,7 +642,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                   type_context_.WrapTypeIdAsOptional(result_type_id);
             }
 
-            ExpressionResult new_result(result_type_id, result->symbol);
+            ExpressionResult new_result(result_type_id, result->binding);
             new_result.narrowing_info = std::move(result->narrowing_info);
             return new_result;
           },
@@ -690,7 +697,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
 
             if (auto unwrapped =
                     type_context_.UnwrapOptionalTypeId(*result->type_id)) {
-              return ExpressionResult{unwrapped.value(), result->symbol};
+              return ExpressionResult{unwrapped.value(), result->binding};
             }
 
             error_collector_.Add(
@@ -705,8 +712,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             if (!result.has_value())
               return std::nullopt;
 
-            if (!result->symbol.has_value() ||
-                (result->symbol->kind != NamedBinding::Struct)) {
+            if (!result->binding.has_value() ||
+                (result->binding->kind != NamedBinding::Struct)) {
               error_collector_.Add(".of() used on non-templated type",
                                    template_expr.generic_target->meta);
               return std::nullopt;
@@ -732,7 +739,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
               return std::nullopt;
 
             if (auto type_id = type_context_.GetTemplateOf(
-                    *result->symbol->symbol_id, type_ids, error_collector_)) {
+                    *result->binding, type_ids, error_collector_)) {
               return *type_id;
             }
 
@@ -792,7 +799,7 @@ std::optional<TypeId> SemanticAnalyzer::InstantiateType(
     const std::vector<ArgumentResult>& argument_results,
     const std::vector<TemplateArgument>& template_arguments,
     const std::vector<TemplateArgument>& self_template_arguments,
-    SymbolId symbol_id,
+    NamedBinding binding,
     std::string_view symbol_name,
     std::unordered_map<std::string, TypeId> default_template_type_ids) {
   TypeResolver::Bindings bindings;
@@ -853,7 +860,7 @@ std::optional<TypeId> SemanticAnalyzer::InstantiateType(
     }
   }
 
-  return type_context_.GetTemplateOf(symbol_id, argument_type_ids,
+  return type_context_.GetTemplateOf(binding, argument_type_ids,
                                      error_collector_);
 }
 
@@ -873,11 +880,11 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
   std::optional<TypeId> callable_type_id = callee_result.type_id;
 
   if (!callable_type_id) {
-    CHECK(callee_result.symbol && callee_result.symbol->symbol_id)
+    CHECK(callee_result.binding && callee_result.binding->symbol_id)
         << "SymbolId is required for templates";
 
     if (const auto* symbol = type_context_.GetSymbol<FunctionSymbol>(
-            *callee_result.symbol->symbol_id)) {
+            *callee_result.binding->symbol_id)) {
       std::vector<ArgumentResult> arg_results = argument_results;
       // Account for the implicit "self" argument for method calls
       if (symbol->declaration.function_kind == FunctionKind::Method) {
@@ -889,11 +896,12 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
 
       // If this function has a parent i.e. is a method, then we must take in to
       // account the parent's template arguments as well for template resolution
-      if (symbol->parent_type_id) {
-        const auto* parent_type =
-            type_context_.GetTypeInfo<StructType>(*symbol->parent_type_id);
-        CHECK(parent_type) << "TypeId: " << *symbol->parent_type_id
-                           << " does not resolve to a StructType";
+      if (callee_result.binding->parent_type_id) {
+        const auto* parent_type = type_context_.GetTypeInfo<StructType>(
+            *callee_result.binding->parent_type_id);
+        CHECK(parent_type) << "TypeId("
+                           << *callee_result.binding->parent_type_id
+                           << ") does not resolve to a StructType";
         template_arguments.insert(
             template_arguments.end(),
             parent_type->declaration.template_arguments.begin(),
@@ -903,19 +911,18 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
       callable_type_id = InstantiateType(
           symbol->declaration.arguments, arg_results,
           std::move(template_arguments), symbol->declaration.template_arguments,
-          *callee_result.symbol->symbol_id, "fn " + symbol->declaration.name,
+          *callee_result.binding, "fn " + symbol->declaration.name,
           symbol->default_template_type_ids);
     }
 
     else if (const auto* symbol = type_context_.GetSymbol<StructSymbol>(
-                 *callee_result.symbol->symbol_id)) {
-      callable_type_id =
-          InstantiateType(symbol->declaration.fields, argument_results,
-                          symbol->declaration.template_arguments,
-                          symbol->declaration.template_arguments,
-                          *callee_result.symbol->symbol_id,
-                          "struct " + symbol->declaration.name,
-                          /*default_template_type_ids=*/{});
+                 *callee_result.binding->symbol_id)) {
+      callable_type_id = InstantiateType(
+          symbol->declaration.fields, argument_results,
+          symbol->declaration.template_arguments,
+          symbol->declaration.template_arguments, *callee_result.binding,
+          "struct " + symbol->declaration.name,
+          /*default_template_type_ids=*/{});
     }
 
     else {
@@ -930,23 +937,23 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
 
   if (const auto* const fn_type =
           type_context_.GetTypeInfo<FunctionType>(*callable_type_id)) {
-    if (callee_result.symbol.has_value() &&
-        callee_result.symbol->kind == NamedBinding::Function) {
-      CHECK(callee_result.symbol->idx.has_value())
+    if (callee_result.binding.has_value() &&
+        callee_result.binding->kind == NamedBinding::Function) {
+      CHECK(callee_result.binding->idx.has_value())
           << "Function symbol must have an index for call resolution";
 
       const auto& fn_declaration = type_context_.GetFunctionDeclaration(
-          callee_result.symbol->idx.value());
+          callee_result.binding->idx.value());
 
       // Account for the implicit "self" argument for method calls
       if (fn_declaration.function_kind == FunctionKind::Method) {
         argument_results.insert(argument_results.begin(),
                                 ArgumentResult{callee_result});
       }
-      call_expr.resolved = ResolvedCall{callee_result.symbol->idx.value(),
+      call_expr.resolved = ResolvedCall{callee_result.binding->idx.value(),
                                         fn_declaration.function_kind};
     } else {
-      call_expr.resolved = ResolvedCall{callee_result.symbol->idx.value(),
+      call_expr.resolved = ResolvedCall{callee_result.binding->idx.value(),
                                         FunctionKind::Anonymous};
     }
 

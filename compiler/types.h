@@ -39,7 +39,7 @@ using InstanceCache =
 
 struct FunctionSymbol {
   FunctionDeclaration& declaration;
-  std::optional<TypeId> parent_type_id;
+  std::string qualified_name;
   ScopeId scope_id;
   std::unordered_map<std::string, TypeId> default_template_type_ids;
 
@@ -67,8 +67,12 @@ struct NamedBinding {
   } kind;
   std::optional<TypeId> realized_type_id;
   std::optional<SymbolId> symbol_id;
+  std::optional<TypeId> parent_type_id;
 
   inline bool IsRealized() { return realized_type_id.has_value(); }
+  inline bool IsType() {
+    return kind == Function || kind == Struct || kind == Template;
+  }
 
   std::string name;
   // Used for function table resolution, struct field ordering, etc.
@@ -253,7 +257,6 @@ struct ResolvedFunction {
   std::vector<NamedBinding> variables_to_capture;
 
   std::vector<NamedBinding> arguments;
-  std::vector<NamedBinding> capture_arguments;
 };
 
 struct TemplateArgument {

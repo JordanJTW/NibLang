@@ -51,7 +51,7 @@ TEST_F(SemanticAnalyzerTest, Expression_PrimaryExpr_BuiltInValue) {
 
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(result->type_id, expected_type_id);
-    EXPECT_FALSE(result->symbol.has_value());
+    EXPECT_FALSE(result->binding.has_value());
   }
 }
 

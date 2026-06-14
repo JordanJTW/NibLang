@@ -161,13 +161,13 @@ TEST_F(ScopeManagerTest, FindBindingFor_Shadowing) {
   scope_manager.EnterScope(ScopeManager::ScopeType::BlockScope, "block");
   auto inner = scope_manager.DeclareVariableBinding("var", TypeContext::f32);
 
-  // Should find inner symbol in current scope
+  // Should find inner binding in current scope
   auto symbol_current =
       scope_manager.FindBindingFor("var", ScopeManager::ScopeToCheck::Current);
   ASSERT_TRUE(symbol_current.has_value());
   EXPECT_EQ(symbol_current->realized_type_id, TypeContext::f32);
 
-  // Should find inner symbol in all scopes (shadows outer)
+  // Should find inner binding in all scopes (shadows outer)
   auto symbol_all =
       scope_manager.FindBindingFor("var", ScopeManager::ScopeToCheck::All);
   ASSERT_TRUE(symbol_all.has_value());
@@ -175,7 +175,7 @@ TEST_F(ScopeManagerTest, FindBindingFor_Shadowing) {
 
   scope_manager.ExitScope();
 
-  // After exiting, should find outer symbol again
+  // After exiting, should find outer binding again
   auto symbol_after_exit =
       scope_manager.FindBindingFor("var", ScopeManager::ScopeToCheck::All);
   ASSERT_TRUE(symbol_after_exit.has_value());

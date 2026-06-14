@@ -135,10 +135,9 @@ void ByteCodeGenerator::EmitFunctionBlock(
   CHECK(fn.resolved->function_symbol.idx)
       << "Function does not have an assigned CallIdx: " << fn.name;
 
-
   builder_.EnterFunctionScope(
       override_name.value_or(fn.name), fn.resolved->function_symbol.idx.value(),
-      fn.resolved->arguments, fn.resolved->capture_arguments);
+      fn.resolved->arguments, fn.resolved->variables_to_capture);
   EmitBlock(*fn.body);
 
   // CHECK(fn.resolved->function_symbol.realized_type_id);

@@ -57,7 +57,8 @@ TEST_F(TypeContextTest, GetTypeIdFor_Function) {
       .body = std::make_unique<Block>(),  // non-extern MUST have body
   };
 
-  auto symbol = type_context.DefineFunction(fn_decl, &error_collector);
+  auto symbol_id = type_context.DeclareFunctionSymbol(fn_decl);
+  auto symbol = type_context.DefineFunction(symbol_id, &error_collector);
   ASSERT_TRUE(symbol.has_value());
   EXPECT_EQ(symbol->kind, NamedBinding::Function);
 
@@ -130,7 +131,7 @@ TEST_F(TypeContextTest, DeclareStructSymbol_NoTemplate) {
       .name = "TestStruct",
   };
 
-  auto symbol = type_context.DeclareStructSymbol("TestStruct", declaration);
+  auto symbol = type_context.DeclareStructSymbol(declaration);
   EXPECT_GT(symbol.realized_type_id, TypeContext::LiteralType::kCount);
   EXPECT_EQ(symbol.kind, NamedBinding::Struct);
   EXPECT_FALSE(symbol.idx.has_value());  // Structs have no index
@@ -145,7 +146,7 @@ TEST_F(TypeContextTest, DeclareStructSymbol_WithTemplate) {
       .template_arguments = {{"T"}},
   };
 
-  auto symbol = type_context.DeclareStructSymbol("TestStruct", declaration);
+  auto symbol = type_context.DeclareStructSymbol(declaration);
   EXPECT_FALSE(symbol.realized_type_id.has_value());
   EXPECT_EQ(symbol.kind, NamedBinding::Struct);
   EXPECT_FALSE(symbol.idx.has_value());  // Structs have no index
@@ -161,15 +162,19 @@ TEST_F(TypeContextTest, DefineStructType_NoTemplate) {
                         {"field2", ParsedType{"f32"}}};
   declaration.is_extern = false;
 
-  auto struct_symbol =
-      type_context.DeclareStructSymbol("TestStruct", declaration);
-  ASSERT_TRUE(struct_symbol.realized_type_id.has_value());
-  type_context.DefineStructType(*struct_symbol.realized_type_id, declaration,
+  auto binding = type_context.DeclareStructSymbol(declaration);
+  ASSERT_TRUE(binding.realized_type_id.has_value());
+  ASSERT_TRUE(binding.symbol_id.has_value());
+
+  auto* const struct_symbol =
+      type_context.GetSymbol<StructSymbol>(*binding.symbol_id);
+  ASSERT_TRUE(struct_symbol);
+  type_context.DefineStructType(*binding.realized_type_id, *struct_symbol,
                                 /*template_arguments=*/{}, error_collector);
 
   // Check that struct type is registered
   auto struct_info =
-      type_context.GetTypeInfo<StructType>(*struct_symbol.realized_type_id);
+      type_context.GetTypeInfo<StructType>(*binding.realized_type_id);
   EXPECT_EQ(struct_info->declaration.name, "TestStruct");
   EXPECT_THAT(struct_info->field_types,
               testing::ElementsAre(TypeContext::i32, TypeContext::f32));
@@ -202,13 +207,12 @@ TEST_F(TypeContextTest, TemplateStruct_GetTemplateOf) {
   declaration.fields = {{"field1", ParsedType{"T"}}};
   declaration.is_extern = false;
 
-  auto struct_symbol =
-      type_context.DeclareStructSymbol("TestStruct", declaration);
-  ASSERT_FALSE(struct_symbol.realized_type_id.has_value());
-  ASSERT_TRUE(struct_symbol.symbol_id.has_value());
+  auto binding = type_context.DeclareStructSymbol(declaration);
+  ASSERT_FALSE(binding.realized_type_id.has_value());
+  ASSERT_TRUE(binding.symbol_id.has_value());
 
-  std::optional<TypeId> type_id = type_context.GetTemplateOf(
-      *struct_symbol.symbol_id, {TypeContext::Bool}, error_collector);
+  std::optional<TypeId> type_id =
+      type_context.GetTemplateOf(binding, {TypeContext::Bool}, error_collector);
   ASSERT_TRUE(type_id.has_value());
 
   // Check that struct type is registered
@@ -237,15 +241,15 @@ TEST_F(TypeContextTest, TemplateFunction_GetTemplateOf) {
   declaration.template_arguments = {{"Type"}, {"Return"}};
   declaration.body = std::make_unique<Block>();
 
-  auto binding = type_context.DefineFunction(declaration, &error_collector);
+  auto symbol_id = type_context.DeclareFunctionSymbol(declaration);
+  auto binding = type_context.DefineFunction(symbol_id, &error_collector);
   ASSERT_TRUE(binding.has_value());
 
   EXPECT_FALSE(binding->realized_type_id.has_value());
   EXPECT_TRUE(binding->symbol_id.has_value());
 
   std::optional<TypeId> type_id = type_context.GetTemplateOf(
-      *binding->symbol_id, {TypeContext::Bool, TypeContext::i32},
-      error_collector);
+      *binding, {TypeContext::Bool, TypeContext::i32}, error_collector);
   ASSERT_TRUE(type_id.has_value());
 
   auto fn_info = type_context.GetTypeInfo<FunctionType>(*type_id);
@@ -268,16 +272,18 @@ TEST_F(TypeContextTest, StructDeclaration_WithMethod) {
   struct_decl.methods.emplace_back("test_method", std::move(method_decl));
   struct_decl.is_extern = false;
 
-  auto struct_symbol =
-      type_context.DeclareStructSymbol("TestStruct", struct_decl);
-  ASSERT_TRUE(struct_symbol.realized_type_id.has_value());
-  ASSERT_TRUE(struct_symbol.symbol_id.has_value());
+  auto binding = type_context.DeclareStructSymbol(struct_decl);
+  ASSERT_TRUE(binding.realized_type_id.has_value());
+  ASSERT_TRUE(binding.symbol_id.has_value());
 
-  type_context.DefineStructType(*struct_symbol.realized_type_id, struct_decl,
+  auto* const struct_symbol =
+      type_context.GetSymbol<StructSymbol>(*binding.symbol_id);
+  ASSERT_TRUE(struct_symbol);
+  type_context.DefineStructType(*binding.realized_type_id, *struct_symbol,
                                 /*template_arguments=*/{}, error_collector);
 
   auto struct_info =
-      type_context.GetTypeInfo<StructType>(*struct_symbol.realized_type_id);
+      type_context.GetTypeInfo<StructType>(*binding.realized_type_id);
 
   auto method_binding = scope_manager.FindBindingFor(
       "test_method", ScopeManager::ScopeToCheck::Current,
@@ -294,10 +300,15 @@ TEST_F(TypeContextTest, DefineFunction_ExternMethod) {
   struct_decl.name = "String";
   struct_decl.is_extern = true;
 
-  auto struct_symbol = type_context.DeclareStructSymbol("String", struct_decl);
-  ASSERT_TRUE(struct_symbol.realized_type_id.has_value());
-  ASSERT_TRUE(struct_symbol.symbol_id.has_value());
-  type_context.DefineStructType(*struct_symbol.realized_type_id, struct_decl,
+  auto struct_binding = type_context.DeclareStructSymbol(struct_decl);
+  ASSERT_TRUE(struct_binding.realized_type_id.has_value());
+  ASSERT_TRUE(struct_binding.symbol_id.has_value());
+
+  auto* const struct_symbol =
+      type_context.GetSymbol<StructSymbol>(*struct_binding.symbol_id);
+  ASSERT_TRUE(struct_symbol);
+  type_context.DefineStructType(*struct_binding.realized_type_id,
+                                *struct_symbol,
                                 /*template_arguments=*/{}, error_collector);
 
   FunctionDeclaration method_decl{
@@ -307,12 +318,13 @@ TEST_F(TypeContextTest, DefineFunction_ExternMethod) {
       .function_kind = FunctionKind::Method,
   };
 
-  auto binding =
-      type_context.DefineFunction(method_decl, &error_collector, &struct_decl,
-                                  *struct_symbol.realized_type_id);
-  ASSERT_TRUE(binding.has_value());
-  EXPECT_EQ(binding->kind, NamedBinding::Function);
-  EXPECT_EQ(binding->idx, VM_BUILTIN_STRING_LENGTH);
+  auto method_symbol_id = type_context.DeclareFunctionSymbol(method_decl);
+  auto method_binding = type_context.DefineFunction(
+      method_symbol_id, &error_collector, &struct_decl,
+      *struct_binding.realized_type_id);
+  ASSERT_TRUE(method_binding.has_value());
+  EXPECT_EQ(method_binding->kind, NamedBinding::Function);
+  EXPECT_EQ(method_binding->idx, VM_BUILTIN_STRING_LENGTH);
 }
 
 TEST_F(TypeContextTest, DefineFunction_UnknownExtern) {
@@ -323,7 +335,8 @@ TEST_F(TypeContextTest, DefineFunction_UnknownExtern) {
       .function_kind = FunctionKind::Extern,
   };
 
-  auto symbol = type_context.DefineFunction(extern_fn, &error_collector);
+  auto symbol_id = type_context.DeclareFunctionSymbol(extern_fn);
+  auto symbol = type_context.DefineFunction(symbol_id, &error_collector);
   EXPECT_FALSE(symbol.has_value());  // CallIdx can not be determined
 }
 
@@ -346,11 +359,15 @@ TEST_F(TypeContextTest, IsTypeSubsetOf) {
   test_struct_decl.is_extern = true;
 
   NamedBinding struct_binding =
-      type_context.DeclareStructSymbol("TestStruct", test_struct_decl);
+      type_context.DeclareStructSymbol(test_struct_decl);
   ASSERT_TRUE(struct_binding.realized_type_id.has_value());
   ASSERT_TRUE(struct_binding.symbol_id.has_value());
   TypeId struct_type_id = *struct_binding.realized_type_id;
-  type_context.DefineStructType(struct_type_id, test_struct_decl,
+
+  auto* const struct_symbol =
+      type_context.GetSymbol<StructSymbol>(*struct_binding.symbol_id);
+  ASSERT_TRUE(struct_symbol);
+  type_context.DefineStructType(struct_type_id, *struct_symbol,
                                 /*template_arguments=*/{}, error_collector);
 
   EXPECT_TRUE(type_context.IsTypeSubsetOf(TypeContext::i32, union_id.value()));
@@ -397,7 +414,8 @@ TEST_F(TypeContextTest, GetNameFromTypeId) {
       .function_kind = FunctionKind::Free,
       .body = std::make_unique<Block>(),
   };
-  auto symbol = type_context.DefineFunction(fn_decl, &error_collector);
+  auto symbol_id = type_context.DeclareFunctionSymbol(fn_decl);
+  auto symbol = type_context.DefineFunction(symbol_id, &error_collector);
   ASSERT_TRUE(symbol.has_value());
   ASSERT_TRUE(symbol->realized_type_id.has_value());
   std::string fn_name =
@@ -413,8 +431,9 @@ TEST_F(TypeContextTest, GetNameFromTypeId) {
       .is_variadic = true,
       .body = std::make_unique<Block>(),
   };
+  auto variadic_symbol_id = type_context.DeclareFunctionSymbol(variadic_fn);
   auto variadic_symbol =
-      type_context.DefineFunction(variadic_fn, &error_collector);
+      type_context.DefineFunction(variadic_symbol_id, &error_collector);
   ASSERT_TRUE(variadic_symbol.has_value());
   ASSERT_TRUE(variadic_symbol->realized_type_id.has_value());
   std::string variadic_name =
@@ -425,12 +444,15 @@ TEST_F(TypeContextTest, GetNameFromTypeId) {
   StructDeclaration struct_decl;
   struct_decl.name = "TestStruct";
   struct_decl.is_extern = false;
-  auto struct_symbol =
-      type_context.DeclareStructSymbol("TestStruct", struct_decl);
-  ASSERT_TRUE(struct_symbol.realized_type_id.has_value());
-  type_context.DefineStructType(*struct_symbol.realized_type_id, struct_decl,
+  auto struct_binding = type_context.DeclareStructSymbol(struct_decl);
+  ASSERT_TRUE(struct_binding.realized_type_id.has_value());
+  auto* const struct_symbol =
+      type_context.GetSymbol<StructSymbol>(*struct_binding.symbol_id);
+  ASSERT_TRUE(struct_symbol);
+  type_context.DefineStructType(*struct_binding.realized_type_id,
+                                *struct_symbol,
                                 /*template_arguments=*/{}, error_collector);
-  EXPECT_EQ(type_context.GetNameFromTypeId(*struct_symbol.realized_type_id),
+  EXPECT_EQ(type_context.GetNameFromTypeId(*struct_binding.realized_type_id),
             "struct TestStruct");
 
   // Union type
@@ -450,7 +472,8 @@ TEST_F(TypeContextTest, GetFunctionDeclaration) {
       .function_kind = FunctionKind::Free,
       .body = std::make_unique<Block>(),
   };
-  auto symbol = type_context.DefineFunction(fn_decl, &error_collector);
+  auto symbol_id = type_context.DeclareFunctionSymbol(fn_decl);
+  auto symbol = type_context.DefineFunction(symbol_id, &error_collector);
   ASSERT_TRUE(symbol.has_value());
   ASSERT_TRUE(symbol->idx.has_value());
 

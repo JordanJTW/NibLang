@@ -32,7 +32,7 @@ class ScopeManager {
   // Allows getting the current scope ID (allowing it to be restored).
   ScopeId GetActiveScopeId() const { return active_scope_id_; }
 
-  // Looks up a symbol by name within the given scope. By default, searches the
+  // Looks up a binding by name within the given scope. By default, searches the
   // current scope and all parent scopes. If `scope` is Function, it will search
   // all parent scopes up to the nearest FunctionScope. If `scope` is Current,
   // it will only search the current scope.
@@ -57,14 +57,19 @@ class ScopeManager {
       NamedBinding::Kind kind,
       std::optional<TypeId> type_id,
       std::optional<SymbolId> symbol_id,
-      std::optional<NamedBinding::Idx> idx = std::nullopt);
+      std::optional<NamedBinding::Idx> idx = std::nullopt,
+      std::optional<TypeId> parent_type_id = std::nullopt);
+
+  std::vector<NamedBinding> GetBindingsForScope(
+      ScopeId scope_id,
+      NamedBinding::Kind filter_kind) const;
 
   template <typename Fn>
   auto WithScope(ScopeId scope_id, Fn&& block) {
-    using Result = std::invoke_result_t<Fn>; 
+    using Result = std::invoke_result_t<Fn>;
 
-    ScopeId current_scope_id = GetActiveScopeId(); 
-    SetActiveScopeId(scope_id); 
+    ScopeId current_scope_id = GetActiveScopeId();
+    SetActiveScopeId(scope_id);
 
     if constexpr (std::is_void_v<Result>) {
       block();

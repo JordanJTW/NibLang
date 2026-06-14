@@ -87,14 +87,24 @@ class TypeContext {
   // Returns the FunctionDeclaration for the last function scope visited.
   FunctionDeclaration& GetCurrentFunction();
 
-  NamedBinding DeclareStructSymbol(std::string_view name,
-                                   StructDeclaration& declaration);
-  // Defines StructType for `self_id` by type checking `decl` and registering
-  // field/member types. Returns false if any errors were encountered.
+  // Creates a new StructSymbol for `declaration` in the symbol table and adds a
+  // NamedBinding to it in the current scope. If the `declaration` is concrete
+  // then a TypeId is assigned proactively (to be passed to DefineStructType).
+  NamedBinding DeclareStructSymbol(StructDeclaration& declaration);
+  // Performs type checking of the members/fields and creates a new StructType
+  // for `self_id` from the results. `template_arguments` are stored on the new
+  // StructType but are NOT used for any sort of template resolution here.
   void DefineStructType(TypeId self_id,
-                        StructDeclaration& declaration,
+                        StructSymbol& symbol,
                         std::vector<TypeId> template_arguments,
                         ErrorCollector& error_collector);
+
+  // Creates a new FunctionSymbol for `delcaration` in the symbol table and adds
+  // a NamedBinding to it in the current scope. If `qualified_name` is passed it
+  // will be passed to the symbol but does NOT effect the binding.
+  SymbolId DeclareFunctionSymbol(
+      FunctionDeclaration& declaration,
+      std::optional<std::string> qualified_name = std::nullopt);
 
   // Declares a new function symbol in the current scope. Functions are
   // structurally typed based on signature. If this functions signature has not
@@ -103,7 +113,7 @@ class TypeContext {
   // Errors are logged from within this function. `self_struct` and `self_id`
   // MUST be provided for method declarations.
   std::optional<NamedBinding> DefineFunction(
-      FunctionDeclaration& decl,
+      SymbolId symbol_id,
       ErrorCollector* error_collector,
       std::optional<const StructDeclaration*> self_struct = std::nullopt,
       std::optional<TypeId> self_id = std::nullopt);
@@ -130,9 +140,7 @@ class TypeContext {
   template <typename T>
   const T* GetTypeInfo(TypeId type_id) const {
     auto it = type_lookup_.find(type_id);
-    CHECK(it != type_lookup_.end())
-        << "TypeInfo not registered for TypeId: " << type_id;
-    return std::get_if<T>(&it->second);
+    return it != type_lookup_.end() ? std::get_if<T>(&it->second) : nullptr;
   }
 
   const FunctionDeclaration& GetFunctionDeclaration(
@@ -147,18 +155,21 @@ class TypeContext {
   std::string GetNameFromTypeId(TypeId type_id) const;
 
   std::optional<TypeId> GetTemplateOf(
-      SymbolId symbol_id,
+      NamedBinding binding,
       const std::vector<TypeId>& argument_type_ids,
       ErrorCollector& error_collector);
 
   ParsedType GetParsedTypeFromId(TypeId) const;
 
   template <typename T>
-  const T* GetSymbol(SymbolId id) const {
+  T* GetSymbol(SymbolId id) {
     auto it = symbol_table_.find(id);
-    CHECK(it != symbol_table_.end())
-        << "Symbol not registered for SymbolID: " << id;
-    return std::get_if<T>(&it->second);
+    return it != symbol_table_.end() ? std::get_if<T>(&it->second) : nullptr;
+  }
+
+  template <typename T>
+  const T* GetSymbol(SymbolId id) const {
+    return const_cast<TypeContext*>(this)->GetSymbol<T>(id);
   }
 
   struct RealizedFunction {

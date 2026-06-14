@@ -55,37 +55,60 @@ TypeContext::TypeContext(ScopeManager& scope_manager,
   };
 
   // Enter "global" function scope by default to allow for top-level statements.
-  auto main_symbol = DefineFunction(main_fn, /*error_collector=*/nullptr);
+  auto main_symbol = DefineFunction(DeclareFunctionSymbol(main_fn),
+                                    /*error_collector=*/nullptr);
   CHECK(main_symbol.has_value());
 }
 
-NamedBinding TypeContext::DeclareStructSymbol(std::string_view name,
-                                              StructDeclaration& declaration) {
-  SymbolId symbol_id = next_symbol_id_++;
-  symbol_table_.emplace(
-      symbol_id, StructSymbol{declaration, scope_manager_.GetActiveScopeId()});
+NamedBinding TypeContext::DeclareStructSymbol(StructDeclaration& declaration) {
+  StructSymbol symbol = scope_manager_.NewScope(
+      ScopeManager::StructScope, "struct " + declaration.name, [&]() {
+        StructSymbol symbol = {declaration, scope_manager_.GetActiveScopeId()};
+
+        for (auto& [name, fn] : declaration.methods) {
+          DeclareFunctionSymbol(fn, declaration.name + "_" + name);
+        }
+        return symbol;
+      });
 
   std::optional<TypeId> type_id = std::nullopt;
   // If the `struct` is already realized at declaration (concrete) then assign
   // its TypeId so that conrete struct/function declarations will fully resolve.
-  if (!declaration.IsTemplate())
+  if (!declaration.IsTemplate()) {
     type_id = next_type_id_++;
+    symbol.instances[{}] = *type_id;
+  }
 
-  return scope_manager_.InsertNameIntoScope(name, NamedBinding::Struct, type_id,
-                                            symbol_id);
+  SymbolId symbol_id = next_symbol_id_++;
+  symbol_table_.emplace(symbol_id, std::move(symbol));
+  return scope_manager_.InsertNameIntoScope(
+      declaration.name, NamedBinding::Struct, type_id, symbol_id);
+}
+
+SymbolId TypeContext::DeclareFunctionSymbol(
+    FunctionDeclaration& declaration,
+    std::optional<std::string> qualified_name) {
+  FunctionSymbol symbol{declaration, qualified_name.value_or(declaration.name),
+                        scope_manager_.GetActiveScopeId()};
+  SymbolId symbol_id = next_symbol_id_++;
+  symbol_table_.emplace(symbol_id, std::move(symbol));
+
+  scope_manager_.InsertNameIntoScope(declaration.name, NamedBinding::Function,
+                                     /*type_id=*/std::nullopt, symbol_id);
+  return symbol_id;
 }
 
 void TypeContext::DefineStructType(TypeId self_id,
-                                   StructDeclaration& declaration,
+                                   StructSymbol& symbol,
                                    const std::vector<TypeId> template_arguemnts,
                                    ErrorCollector& error_collector) {
-  StructType struct_type(declaration);
+  StructType struct_type(symbol.declaration);
   struct_type.template_arguments = template_arguemnts;
   struct_type.scope_id = scope_manager_.EnterScope(
-      ScopeManager::StructScope, "struct " + declaration.name);
+      ScopeManager::StructScope, "struct " + symbol.declaration.name);
 
   NamedBinding::Idx field_idx = 0;
-  for (const auto& [name, type] : declaration.fields) {
+  for (const auto& [name, type] : symbol.declaration.fields) {
     auto type_id = GetTypeIdFor(type);
     if (!type_id.has_value()) {
       error_collector.Add("Unknown type for struct field: " + name,
@@ -104,9 +127,11 @@ void TypeContext::DefineStructType(TypeId self_id,
     struct_type.field_types.push_back(type_id.value());
   }
 
-  for (auto& [name, fn] : declaration.methods) {
+  for (const auto& binding : scope_manager_.GetBindingsForScope(
+           symbol.scope_id, NamedBinding::Function)) {
     // Errors are logged from within `DefineFunction`.
-    DefineFunction(fn, &error_collector, &declaration, self_id);
+    DefineFunction(*binding.symbol_id, &error_collector, &symbol.declaration,
+                   self_id);
   }
   scope_manager_.ExitScope();
 
@@ -114,10 +139,15 @@ void TypeContext::DefineStructType(TypeId self_id,
 }
 
 std::optional<NamedBinding> TypeContext::DefineFunction(
-    FunctionDeclaration& fn,
+    SymbolId symbol_id,
     ErrorCollector* error_collector,
     std::optional<const StructDeclaration*> object,
     std::optional<TypeId> self_id) {
+  FunctionSymbol* symbol = GetSymbol<FunctionSymbol>(symbol_id);
+  CHECK(symbol) << "DefineFunction passed an invalid `symbol_id`";
+
+  FunctionDeclaration& fn = symbol->declaration;
+
   std::string qualified_name = fn.name;
   bool is_function_extern = fn.function_kind == FunctionKind::Extern;
   if (object) {
@@ -147,12 +177,17 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
     call_idx = GetCallIdxFor(qualified_name, CreateIfMissing::YES);
   }
 
-  FunctionSymbol symbol{fn, self_id, scope_manager_.GetActiveScopeId()};
-  SymbolId symbol_id = next_symbol_id_++;
-
   fn.resolved = ResolvedFunction{};
 
-  if (!fn.template_arguments.empty()) {
+  std::optional<TypeId> type_id;
+  if (fn.template_arguments.empty()) {
+    if ((type_id = DeclareFunctionType(fn, error_collector, self_id))) {
+      symbol->instances[{*self_id}] = *type_id;
+    } else {
+      LOG(INFO) << "Failed to declare function type";
+      return std::nullopt;
+    }
+  } else {
     for (const auto& argument : fn.template_arguments) {
       if (!argument.default_type.has_value())
         continue;
@@ -164,31 +199,16 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
         continue;
       }
 
-      symbol.default_template_type_ids[argument.name] = *type_id;
+      symbol->default_template_type_ids[argument.name] = *type_id;
     }
-    symbol_table_.emplace(symbol_id, std::move(symbol));
-
-    function_lookup_[call_idx.value()] = &fn;
-    NamedBinding binding = scope_manager_.InsertNameIntoScope(
-        fn.name, NamedBinding::Function,
-        /*type_id=*/std::nullopt, symbol_id, call_idx);
-    fn.resolved->function_symbol = binding;
-    return binding;
   }
 
-  if (std::optional<TypeId> type_id =
-          DeclareFunctionType(fn, error_collector, self_id)) {
-    symbol_table_.emplace(symbol_id, std::move(symbol));
-    NamedBinding binding = scope_manager_.InsertNameIntoScope(
-        fn.name, NamedBinding::Function, type_id.value(), symbol_id,
-        call_idx.value());
-    function_lookup_[call_idx.value()] = &fn;
-    fn.resolved->function_symbol = binding;
-    return binding;
-  }
-
-  LOG(INFO) << "Failed to declare function type";
-  return std::nullopt;
+  NamedBinding binding = scope_manager_.InsertNameIntoScope(
+      fn.name, NamedBinding::Function, std::move(type_id), symbol_id, call_idx,
+      std::move(self_id));
+  fn.resolved->function_symbol = binding;
+  function_lookup_[call_idx.value()] = &fn;
+  return binding;
 }
 
 std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
@@ -311,8 +331,7 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
             }
 
             ErrorCollector dummy_error_collector;
-            return GetTemplateOf(*binding->symbol_id,
-                                 std::move(argument_type_ids),
+            return GetTemplateOf(binding.value(), std::move(argument_type_ids),
                                  dummy_error_collector);
           }},
       type.type);
@@ -640,11 +659,14 @@ std::string TypeContext::GetNameFromTypeId(TypeId type_id) const {
 }
 
 std::optional<TypeId> TypeContext::GetTemplateOf(
-    SymbolId symbol_id,
+    NamedBinding binding,
     const std::vector<TypeId>& argument_type_ids,
     ErrorCollector& error_collector) {
-  auto it = symbol_table_.find(symbol_id);
-  CHECK(it != symbol_table_.end()) << "Unable to lookup symbol: " << symbol_id;
+  CHECK(binding.symbol_id) << "Provided binding is missing SymbolId";
+
+  auto it = symbol_table_.find(*binding.symbol_id);
+  CHECK(it != symbol_table_.end())
+      << "Unable to lookup Symbol from binding: " << binding;
 
   std::stringstream ss;
   for (size_t i = 0; i < argument_type_ids.size(); ++i) {
@@ -690,8 +712,8 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
                   scope_manager_.DeclareTemplateBinding(
                       template_arguments[i].name, argument_type_ids[i]);
 
-                DefineStructType(self_id, symbol->declaration,
-                                 argument_type_ids, error_collector);
+                DefineStructType(self_id, *symbol, argument_type_ids,
+                                 error_collector);
                 return self_id;
               });
         });
@@ -715,8 +737,16 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
       return std::nullopt;
     }
 
+    std::optional<ScopeId> parent_scope_id;
+    if (binding.parent_type_id) {
+      auto* struct_type = GetTypeInfo<StructType>(*binding.parent_type_id);
+      CHECK(struct_type) << "`parent_type_id` did not map to StructType";
+      parent_scope_id = struct_type->scope_id;
+    }
+
+    const ScopeId lexical_scope_id = parent_scope_id.value_or(symbol->scope_id);
     return scope_manager_.WithScope(
-        symbol->scope_id, [&]() -> std::optional<TypeId> {
+        lexical_scope_id, [&]() -> std::optional<TypeId> {
           // TODO: Ensure scope stacking does not cause bugs since unrelated
           //       templates would inherit this scope environment if a type is
           //       processed later
@@ -730,7 +760,7 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
 
                 return DeclareFunctionType(symbol->declaration,
                                            &error_collector,
-                                           symbol->parent_type_id);
+                                           binding.parent_type_id);
               });
 
           if (self_id) {
@@ -743,7 +773,7 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
         });
   }
 
-  NOTREACHED() << "Do not know how to realize SymbolId: " << symbol_id;
+  NOTREACHED() << "Do not know how to realize binding: " << binding;
   return std::nullopt;
 }
 

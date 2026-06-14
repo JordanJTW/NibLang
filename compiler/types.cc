@@ -47,6 +47,8 @@ std::ostream& operator<<(std::ostream& os, const NamedBinding& symbol) {
      << (symbol.symbol_id ? std::to_string(*symbol.symbol_id) : "?");
   if (symbol.idx.has_value())
     os << ", idx=" << symbol.idx.value();
+  if (symbol.parent_type_id.has_value())
+    os << ", parent_type_id=" << *symbol.parent_type_id;
   os << "}";
   return os;
 }

@@ -87,12 +87,14 @@ NamedBinding ScopeManager::InsertNameIntoScope(
     NamedBinding::Kind kind,
     std::optional<TypeId> type_id,
     std::optional<SymbolId> symbol_id,
-    std::optional<NamedBinding::Idx> idx) {
+    std::optional<NamedBinding::Idx> idx,
+    std::optional<TypeId> parent_type_id) {
   NamedBinding binding = {.kind = kind,
                           .name = name.data(),
                           .realized_type_id = std::move(type_id),
                           .symbol_id = std::move(symbol_id),
-                          .idx = std::move(idx)};
+                          .idx = std::move(idx),
+                          .parent_type_id = std::move(parent_type_id)};
   scopes_[active_scope_id_].symbols[name.data()] = binding;
   return binding;
 }
@@ -124,6 +126,17 @@ NamedBinding ScopeManager::DeclareTemplateBinding(std::string_view name,
                                                   TypeId type_id) {
   return InsertNameIntoScope(name, NamedBinding::Template, type_id,
                              /*symbol_id=*/std::nullopt);
+}
+
+std::vector<NamedBinding> ScopeManager::GetBindingsForScope(
+    ScopeId scope_id,
+    NamedBinding::Kind filter_kind) const {
+  std::vector<NamedBinding> result;
+  for (const auto& [name, binding] : scopes_[scope_id].symbols) {
+    if (binding.kind == filter_kind)
+      result.push_back(binding);
+  }
+  return result;
 }
 
 void ScopeManager::PrintScopeTree(std::ostream& os,

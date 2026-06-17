@@ -2,18 +2,18 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause
 
-extern struct Array {
-  static fn new() -> Array;
-  static fn init(...) -> Array;
-  static fn withSize(size: i32) -> Array;
+extern struct Array[T] {
+  static fn new() -> Array[T];
+  static fn init(...) -> Array[T];
+  static fn withSize(size: i32) -> Array[T];
 
-  fn push(self: Array, value: any);
-  fn get(self: Array, idx: i32) -> any;
-  fn set(self: Array, idx: i32, value: any) -> any;
-  fn length(self: Array) -> i32;
+  fn push(self: Array[T], value: T);
+  fn get(self: Array[T], idx: i32) -> T;
+  fn set(self: Array[T], idx: i32, value: T) -> T;
+  fn length(self: Array[T]) -> i32;
 
-  fn slice(self: Array, start: i32, count: i32) -> Array {
-    let slice = Array.withSize(count);
+  fn slice(self: Array[T], start: i32, count: i32) -> Array[T] {
+    let slice = Array.of(T).withSize(count);
 
     let idx = 0;
     while (start + idx < self.length() && idx < count) {
@@ -23,8 +23,8 @@ extern struct Array {
     return slice;
   }
 
-  fn map(self: Array, transform: fn(any) -> any) -> Array {
-    let result = Array.withSize(self.length());
+  fn map[N](self: Array[T], transform: fn(T) -> N) -> Array[N] {
+    let result = Array.of(N).withSize(self.length());
 
     let idx = 0;
     while (idx < self.length()) {
@@ -36,52 +36,58 @@ extern struct Array {
   }
 }
 
-struct BoxInt {
-  value: i32;
+struct Box[T] {
+  value: T;
 }
 
-extern struct Map {
-  static fn new() -> Map;
-  fn get(self: Map, key: any) -> any;
-  fn set(self: Map, key: any, value: any) -> Void;
+extern struct Map[K, V] {
+  static fn new() -> Map[K, V];
+  fn get(self: Map[K,V], key: K) -> V;
+  fn set(self: Map[K,V], key: K, value: V) -> Void;
 }
 
-extern struct Promise {
-  static fn new() -> Promise;
+extern struct Promise[T] {
+  static fn new() -> Promise[T];
 
-  fn fulfill(self: Promise, value: any);
-  fn reject(self: Promise, error: any);
-  fn then(self: Promise, on_fulfill: any, on_reject: any) -> Promise;
-
-  static fn all(promises: Array) -> Promise {
-    let promise = Promise.new();
-
-    let results = Array.withSize(promises.length());
-    let completed = BoxInt(0);
-
-    let idx = 0;
-    while (idx < promises.length()) {
-      (promises.get(idx) as Promise).then(
-        fn (value: any) {  
-          results.set(idx, value);  
-          completed.value = completed.value + 1;
-
-          if (completed.value == promises.length()) { 
-            promise.fulfill(results); 
-          }
-        },
-        fn (error: any) {
-          if (completed.value != -1) {
-            promise.reject(error);
-            completed.value = -1;
-          }
-        }
-      );
-      idx = idx + 1;
-    }
-    return promise;
-  }
+  fn fulfill(self: Promise[T], value: T);
+  fn reject(self: Promise[T], error: any);
+  fn then[R1 = T, R2 = never](self: Promise[T],
+      on_fulfill: (fn(T)->R1)?,
+      on_reject: (fn(any)->R2)?
+  ) -> Promise[R1|R2];
 }
+
+// fn Promise_all[ResultType](
+//   promises: Array[Promise[ResultType]]
+// ) -> Promise[Array[ResultType]] {
+//   let promise = Promise.of(Array[ResultType]).new();
+
+//   let results = Array.of(ResultType).withSize(promises.length());
+//   let completed = Box.of(i32)(0);
+
+//   let idx = 0;
+//   while (idx < promises.length()) {
+//     promises.get(idx).then(
+//       fn (value: ResultType) {  
+//         results.set(idx, value);  
+//         completed.value = completed.value + 1;
+
+//         if (completed.value == promises.length()) { 
+//           promise.fulfill(results); 
+//         }
+//       },
+//       fn (error: any) -> any {
+//         if (completed.value != -1) {
+//           promise.reject(error);
+//           completed.value = -1;
+//         }
+//         return Nil;
+//       }
+//     );
+//     idx = idx + 1;
+//   }
+//   return promise;
+// }
 
 extern struct String {
   static fn valueOf(value: any) -> String;

@@ -1,0 +1,55 @@
+// Copyright (c) 2026, Jordan Werthman <jordanwerthman@gmail.com>
+//
+// SPDX-License-Identifier: BSD-2-Clause
+
+@import "std/types.nib"
+
+fn sort[T](array: Array[T], compare: fn(T, T) -> i32) {
+  if (array.length() > 1) {
+    quicksort(array, 0, array.length() - 1, compare);
+  }
+}
+
+fn quicksort[T](
+  array: Array[T],
+  low: i32,
+  high: i32,
+  compare: fn(T, T) -> i32
+) {
+  if (low < high) {
+    let pivot_index = partition(array, low, high, compare);
+
+    quicksort(array, low, pivot_index - 1, compare);
+    quicksort(array, pivot_index + 1, high, compare);
+  }
+}
+
+fn partition[T](
+  array: Array[T],
+  low: i32,
+  high: i32,
+  compare: fn(T, T) -> i32
+) -> i32 {
+  let pivot = array.get(high);
+  let i = low;
+
+  let j = low;
+  while (j < high) {
+    if (compare(array.get(j), pivot) <= 0) {
+      swap(array, i, j);
+      i = i + 1;
+    }
+
+    j = j + 1;
+  }
+
+  swap(array, i, high);
+
+  return i;
+}
+
+fn swap[T](array: Array[T], a: i32, b: i32) {
+  let tmp = array.get(a);
+  array.set(a, array.get(b));
+  array.set(b, tmp);
+}

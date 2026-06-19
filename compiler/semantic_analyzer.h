@@ -19,7 +19,7 @@ class SemanticAnalyzer {
                             ScopeManager& scope_manager,
                             ErrorCollector& error_collector);
 
-  void Check(Block& block);
+  void Check(Block& block, TypeId return_type_id);
 
   struct ScopeNarrowingInfo {
     NamedBinding symbol;
@@ -47,7 +47,8 @@ class SemanticAnalyzer {
       std::unique_ptr<Expression>& expression);
 
  private:
-  void CheckStatement(std::unique_ptr<Statement>& statement);
+  void CheckStatement(std::unique_ptr<Statement>& statement,
+                      TypeId return_type_id);
 
   struct ArgumentResult {
     SemanticAnalyzer::Result result;

@@ -54,7 +54,7 @@ SemanticAnalyzer::SemanticAnalyzer(TypeContext& type_context,
       scope_manager_(scope_manager),
       error_collector_(error_collector) {}
 
-void SemanticAnalyzer::Check(Block& block) {
+void SemanticAnalyzer::Check(Block& block, TypeId function_type_id) {
   // Collect user-defined type names to ensure they're available for function
   // signatures, field types, etc. This also allows for recursive types (e.g. a
   // struct that has a field of its own type).
@@ -87,7 +87,7 @@ void SemanticAnalyzer::Check(Block& block) {
   }
 
   for (auto& statement : block.statements) {
-    CheckStatement(statement);
+    CheckStatement(statement, function_type_id);
   }
 
   std::vector<TypeContext::RealizedFunction> function_bodies =
@@ -102,7 +102,8 @@ void SemanticAnalyzer::Check(Block& block) {
         continue;
 
       scope_manager_.WithScope(realized_function.scope_id, [&]() {
-        Check(*realized_function.delcaration.body);
+        Check(*realized_function.delcaration.body,
+              realized_function.return_type_id);
       });
     }
 
@@ -110,7 +111,8 @@ void SemanticAnalyzer::Check(Block& block) {
   }
 }
 
-void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement) {
+void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
+                                      TypeId return_type_id) {
   std::visit(
       Overloaded{
           [&](std::unique_ptr<Expression>& expr) { CheckExpression(expr); },
@@ -131,29 +133,16 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement) {
                   ret.value->meta);
               return;
             }
-            // const auto& current_function =
-            // type_context_.GetCurrentFunction();
-            // CHECK(current_function.resolved.has_value());
 
-            // NamedBinding function_symbol =
-            //     current_function.resolved->function_symbol;
-
-            // const FunctionType* function_type =
-            //     type_context_.GetTypeInfo<FunctionType>(
-            //         function_symbol.type_id);
-            // CHECK(function_type)
-            //     << "Invalid function type for symbol: " << function_symbol;
-            // TypeId expected_return_type = function_type->return_type;
-
-            // if (!type_context_.IsTypeSubsetOf(return_result->type_id,
-            //                                   expected_return_type)) {
-            //   error_collector_.Add(
-            //       "Returning " +
-            //           type_context_.GetNameFromTypeId(return_result->type_id)
-            //           + " from function with return type " +
-            //           type_context_.GetNameFromTypeId(expected_return_type),
-            //       statement->meta);
-            // }
+            if (!type_context_.IsTypeSubsetOf(*return_result->type_id,
+                                              return_type_id)) {
+              error_collector_.Add(
+                  "Returning " +
+                      type_context_.GetNameFromTypeId(*return_result->type_id) +
+                      " from function with return type " +
+                      type_context_.GetNameFromTypeId(return_type_id),
+                  statement->meta);
+            }
           },
           [&](ThrowStatement& thr) { CheckExpression(thr.value); },
           [&](IfStatement& if_stmt) {
@@ -170,7 +159,7 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement) {
                                                       narrowing.if_branch_type);
               }
 
-              Check(if_stmt.then_body);
+              Check(if_stmt.then_body, return_type_id);
             }
             {
               AutoScope _{scope_manager_, ScopeManager::BlockScope, "else"};
@@ -179,14 +168,14 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement) {
                     narrowing.symbol, narrowing.else_branch_type);
               }
 
-              Check(if_stmt.else_body);
+              Check(if_stmt.else_body, return_type_id);
             }
           },
           [&](WhileStatement& while_stmt) {
             CheckExpression(while_stmt.condition);
             {
               AutoScope _{scope_manager_, ScopeManager::BlockScope, "while"};
-              Check(while_stmt.body);
+              Check(while_stmt.body, return_type_id);
             }
           },
           // `break` and `continue` are single word statements.

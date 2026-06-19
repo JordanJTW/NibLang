@@ -438,7 +438,7 @@ std::optional<TypeId> TypeContext::DeclareFunctionType(
 
   scope_manager_.ExitScope();
 
-  realized_functions_.push_back(RealizedFunction{scope_id, fn});
+  realized_functions_.push_back(RealizedFunction{scope_id, fn, *return_type});
 
   auto key = FunctionType{std::move(argument_types), return_type.value(),
                           fn.is_variadic, scope_id};

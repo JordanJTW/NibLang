@@ -175,7 +175,9 @@ class TypeContext {
   struct RealizedFunction {
     ScopeId scope_id;
     const FunctionDeclaration& delcaration;
+    TypeId return_type_id;
   };
+
   std::vector<RealizedFunction> GetRealizedFunctions() {
     std::vector<RealizedFunction> current_functions = realized_functions_;
     realized_functions_.clear();

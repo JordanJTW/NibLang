@@ -102,7 +102,7 @@ class GoldenTest : public ::testing::Test {
     Block root_block = Parser{full_program_text}.Parse();
 
     SemanticAnalyzer{type_context_, scope_manager_, error_collector_}.Check(
-        root_block);
+        root_block, TypeContext::Any);
 
     if (error_collector_.HasErrors()) {
       error_collector_.PrintAllErrors(full_program_text);

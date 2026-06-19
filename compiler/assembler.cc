@@ -320,7 +320,7 @@ void PrintTwoArgumentOp(const std::vector<uint8_t>& bytecode,
                   (bytecode[pc + 7] << 16) | (bytecode[pc + 8] << 24);
   printf(
       "0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x,"
-      " // %04zx: %s %s: %d %s: %d\n"
+      " // %04zx: %s %s: %u %s: %u\n"
       "      0x%02x, 0x%02x, 0x%02x, 0x%02x\n",
       bytecode[pc], bytecode[pc + 1], bytecode[pc + 2], bytecode[pc + 3],
       bytecode[pc + 4], pc, GetOpName(op).c_str(), arg1_name.data(), arg1,

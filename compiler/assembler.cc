@@ -12,6 +12,8 @@
 #include <string_view>
 #include <utility>
 
+#include "compiler/logging.h"
+
 Assembler& Assembler::PushConstRef(uint32_t idx) {
   PushOpAndArgs(OP_PUSH_CONST_REF, {idx});
   return *this;
@@ -47,12 +49,24 @@ Assembler& Assembler::Call(uint32_t idx, uint32_t argc) {
   PushOpAndArgs(OP_CALL, {idx, argc});
   return *this;
 }
+Assembler& Assembler::PatchCall(uint32_t idx, uint32_t argc) {
+  size_t index_address = data_.size() + 1 /* account for op code */;
+  call_patch_locations.emplace_back(idx, index_address);
+  Call(idx, argc);
+  return *this;
+}
 Assembler& Assembler::CallDynamic(uint32_t argc) {
   PushOpAndArgs(OP_DYNAMIC_CALL, {argc});
   return *this;
 }
 Assembler& Assembler::Bind(uint32_t idx, uint32_t argc) {
   PushOpAndArgs(OP_BIND, {idx, argc});
+  return *this;
+}
+Assembler& Assembler::PatchBind(uint32_t idx, uint32_t argc) {
+  size_t index_address = data_.size() + 1 /* account for op code */;
+  call_patch_locations.emplace_back(idx, index_address);
+  Bind(idx, argc);
   return *this;
 }
 Assembler& Assembler::PushLocal(uint32_t idx) {
@@ -197,24 +211,42 @@ Assembler& Assembler::DebugString(const std::string& message) {
   return *this;
 }
 
-std::vector<uint8_t> Assembler::Build(Metadata* metadata) {
+std::vector<uint8_t> Assembler::Build(
+    Metadata* metadata,
+    std::unordered_map<uint32_t, uint32_t> call_link_mapping) const {
+  std::vector<uint8_t> result = data_;
+
+  // Late linking for Jump/Labels.
   for (const auto& [pc, label] : patch_locations) {
     if (auto iter = label_to_location.find(label);
         iter != label_to_location.cend()) {
       uint32_t address = iter->second;
-      data_[pc] = address & 0xFF;
-      data_[pc + 1] = (address >> 8) & 0xFF;
-      data_[pc + 2] = (address >> 16) & 0xFF;
-      data_[pc + 3] = (address >> 24) & 0xFF;
+      result[pc] = address & 0xFF;
+      result[pc + 1] = (address >> 8) & 0xFF;
+      result[pc + 2] = (address >> 16) & 0xFF;
+      result[pc + 3] = (address >> 24) & 0xFF;
     } else {
-      fprintf(stderr, "label '%s' was never defined", label.c_str());
-      std::abort();
+      LOG(FATAL) << "label '" << label << "' was never defined";
     }
   }
+
+  for (const auto& [idx, address] : call_patch_locations) {
+    if (auto iter = call_link_mapping.find(idx);
+        iter != call_link_mapping.cend()) {
+      const auto [source_idx, target_idx] = *iter;
+      result[address] = target_idx & 0xFF;
+      result[address + 1] = (target_idx >> 8) & 0xFF;
+      result[address + 2] = (target_idx >> 16) & 0xFF;
+      result[address + 3] = (target_idx >> 24) & 0xFF;
+    } else {
+      LOG(FATAL) << "call idx '" << idx << "' was never linked";
+    }
+  }
+
   if (metadata != nullptr) {
     metadata->max_local_index = max_local_index;
   }
-  return data_;
+  return result;
 }
 
 void Assembler::PushOpAndArgs(op_t op, std::initializer_list<uint32_t> args) {

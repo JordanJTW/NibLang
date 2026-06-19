@@ -26,8 +26,12 @@ class Assembler {
   Assembler& StackDup();
   Assembler& StackDel();
   Assembler& Call(uint32_t idx, uint32_t argc);
+  // The same as `Call` but allows for remapping `idx` during linking.
+  Assembler& PatchCall(uint32_t idx, uint32_t argc);
   Assembler& CallDynamic(uint32_t argc);
   Assembler& Bind(uint32_t idx, uint32_t argc);
+  // The same as `Bind` but allows for remapping `idx` during linking.
+  Assembler& PatchBind(uint32_t idx, uint32_t argc);
   Assembler& PushLocal(uint32_t idx);
   Assembler& Add();
   Assembler& Subtract();
@@ -64,7 +68,9 @@ class Assembler {
     uint32_t max_local_index;
   };
 
-  std::vector<uint8_t> Build(Metadata* metadata = nullptr);
+  std::vector<uint8_t> Build(
+      Metadata* metadata = nullptr,
+      std::unordered_map<uint32_t, uint32_t> call_link_mapping = {}) const;
 
  private:
   void PushOpAndArgs(op_t op, std::initializer_list<uint32_t> args);
@@ -78,6 +84,8 @@ class Assembler {
   std::map<std::string, uint32_t> label_to_location;
   // Targets for labels that need to be patched during `Assemble()`
   std::map<uint32_t, std::string> patch_locations;
+  // Maps a PatchCall's idx argument to the address in the bytecode to patch.
+  std::vector<std::pair<uint32_t, uint32_t>> call_patch_locations;
   // The maximum local storage index referenced in the bytecode
   uint32_t max_local_index = 0;
 };

@@ -13,7 +13,6 @@
 #include "compiler/assembler.h"
 #include "compiler/logging.h"
 #include "compiler/printer.h"
-#include "compiler/program_builder.h"
 #include "compiler/tokenizer.h"
 #include "compiler/type_context.h"
 #include "compiler/types.h"
@@ -31,124 +30,126 @@ Overloaded(Ts...) -> Overloaded<Ts...>;
 
 }  // namespace
 
-ByteCodeGenerator::ByteCodeGenerator(ProgramBuilder& program_builder,
-                                     const TypeContext& type_context)
-    : builder_(program_builder), type_context_(type_context) {}
+ByteCodeGenerator::ByteCodeGenerator(const TypeContext& type_context,
+                                     const ScopeManager& scope_manager,
+                                     ConstantPool& constant_pool)
+    : type_context_(type_context),
+      scope_manager_(scope_manager),
+      constant_pool_(constant_pool) {}
 
-void ByteCodeGenerator::EmitBlock(const Block& root) {
-  EmitBlock(root, std::nullopt);
+ByteCodeGenerator::FunctionObject ByteCodeGenerator::Build(
+    const FunctionSymbol& symbol,
+    std::vector<SymbolId>& called_symbols) && {
+  size_t capture_count = 0;
+  size_t argument_count = 0;
+
+  const auto& [key, instance_id] = *symbol.instances.begin();
+
+  const FunctionType* const type =
+      type_context_.GetTypeInfo<FunctionType>(instance_id);
+
+  // Process captures first to reflect their position in an OP_BIND.
+  for (const auto& binding :
+       scope_manager_.GetBindingsForScope(type->scope_id)) {
+    if (binding.kind == NamedBinding::Kind::Capture) {
+      symbol_to_local_idx_[binding.idx.value()] = next_local_idx_++;
+      capture_count++;
+    }
+  }
+
+  for (const auto& binding :
+       scope_manager_.GetBindingsForScope(type->scope_id)) {
+    if (binding.kind == NamedBinding::Kind::Argument) {
+      symbol_to_local_idx_[binding.idx.value()] = next_local_idx_++;
+      argument_count++;
+    }
+  }
+
+  if (symbol.declaration.body)
+    EmitBlock(*symbol.declaration.body);
+
+  // Insert an return; to unwind the stack
+  if (auto* string =
+          std::get_if<std::string>(&symbol.declaration.return_type.type);
+      string && (*string == "Void"))
+    bytecode_.Return();
+
+  called_symbols = std::move(called_symbols_);
+  return FunctionObject{&symbol, std::move(bytecode_), capture_count,
+                        argument_count, symbol_to_local_idx_.size()};
 }
 
 void ByteCodeGenerator::EmitBlock(const Block& block,
                                   std::optional<LoopContext> loop_ctx) {
   for (const auto& stmt : block.statements) {
-    std::visit(
-        Overloaded{
-            [&](const std::unique_ptr<Expression>& expr) {
-              EmitExpression(expr);
+    std::visit(Overloaded{
+                   [&](const std::unique_ptr<Expression>& expr) {
+                     EmitExpression(expr);
 
-              // Expressions always leave a value on the stack (if not Void) so
-              // when executed as a Statement the unused value must be consumed.
-              if (expr->type != TypeContext::LiteralType::Void)
-                builder_.GetCurrentCode().StackDel();
-            },
-            [&](const FunctionDeclaration& fn) {
-              if (fn.body) {
-                CHECK(fn.resolved->variables_to_capture.empty())
-                    << "Captures found for function.";
+                     // Expressions always leave a value on the stack (if not
+                     // Void) so when executed as a Statement the unused value
+                     // must be consumed.
+                     if (expr->type != TypeContext::LiteralType::Void)
+                       bytecode_.StackDel();
+                   },
+                   [&](const FunctionDeclaration& fn) {
+                     // Will be handled as separate FunctionSymbol codegen.
+                   },
+                   [&](const ReturnStatement& ret) {
+                     EmitExpression(ret.value);
+                     bytecode_.Return();
+                   },
+                   [&](const ThrowStatement& thr) {
+                     EmitExpression(thr.value);
+                     bytecode_.Throw();
+                   },
+                   [&](const IfStatement& if_stmt) {
+                     EmitExpression(if_stmt.condition);
+                     std::string id = std::to_string(next_unique_id_++);
+                     bytecode_.JumpIfFalse("else" + id);
+                     EmitBlock(if_stmt.then_body, loop_ctx);
+                     bytecode_.Jump("end_if" + id);
+                     bytecode_.Label("else" + id);
+                     EmitBlock(if_stmt.else_body, loop_ctx);
+                     bytecode_.Label("end_if" + id);
+                   },
+                   [&](const WhileStatement& while_stmt) {
+                     std::string id = std::to_string(next_unique_id_++);
+                     std::string condition_label = "while_cond" + id;
+                     std::string end_label = "while_end" + id;
 
-                EmitFunctionBlock(fn);
-              }
-            },
-            [&](const ReturnStatement& ret) {
-              EmitExpression(ret.value);
-              builder_.GetCurrentCode().Return();
-            },
-            [&](const ThrowStatement& thr) {
-              EmitExpression(thr.value);
-              builder_.GetCurrentCode().Throw();
-            },
-            [&](const IfStatement& if_stmt) {
-              EmitExpression(if_stmt.condition);
-              std::string id = std::to_string(next_unique_id_++);
-              builder_.GetCurrentCode().JumpIfFalse("else" + id);
-              EmitBlock(if_stmt.then_body, loop_ctx);
-              builder_.GetCurrentCode().Jump("end_if" + id);
-              builder_.GetCurrentCode().Label("else" + id);
-              EmitBlock(if_stmt.else_body, loop_ctx);
-              builder_.GetCurrentCode().Label("end_if" + id);
-            },
-            [&](const WhileStatement& while_stmt) {
-              std::string id = std::to_string(next_unique_id_++);
-              std::string condition_label = "while_cond" + id;
-              std::string end_label = "while_end" + id;
+                     bytecode_.Label(condition_label);
+                     EmitExpression(while_stmt.condition);
+                     bytecode_.JumpIfFalse(end_label);
+                     EmitBlock(while_stmt.body,
+                               LoopContext{end_label, condition_label});
+                     bytecode_.Jump(condition_label);
+                     bytecode_.Label(end_label);
+                   },
+                   [&](const BreakStatement&) {
+                     CHECK(loop_ctx) << "break statement not within a loop";
+                     bytecode_.Jump(loop_ctx->break_label);
+                   },
+                   [&](const ContinueStatement&) {
+                     CHECK(loop_ctx) << "continue statement not within a loop";
+                     bytecode_.Jump(loop_ctx->continue_label);
+                   },
+                   [&](const AssignStatement& assign) {
+                     EmitExpression(assign.value);
+                     CHECK(assign.resolved)
+                         << "Unresolved variable in assignment: "
+                         << assign.name;
 
-              builder_.GetCurrentCode().Label(condition_label);
-              EmitExpression(while_stmt.condition);
-              builder_.GetCurrentCode().JumpIfFalse(end_label);
-              EmitBlock(while_stmt.body,
-                        LoopContext{end_label, condition_label});
-              builder_.GetCurrentCode().Jump(condition_label);
-              builder_.GetCurrentCode().Label(end_label);
-            },
-            [&](const BreakStatement&) {
-              CHECK(loop_ctx) << "break statement not within a loop";
-              builder_.GetCurrentCode().Jump(loop_ctx->break_label);
-            },
-            [&](const ContinueStatement&) {
-              CHECK(loop_ctx) << "continue statement not within a loop";
-              builder_.GetCurrentCode().Jump(loop_ctx->continue_label);
-            },
-            [&](const AssignStatement& assign) {
-              EmitExpression(assign.value);
-              CHECK(assign.resolved)
-                  << "Unresolved variable in assignment: " << assign.name;
-
-              builder_.StoreSymbol(assign.resolved->symbol);
-            },
-            [&](const StructDeclaration& struct_decl) {
-              for (const auto& method : struct_decl.methods) {
-                // Assume that a function missing a body is valid by the time
-                // we generate ByteCode (i.e. struct is extern, etc) and skip.
-                if (!method.second.body)
-                  continue;
-
-                CHECK(method.second.resolved)
-                    << "Unresolved method: " << method.first;
-                CHECK(method.second.resolved->variables_to_capture.empty())
-                    << "Captures found for method: " << method.first;
-
-                EmitFunctionBlock(method.second,
-                                  struct_decl.name + "_" + method.first);
-              }
-            },
-            [&](ImportStatement& import) { /*nothing to compile*/ },
-        },
-        stmt->as);
+                     StoreSymbol(assign.resolved->symbol);
+                   },
+                   [&](const StructDeclaration& struct_decl) {
+                     // SemanticAnalyzer produces FunctionSymbols for methods
+                     // and they will be handled as separate functions.
+                   },
+                   [&](ImportStatement& import) { /*nothing to compile*/ },
+               },
+               stmt->as);
   }
-}
-
-void ByteCodeGenerator::EmitFunctionBlock(
-    const FunctionDeclaration& fn,
-    std::optional<std::string> override_name) {
-  CHECK(fn.resolved) << "Function must be resolved: " << fn.name;
-  CHECK(fn.resolved->function_symbol.idx)
-      << "Function does not have an assigned CallIdx: " << fn.name;
-
-  builder_.EnterFunctionScope(
-      override_name.value_or(fn.name), fn.resolved->function_symbol.idx.value(),
-      fn.resolved->arguments, fn.resolved->variables_to_capture);
-  EmitBlock(*fn.body);
-
-  // CHECK(fn.resolved->function_symbol.realized_type_id);
-  // const auto& type = type_context_.GetTypeInfo<FunctionType>(
-  //     *fn.resolved->function_symbol.realized_type_id);
-
-  // Insert an return; to unwind the stack
-  if (auto* string = std::get_if<std::string>(&fn.return_type.type);
-      string && (*string == "Void"))
-    builder_.GetCurrentCode().Return();
-  builder_.ExitFunctionScope();
 }
 
 void ByteCodeGenerator::EmitExpression(
@@ -168,47 +169,44 @@ void ByteCodeGenerator::EmitExpression(
       Overloaded{
           [&](const PrimaryExpression& primary) {
             std::visit(
-                Overloaded{
-                    [&](const StringLiteral& str) {
-                      builder_.GetCurrentCode().PushConstRef(
-                          builder_.GetIdForConstant(str.value));
-                    },
-                    [&](const Identifier& ident) {
-                      CHECK(ident.resolved)
-                          << "Unresolved identifier: " << ident.name;
+                Overloaded{[&](const StringLiteral& str) {
+                             bytecode_.PushConstRef(
+                                 constant_pool_.GetIdFor(str.value));
+                           },
+                           [&](const Identifier& ident) {
+                             CHECK(ident.resolved)
+                                 << "Unresolved identifier: " << ident.name;
 
-                      switch (ident.resolved->symbol.kind) {
-                        case NamedBinding::Function:
-                          CHECK(ident.resolved->symbol.idx.has_value())
-                              << "Function symbol missing index: "
-                              << ident.name;
-                          builder_.GetCurrentCode().Bind(
-                              ident.resolved->symbol.idx.value(),
-                              /*argc=*/0);
-                          break;
-                        case NamedBinding::Variable:
-                        case NamedBinding::Capture:
-                        case NamedBinding::Narrowed: {
-                          builder_.PushSymbol(ident.resolved->symbol);
-                          break;
-                        }
-                        default:
-                          NOTREACHED() << "Unsupported identifier kind: "
-                                       << ident.resolved->symbol.kind;
-                          break;
-                      }
-                    },
-                    [&](int32_t i32) {
-                      builder_.GetCurrentCode().PushInt32(i32);
-                    },
-                    [&](float f32) {
-                      builder_.GetCurrentCode().PushFloat(f32);
-                    },
-                    [&](const CodepointLiteral& codepoint) {
-                      builder_.GetCurrentCode().PushInt32(codepoint.value);
-                    },
-                    [&](bool b) { builder_.GetCurrentCode().PushBool(b); },
-                    [&](Nil) { builder_.GetCurrentCode().PushNil(); }},
+                             switch (ident.resolved->symbol.kind) {
+                               case NamedBinding::Function:
+                                 CHECK(ident.resolved)
+                                     << "Unresolved function:" << ident.name;
+                                 bytecode_.PatchBind(
+                                     *ident.resolved->symbol.symbol_id,
+                                     /*argc=*/0);
+                                 called_symbols_.push_back(
+                                     *ident.resolved->symbol.symbol_id);
+                                 break;
+                               case NamedBinding::Argument:
+                               case NamedBinding::Variable:
+                               case NamedBinding::Capture:
+                               case NamedBinding::Narrowed: {
+                                 PushSymbol(ident.resolved->symbol);
+                                 break;
+                               }
+                               default:
+                                 NOTREACHED() << "Unsupported identifier kind: "
+                                              << ident.resolved->symbol.kind;
+                                 break;
+                             }
+                           },
+                           [&](int32_t i32) { bytecode_.PushInt32(i32); },
+                           [&](float f32) { bytecode_.PushFloat(f32); },
+                           [&](const CodepointLiteral& codepoint) {
+                             bytecode_.PushInt32(codepoint.value);
+                           },
+                           [&](bool b) { bytecode_.PushBool(b); },
+                           [&](Nil) { bytecode_.PushNil(); }},
                 primary.value);
           },
           [&](const BinaryExpression& binary) {
@@ -223,11 +221,11 @@ void ByteCodeGenerator::EmitExpression(
               EmitExpression(target);
               switch (binary.op) {
                 case TokenKind::kCompareEq:
-                  builder_.GetCurrentCode().Is(value_type_t::VALUE_TYPE_NULL);
+                  bytecode_.Is(value_type_t::VALUE_TYPE_NULL);
                   break;
                 case TokenKind::kCompareNe:
-                  builder_.GetCurrentCode().Is(value_type_t::VALUE_TYPE_NULL);
-                  builder_.GetCurrentCode().Not();
+                  bytecode_.Is(value_type_t::VALUE_TYPE_NULL);
+                  bytecode_.Not();
                   break;
                 default:
                   NOTREACHED()
@@ -250,13 +248,13 @@ void ByteCodeGenerator::EmitExpression(
               if (const auto* identifier = std::get_if<Identifier>(
                       &std::get<PrimaryExpression>(assign.lhs->as).value)) {
                 EmitExpression(assign.rhs);
-                builder_.GetCurrentCode().StackDup();
+                bytecode_.StackDup();
 
                 CHECK(identifier->resolved)
                     << "Unresolved identifier on LHS of assignment: "
                     << identifier->name;
 
-                builder_.StoreSymbol(identifier->resolved->symbol);
+                StoreSymbol(identifier->resolved->symbol);
               } else {
                 LOG(FATAL) << "Assigning to literal type";
               }
@@ -271,33 +269,33 @@ void ByteCodeGenerator::EmitExpression(
                              AccessMode::STORE);
               EmitExpression(assign.rhs);
 
-              builder_.GetCurrentCode().Call(VM_BUILTIN_ARRAY_SET, 3);
+              bytecode_.Call(VM_BUILTIN_ARRAY_SET, 3);
             } else {
               LOG(FATAL) << "Unsupported LHS for AssignmentExpression: "
                          << assign.lhs->as.index();
             }
           },
           [&](const MemberAccessExpression& member_access) {
-            CHECK(member_access.resolved)
-                << "Unresolved member access: " << member_access.member_name
-                << " at line: " << expr->meta.line_range.start;
-
             EmitExpression(member_access.object, optional_chain_ctx);
 
             if (access_mode == AccessMode::LOAD ||
                 access_mode == AccessMode::STORE) {
+              CHECK(member_access.resolved)
+                  << "Unresolved field access: " << member_access.member_name
+                  << " at line: " << expr->meta.line_range.start;
+
               MemberIdx idx = member_access.resolved->index;
-              builder_.GetCurrentCode().PushInt32(idx);
+              bytecode_.PushInt32(idx);
             }
             if (access_mode == AccessMode::LOAD)
-              builder_.GetCurrentCode().Call(VM_BUILTIN_ARRAY_GET, 2);
+              bytecode_.Call(VM_BUILTIN_ARRAY_GET, 2);
           },
           [&](const ArrayAccessExpression& array_access) {
             EmitExpression(array_access.array, optional_chain_ctx);
             EmitExpression(array_access.index);
 
             if (access_mode == AccessMode::LOAD)
-              builder_.GetCurrentCode().Call(VM_BUILTIN_ARRAY_GET, 2);
+              bytecode_.Call(VM_BUILTIN_ARRAY_GET, 2);
           },
           [&](const LogicExpression& logic) {
             EmitExpression(logic.lhs);
@@ -308,36 +306,48 @@ void ByteCodeGenerator::EmitExpression(
 
             // Handle short-circuiting to skip evaluating the RHS if possible.
             if (logic.kind == LogicExpression::AND) {
-              builder_.GetCurrentCode().JumpIfFalse(lhs_label);
+              bytecode_.JumpIfFalse(lhs_label);
             } else {
-              builder_.GetCurrentCode().JumpIfTrue(lhs_label);
+              bytecode_.JumpIfTrue(lhs_label);
             }
 
             EmitExpression(logic.rhs);
-            builder_.GetCurrentCode().Jump(end_label);
+            bytecode_.Jump(end_label);
 
             // Short-circuiting consumes the LHS value on the stack, so we need
             // to push the correct value for the result of the logic expression.
-            builder_.GetCurrentCode().Label(lhs_label);
+            bytecode_.Label(lhs_label);
             if (logic.kind == LogicExpression::AND) {
-              builder_.GetCurrentCode().PushBool(false);
+              bytecode_.PushBool(false);
             } else {
-              builder_.GetCurrentCode().PushBool(true);
+              bytecode_.PushBool(true);
             }
 
-            builder_.GetCurrentCode().Label(end_label);
+            bytecode_.Label(end_label);
           },
           [&](const ClosureExpression& closure) {
             CHECK(closure.fn.resolved) << "Unresolved function!";
-            EmitFunctionBlock(closure.fn);
 
-            for (const auto& capture :
-                 closure.fn.resolved->variables_to_capture) {
-              builder_.PushSymbol(capture);
+            const auto* closure_symbol =
+                type_context_.GetSymbol<FunctionSymbol>(
+                    closure.fn.resolved->function_symbol.symbol_id.value());
+
+            const auto* closure_type = type_context_.GetTypeInfo<FunctionType>(
+                closure_symbol->instances.begin()->second);
+
+            size_t capture_count = 0;
+            for (const auto& binding :
+                 scope_manager_.GetBindingsForScope(closure_type->scope_id)) {
+              if (binding.kind != NamedBinding::Capture)
+                continue;
+
+              PushSymbol(binding);
+              capture_count++;
             }
-            builder_.GetCurrentCode().Bind(
-                closure.fn.resolved->function_symbol.idx.value(),
-                /*argc=*/closure.fn.resolved->variables_to_capture.size());
+            bytecode_.PatchBind(*closure.fn.resolved->function_symbol.symbol_id,
+                                /*argc=*/capture_count);
+            called_symbols_.push_back(
+                *closure.fn.resolved->function_symbol.symbol_id);
           },
           [&](PrefixUnaryExpression& prefix) {
             EmitExpression(prefix.operand);
@@ -346,15 +356,15 @@ void ByteCodeGenerator::EmitExpression(
                 break;
               case TokenKind::kMinus:
                 // TODO: Add OP_NEGATE?
-                builder_.GetCurrentCode().PushInt32(-1);
-                builder_.GetCurrentCode().Multiply();
+                bytecode_.PushInt32(-1);
+                bytecode_.Multiply();
                 break;
               case TokenKind::kPlusPlus:
               case TokenKind::kMinusMinus:
                 LOG(FATAL) << "Prefix ++/-- are not yet supported!";
                 break;
               case TokenKind::kNot:
-                builder_.GetCurrentCode().Not();
+                bytecode_.Not();
                 break;
               default:
                 LOG(FATAL) << "Unsupported TokenKind op: " << prefix.op;
@@ -370,30 +380,29 @@ void ByteCodeGenerator::EmitExpression(
                 "null_case_" + std::to_string(next_unique_id_++);
             EmitExpression(optional_chain.root,
                            OptionalChainContext{null_label}, access_mode);
-            builder_.GetCurrentCode().Label(null_label);
+            bytecode_.Label(null_label);
           },
           [&](NilCoalescingExpression& coalescing) {
             std::string not_null_label =
                 "coalesce_" + std::to_string(next_unique_id_++);
 
             EmitExpression(coalescing.lhs);
-            builder_.GetCurrentCode().StackDup();
-            builder_.GetCurrentCode().Is(value_type_t::VALUE_TYPE_NULL);
-            builder_.GetCurrentCode().JumpIfFalse(not_null_label);
+            bytecode_.StackDup();
+            bytecode_.Is(value_type_t::VALUE_TYPE_NULL);
+            bytecode_.JumpIfFalse(not_null_label);
 
             EmitExpression(coalescing.rhs);
 
-            builder_.GetCurrentCode().Label(not_null_label);
+            bytecode_.Label(not_null_label);
           },
           [&](OptionalAccessExpression& optional_access) {
             EmitExpression(optional_access.target, optional_chain_ctx,
                            access_mode);
             CHECK(optional_chain_ctx.has_value())
                 << "Missing OptionalChainContext for OptionalAccessExpression";
-            builder_.GetCurrentCode().StackDup();
-            builder_.GetCurrentCode().Is(value_type_t::VALUE_TYPE_NULL);
-            builder_.GetCurrentCode().JumpIfTrue(
-                optional_chain_ctx->null_label);
+            bytecode_.StackDup();
+            bytecode_.Is(value_type_t::VALUE_TYPE_NULL);
+            bytecode_.JumpIfTrue(optional_chain_ctx->null_label);
           },
           [&](TemplateInstantiationExpression& template_expr) {
             EmitExpression(template_expr.generic_target);
@@ -412,15 +421,16 @@ void ByteCodeGenerator::EmitCall(
       case StaticMethod: {
         for (const auto& argument : call.arguments)
           EmitExpression(argument);
-        builder_.GetCurrentCode().Call(call.resolved->function_idx,
-                                       call.arguments.size());
+        bytecode_.PatchCall(call.resolved->target_symbol_id,
+                            call.arguments.size());
+        called_symbols_.push_back(call.resolved->target_symbol_id);
         break;
       }
       case Anonymous: {
         for (const auto& argument : call.arguments)
           EmitExpression(argument);
         EmitExpression(call.callee);
-        builder_.GetCurrentCode().CallDynamic(call.arguments.size());
+        bytecode_.CallDynamic(call.arguments.size());
         break;
       }
       case Method: {
@@ -429,15 +439,15 @@ void ByteCodeGenerator::EmitCall(
         for (const auto& argument : call.arguments)
           EmitExpression(argument);
 
-        builder_.GetCurrentCode().Call(call.resolved->function_idx,
-                                       call.arguments.size() + 1);
+        bytecode_.PatchCall(call.resolved->target_symbol_id,
+                            call.arguments.size() + 1);
+        called_symbols_.push_back(call.resolved->target_symbol_id);
         break;
       }
       case Constructor: {
         for (const auto& argument : call.arguments)
           EmitExpression(argument);
-        builder_.GetCurrentCode().Call(VM_BUILTIN_ARRAY_INIT,
-                                       call.arguments.size());
+        bytecode_.Call(VM_BUILTIN_ARRAY_INIT, call.arguments.size());
         break;
       }
     }
@@ -448,40 +458,78 @@ void ByteCodeGenerator::EmitOp(const Token& op, bool is_string) {
   switch (op.kind) {
     case TokenKind::kPlus:
       if (is_string)
-        builder_.GetCurrentCode().Concat();
+        bytecode_.Concat();
       else
-        builder_.GetCurrentCode().Add();
+        bytecode_.Add();
       break;
     case TokenKind::kMinus:
-      builder_.GetCurrentCode().Subtract();
+      bytecode_.Subtract();
       break;
     case TokenKind::kMultiply:
-      builder_.GetCurrentCode().Multiply();
+      bytecode_.Multiply();
       break;
     case TokenKind::kDivide:
-      builder_.GetCurrentCode().Divide();
+      bytecode_.Divide();
       break;
     case TokenKind::kCompareEq:
-      builder_.GetCurrentCode().Compare(OP_EQUAL);
+      bytecode_.Compare(OP_EQUAL);
       break;
     case TokenKind::kCompareNe:
-      builder_.GetCurrentCode().Compare(OP_EQUAL);
-      builder_.GetCurrentCode().Not();
+      bytecode_.Compare(OP_EQUAL);
+      bytecode_.Not();
       break;
     case TokenKind::kCompareGt:
-      builder_.GetCurrentCode().Compare(OP_GREATER_THAN);
+      bytecode_.Compare(OP_GREATER_THAN);
       break;
     case TokenKind::kCompareGe:
-      builder_.GetCurrentCode().Compare(OP_GREAT_OR_EQ);
+      bytecode_.Compare(OP_GREAT_OR_EQ);
       break;
     case TokenKind::kCompareLt:
-      builder_.GetCurrentCode().Compare(OP_LESS_THAN);
+      bytecode_.Compare(OP_LESS_THAN);
       break;
     case TokenKind::kCompareLe:
-      builder_.GetCurrentCode().Compare(OP_LESS_OR_EQ);
+      bytecode_.Compare(OP_LESS_OR_EQ);
       break;
     default:
       LOG(ERROR) << "unsupported binary operator: " << op.kind;
       return;
   }
+}
+
+void ByteCodeGenerator::PushSymbol(NamedBinding symbol) {
+  uint32_t local_idx = GetIdFor(symbol);
+  bytecode_.PushLocal(local_idx);
+}
+
+void ByteCodeGenerator::StoreSymbol(NamedBinding symbol) {
+  uint32_t local_idx = GetIdFor(symbol);
+  bytecode_.StoreLocal(local_idx);
+}
+
+uint32_t ByteCodeGenerator::GetIdFor(NamedBinding lookup) {
+  if (auto it = symbol_to_local_idx_.find(lookup.idx.value());
+      it != symbol_to_local_idx_.end())
+    return it->second;
+
+  uint32_t id = next_local_idx_++;
+  symbol_to_local_idx_[lookup.idx.value()] = id;
+  return lookup.idx.value();
+}
+
+uint32_t ConstantPool::GetIdFor(const std::string& value) {
+  auto it = string_constant_to_id_.find(value);
+  if (it != string_constant_to_id_.end())
+    return it->second;
+
+  uint32_t id = next_string_constant_id_++;
+  string_constant_to_id_[value] = id;
+  return id;
+}
+
+std::vector<std::string> ConstantPool::GetStrings() const {
+  std::vector<std::string> strings;
+  strings.resize(string_constant_to_id_.size());
+  for (const auto& [str, id] : string_constant_to_id_)
+    strings[id] = str;
+  return strings;
 }

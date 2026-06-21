@@ -35,29 +35,11 @@ inline void ComputeHash(size_t& seed, TypeId value) {
 
 }  // namespace
 
-TypeContext::TypeContext(ScopeManager& scope_manager,
-                         std::span<const std::string_view> external_functions)
-    : scope_manager_(scope_manager),
-      external_functions_(external_functions.begin(),
-                          external_functions.end()) {
+TypeContext::TypeContext(ScopeManager& scope_manager)
+    : scope_manager_(scope_manager) {
   // Add dummy entries for the built-in types to simplify logic.
   for (size_t i = 0; i < LiteralType::kCount; ++i)
     type_lookup_[i] = BuiltInType{};
-
-  static FunctionDeclaration main_fn{
-      .name = "<<main>>",
-      .arguments = {},
-      .return_type = ParsedType{"any"},
-      .function_kind = FunctionKind::Free,
-      // Technically all top-level statements are in <main> but TypeContext
-      // only cares if a function _has_ a body or not for type checking.
-      .body = std::make_unique<Block>(),
-  };
-
-  // Enter "global" function scope by default to allow for top-level statements.
-  auto main_symbol = DefineFunction(DeclareFunctionSymbol(main_fn),
-                                    /*error_collector=*/nullptr);
-  CHECK(main_symbol.has_value());
 }
 
 NamedBinding TypeContext::DeclareStructSymbol(StructDeclaration& declaration) {
@@ -66,7 +48,7 @@ NamedBinding TypeContext::DeclareStructSymbol(StructDeclaration& declaration) {
         StructSymbol symbol = {declaration, scope_manager_.GetActiveScopeId()};
 
         for (auto& [name, fn] : declaration.methods) {
-          DeclareFunctionSymbol(fn, declaration.name + "_" + name);
+          DeclareFunctionSymbol(fn, &declaration);
         }
         return symbol;
       });
@@ -87,10 +69,10 @@ NamedBinding TypeContext::DeclareStructSymbol(StructDeclaration& declaration) {
 
 SymbolId TypeContext::DeclareFunctionSymbol(
     FunctionDeclaration& declaration,
-    std::optional<std::string> qualified_name) {
-  FunctionSymbol symbol{declaration, qualified_name.value_or(declaration.name),
-                        scope_manager_.GetActiveScopeId()};
+    std::optional<StructDeclaration*> parent_declaration) {
   SymbolId symbol_id = next_symbol_id_++;
+  FunctionSymbol symbol{declaration, std::move(parent_declaration), symbol_id,
+                        scope_manager_.GetActiveScopeId()};
   symbol_table_.emplace(symbol_id, std::move(symbol));
 
   scope_manager_.InsertNameIntoScope(declaration.name, NamedBinding::Function,
@@ -127,11 +109,15 @@ void TypeContext::DefineStructType(TypeId self_id,
     struct_type.field_types.push_back(type_id.value());
   }
 
-  for (const auto& binding : scope_manager_.GetBindingsForScope(
-           symbol.scope_id, NamedBinding::Function)) {
+  for (const auto& binding :
+       scope_manager_.GetBindingsForScope(symbol.scope_id)) {
+    if (binding.kind != NamedBinding::Function)
+      continue;
+
+    SymbolId symbol_id = binding.symbol_id.value();
+
     // Errors are logged from within `DefineFunction`.
-    DefineFunction(*binding.symbol_id, &error_collector, &symbol.declaration,
-                   self_id);
+    DefineFunction(symbol_id, &error_collector, self_id);
   }
   scope_manager_.ExitScope();
 
@@ -141,41 +127,39 @@ void TypeContext::DefineStructType(TypeId self_id,
 std::optional<NamedBinding> TypeContext::DefineFunction(
     SymbolId symbol_id,
     ErrorCollector* error_collector,
-    std::optional<const StructDeclaration*> object,
     std::optional<TypeId> self_id) {
   FunctionSymbol* symbol = GetSymbol<FunctionSymbol>(symbol_id);
   CHECK(symbol) << "DefineFunction passed an invalid `symbol_id`";
 
   FunctionDeclaration& fn = symbol->declaration;
 
-  std::string qualified_name = fn.name;
-  bool is_function_extern = fn.function_kind == FunctionKind::Extern;
-  if (object) {
-    qualified_name = object.value()->name + "_" + fn.name;
-    is_function_extern = object.value()->is_extern && !fn.body;
-  }
+  // std::string qualified_name = fn.name;
+  // bool is_function_extern = fn.function_kind == FunctionKind::Extern;
+  // if (object) {
+  //   qualified_name = object.value()->name + "_" + fn.name;
+  //   is_function_extern = object.value()->is_extern && !fn.body;
+  // }
+  // std::optional<NamedBinding::Idx> call_idx;
+  // // Extern (native) functions must have a hardcoded CallIdx already
+  // assigned. if (is_function_extern) {
+  //   call_idx = GetCallIdxFor(qualified_name, CreateIfMissing::NO);
+  //   if (!call_idx) {
+  //     LOG(ERROR) << "extern function '" << qualified_name << "' is not
+  //     found"; return std::nullopt;
+  //   }
+  // } else {
+  //   if (!fn.body) {
+  //     LOG(ERROR) << "non-extern functions MUST have a body: " << fn.name;
+  //     return std::nullopt;
+  //   }
 
-  std::optional<NamedBinding::Idx> call_idx;
-  // Extern (native) functions must have a hardcoded CallIdx already assigned.
-  if (is_function_extern) {
-    call_idx = GetCallIdxFor(qualified_name, CreateIfMissing::NO);
-    if (!call_idx) {
-      LOG(ERROR) << "extern function '" << qualified_name << "' is not found";
-      return std::nullopt;
-    }
-  } else {
-    if (!fn.body) {
-      LOG(ERROR) << "non-extern functions MUST have a body: " << fn.name;
-      return std::nullopt;
-    }
+  //   if (error_collector && fn.is_variadic) {
+  //     LOG(ERROR) << "'...' is only allowed in extern functions";
+  //     return std::nullopt;
+  //   }
 
-    if (error_collector && fn.is_variadic) {
-      LOG(ERROR) << "'...' is only allowed in extern functions";
-      return std::nullopt;
-    }
-
-    call_idx = GetCallIdxFor(qualified_name, CreateIfMissing::YES);
-  }
+  //   call_idx = GetCallIdxFor(qualified_name, CreateIfMissing::YES);
+  // }
 
   fn.resolved = ResolvedFunction{};
 
@@ -204,10 +188,10 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
   }
 
   NamedBinding binding = scope_manager_.InsertNameIntoScope(
-      fn.name, NamedBinding::Function, std::move(type_id), symbol_id, call_idx,
-      std::move(self_id));
+      fn.name, NamedBinding::Function, std::move(type_id), symbol_id,
+      /*idx=*/std::nullopt, std::move(self_id));
   fn.resolved->function_symbol = binding;
-  function_lookup_[call_idx.value()] = &fn;
+  // function_lookup_[call_idx.value()] = &fn;
   return binding;
 }
 
@@ -407,11 +391,9 @@ std::optional<TypeId> TypeContext::DeclareFunctionType(
       scope_manager_.EnterScope(ScopeManager::FunctionScope, "fn " + fn.name);
 
   std::vector<TypeId> argument_types;
-  std::vector<NamedBinding> argument_bindings;
   for (const auto& [name, type] : fn.arguments) {
     if (auto type_id = GetTypeIdFor(type); type_id.has_value()) {
-      argument_bindings.push_back(
-          scope_manager_.DeclareVariableBinding(name, *type_id));
+      scope_manager_.DeclareArgumentBinding(name, *type_id);
       argument_types.push_back(*type_id);
     } else {
       // TODO: Print error message on bad argument type.
@@ -419,7 +401,6 @@ std::optional<TypeId> TypeContext::DeclareFunctionType(
       return std::nullopt;
     }
   }
-  fn.resolved->arguments = std::move(argument_bindings);
 
   if (fn.function_kind == FunctionKind::Method && error_collector &&
       (argument_types.size() == 0 || argument_types[0] != self_id)) {
@@ -505,63 +486,6 @@ bool TypeContext::IsTypeSubsetOf(TypeId sub_type_id, TypeId super_type_id) {
 
   // Neither type is a union so they must be different concrete types.
   return false;
-}
-
-std::optional<NamedBinding::Idx> TypeContext::GetCallIdxFor(
-    const std::string& name,
-    CreateIfMissing create) {
-  static const std::map<std::string, NamedBinding::Idx> kBuiltInCallIdx = {
-      {"Array_get", VM_BUILTIN_ARRAY_GET},
-      {"Array_init", VM_BUILTIN_ARRAY_INIT},
-      {"Array_length", VM_BUILTIN_ARRAY_LENGTH},
-      {"Array_new", VM_BUILTIN_ARRAY_NEW},
-      // Alias for the argument version of the native function.
-      {"Array_withSize", VM_BUILTIN_ARRAY_NEW},
-      {"Array_push", VM_BUILTIN_ARRAY_PUSH},
-      {"Array_set", VM_BUILTIN_ARRAY_SET},
-      {"Map_new", VM_BUILTIN_MAP_NEW},
-      {"Map_get", VM_BUILTIN_MAP_GET},
-      {"Map_set", VM_BUILTIN_MAP_SET},
-      {"Math_pow", VM_BUILTIN_MATH_POW},
-      {"Promise_fulfill", VM_BUILTIN_PROMISE_FULFILL},
-      {"Promise_new", VM_BUILTIN_PROMISE_NEW},
-      {"Promise_reject", VM_BUILTIN_PROMISE_REJECT},
-      {"Promise_then", VM_BUILTIN_PROMISE_THEN},
-      {"String_charAt", VM_BUILTIN_STRINGS_GET},
-      {"String_length", VM_BUILTIN_STRING_LENGTH},
-      {"String_startsWith", VM_BUILTIN_STRINGS_STARTWITH},
-      {"String_substr", VM_BUILTIN_STRINGS_SUBSTRING},
-      {"String_valueOf", VM_BUILTIN_STRINGS_VALUEOF},
-  };
-
-  // Since some built-in functions (i.e. Array_withSize) overload a single
-  // native function, this count can differ from `kBuiltInCallIdx.size()`.
-  static constexpr size_t kBuiltInCallCount = 19;
-
-  if (auto it = kBuiltInCallIdx.find(name); it != kBuiltInCallIdx.end())
-    return it->second;
-
-  if (auto it = std::find(external_functions_.begin(),
-                          external_functions_.end(), name);
-      it != external_functions_.end()) {
-    // Functions provided to the VM appear directly after built-ins within the
-    // function look-up table (calculate the index and convert to VM_BUILTIN).
-    return VM_BUILTIN(std::distance(external_functions_.begin(), it) +
-                      kBuiltInCallCount);
-  }
-
-  if (auto it = assigned_call_idx_.find(name);
-      it != assigned_call_idx_.end() && !name.empty()) {
-    return it->second;
-  }
-
-  if (create == CreateIfMissing::YES) {
-    CallIdx call_idx = next_call_idx_++;
-    assigned_call_idx_[name] = call_idx;
-    return call_idx;
-  }
-
-  return std::nullopt;
 }
 
 bool FunctionType::operator==(const FunctionType& other) const {

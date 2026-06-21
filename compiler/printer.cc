@@ -67,7 +67,7 @@ void print_resolved_call(const std::optional<ResolvedCall>& r, size_t indent) {
   } else {
     std::cout << std::string(indent, ' ') << "ResolvedCall:" << std::endl;
     std::cout << std::string(indent + 2, ' ')
-              << "function_idx: " << r->function_idx << std::endl;
+              << "target_symbol_id: " << r->target_symbol_id << std::endl;
     std::cout << std::string(indent + 2, ' ')
               << "function_kind: " << ToString(r->kind) << std::endl;
   }
@@ -94,18 +94,6 @@ void print_resolved_binary(const std::optional<ResolvedBinary>& r,
     std::cout << std::string(indent, ' ') << "ResolvedBinary:" << std::endl;
     std::cout << std::string(indent + 2, ' ')
               << "specialization: " << r->specialization << std::endl;
-  }
-}
-
-void print_resolved_function(const std::optional<ResolvedFunction>& r,
-                             size_t indent) {
-  if (!r.has_value()) {
-    std::cout << std::string(indent, ' ') << "ResolvedFunction: UNRESOLVED"
-              << std::endl;
-  } else {
-    std::cout << std::string(indent, ' ') << "ResolvedFunction:" << std::endl;
-    std::cout << std::string(indent + 2, ' ')
-              << "symbol: " << r->function_symbol << std::endl;
   }
 }
 
@@ -425,8 +413,6 @@ void Printer::Print(const FunctionDeclaration& fn, size_t indent) {
   }
   std::cout << std::string(indent + 2, ' ') << "Return: " << fn.return_type
             << std::endl;
-
-  print_resolved_function(fn.resolved, indent + 2);
 
   if (fn.body) {
     std::cout << std::string(indent + 2, ' ') << "Body:" << std::endl;

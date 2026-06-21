@@ -472,9 +472,11 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
               if (auto binding = scope_manager_.FindBindingFor(
                       member_name, ScopeManager::Current,
                       struct_type->scope_id)) {
-                CHECK(binding->idx.has_value())
-                    << "Member symbol must have an index for member access";
-                member_access.resolved = ResolvedAccess{binding->idx.value()};
+                if (binding->kind == NamedBinding::Field) {
+                  CHECK(binding->idx.has_value())
+                      << "Member symbol must have an index for member access";
+                  member_access.resolved = ResolvedAccess{binding->idx.value()};
+                }
                 return ExpressionResult(*binding);
               } else {
                 error_collector_.Add("No member '" + member_name + "' on " +
@@ -943,21 +945,18 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
           type_context_.GetTypeInfo<FunctionType>(*callable_type_id)) {
     if (callee_result.binding.has_value() &&
         callee_result.binding->kind == NamedBinding::Function) {
-      CHECK(callee_result.binding->idx.has_value())
-          << "Function symbol must have an index for call resolution";
-
-      const auto& fn_declaration = type_context_.GetFunctionDeclaration(
-          callee_result.binding->idx.value());
+      const FunctionSymbol& symbol = *type_context_.GetSymbol<FunctionSymbol>(
+          *callee_result.binding->symbol_id);
 
       // Account for the implicit "self" argument for method calls
-      if (fn_declaration.function_kind == FunctionKind::Method) {
+      if (symbol.declaration.function_kind == FunctionKind::Method) {
         argument_results.insert(argument_results.begin(),
                                 ArgumentResult{callee_result});
       }
-      call_expr.resolved = ResolvedCall{callee_result.binding->idx.value(),
-                                        fn_declaration.function_kind};
+      call_expr.resolved = ResolvedCall{*callee_result.binding->symbol_id,
+                                        symbol.declaration.function_kind};
     } else {
-      call_expr.resolved = ResolvedCall{callee_result.binding->idx.value(),
+      call_expr.resolved = ResolvedCall{*callee_result.binding->symbol_id,
                                         FunctionKind::Anonymous};
     }
 

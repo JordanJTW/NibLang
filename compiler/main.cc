@@ -188,7 +188,7 @@ int main(int argc, char* argv[]) {
       CalculateImportsFor(opts.input_path, env_search_path);
 
   ScopeManager scope_manager;
-  TypeContext type_context(scope_manager, kRuntimeFunctions);
+  TypeContext type_context(scope_manager);
 
   bool any_errors = false;
   for (File& file : files) {
@@ -213,15 +213,78 @@ int main(int argc, char* argv[]) {
   if (any_errors)
     return 1;
 
-  ProgramBuilder builder;
+  ConstantPool constant_pool;
+  std::vector<ByteCodeGenerator::FunctionObject> function_objects;
+  std::vector<const FunctionSymbol*> external_functions;
 
-  ByteCodeGenerator bytecode_generator{builder, type_context};
-  for (const File& file : files) {
-    bytecode_generator.EmitBlock(file.root_block);
+  std::set<SymbolId> processed_symbols;
+  std::vector<SymbolId> symbols_to_process;
+
+  auto process_symbol = [&](const FunctionSymbol& symbol) {
+    // .insert().second returns false if the symbol was already in the set
+    if (!processed_symbols.insert(symbol.symbol_id).second) {
+      return;
+    }
+
+    std::vector<SymbolId> called_symbols;
+    if (symbol.IsExtern()) {
+      external_functions.push_back(&symbol);
+      return;
+    }
+
+    function_objects.push_back(
+        ByteCodeGenerator{type_context, scope_manager, constant_pool}.Build(
+            symbol, called_symbols));
+
+    for (SymbolId id : called_symbols) {
+      symbols_to_process.push_back(id);
+    }
+  };
+
+  for (const auto& [id, symbol] : type_context.symbol_table()) {
+    if (const auto* fn_symbol = std::get_if<FunctionSymbol>(&symbol)) {
+      if (fn_symbol->declaration.name == "main") {
+        process_symbol(*fn_symbol);
+        break;
+      }
+    }
   }
-  builder.GetCurrentCode().Return();
 
-  std::vector<uint8_t> program_image = builder.GenerateImage();
+  while (!symbols_to_process.empty()) {
+    SymbolId id = symbols_to_process.back();
+    symbols_to_process.pop_back();
+
+    if (processed_symbols.contains(id))
+      continue;
+
+    if (const auto* fn_symbol =
+            std::get_if<FunctionSymbol>(&type_context.symbol_table().at(id))) {
+      process_symbol(*fn_symbol);
+    }
+  }
+
+  // Output ALL of the instantiated Symbols (without tree-shaking) for debugging
+  // for (const auto& [id, symbol] : type_context.symbol_table()) {
+  //   if (const auto* fn_symbol = std::get_if<FunctionSymbol>(&symbol)) {
+  //     if (fn_symbol->instances.empty())
+  //       continue;
+
+  //     if (!fn_symbol->IsExtern()) {
+  //       CHECK(fn_symbol->declaration.body);
+  //       function_objects.push_back(
+  //           ByteCodeGenerator{type_context, scope_manager,
+  //           constant_pool}.Build(
+  //               *fn_symbol));
+  //     } else {
+  //       external_functions.push_back(fn_symbol);
+  //     }
+  //   }
+  // }
+
+  ProgramBuilder builder{constant_pool, kRuntimeFunctions};
+
+  std::vector<uint8_t> program_image = builder.GenerateImage(
+      std::move(function_objects), std::move(external_functions));
 
   if (opts.mode == OutputMode::DumpImage) {
     return ProgramBuilder::DumpImage(program_image) ? 0 : -1;

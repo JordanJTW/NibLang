@@ -23,6 +23,8 @@ std::ostream& operator<<(std::ostream& os, NamedBinding::Kind kind) {
       return os << "Struct";
     case NamedBinding::Field:
       return os << "Field";
+    case NamedBinding::Argument:
+      return os << "Argument";
     case NamedBinding::Variable:
       return os << "Variable";
     case NamedBinding::Capture:
@@ -38,6 +40,20 @@ std::ostream& operator<<(std::ostream& os, NamedBinding::Kind kind) {
 }
 
 }  // namespace
+
+bool FunctionSymbol::IsExtern() const {
+  if (parent_declaration.has_value())
+    return parent_declaration.value()->is_extern && !declaration.body;
+
+  return declaration.function_kind == FunctionKind::Extern;
+}
+
+std::string FunctionSymbol::GetName() const {
+  if (parent_declaration.has_value())
+    return parent_declaration.value()->name + "_" + declaration.name;
+
+  return declaration.name;
+}
 
 std::ostream& operator<<(std::ostream& os, const NamedBinding& symbol) {
   os << "{kind=" << symbol.kind << ", type_id="

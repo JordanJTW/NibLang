@@ -9,108 +9,110 @@
 #include <cstdio>
 #include <cstring>
 #include <iostream>
-#include <map>
 #include <optional>
 #include <stack>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "compiler/logging.h"
 #include "src/prog_types.h"
+#include "src/vm.h"
 
-ProgramBuilder::ProgramBuilder() {
-  EnterFunctionScope("<<main>>", 0, {}, {});
-}
+ProgramBuilder::ProgramBuilder(
+    const ConstantPool& constant_pool,
+    std::span<const std::string_view> external_functions)
+    : constant_pool_(constant_pool),
+      external_functions_(external_functions.begin(),
+                          external_functions.end()) {}
 
-void ProgramBuilder::EnterFunctionScope(
-    const std::string& name,
-    size_t call_idx,
-    std::vector<NamedBinding> arguments,
-    std::vector<NamedBinding> capture_arguments) {
-  size_t fn_id = next_func_id_++;
-  function_decl_stack_.push(fn_id);
+std::optional<NamedBinding::Idx> ProgramBuilder::LinkExternalCallIdx(
+    const std::string& name) {
+  static const std::unordered_map<std::string, NamedBinding::Idx>
+      kBuiltInCallIdx = {
+          {"Array_get", VM_BUILTIN_ARRAY_GET},
+          {"Array_init", VM_BUILTIN_ARRAY_INIT},
+          {"Array_length", VM_BUILTIN_ARRAY_LENGTH},
+          {"Array_new", VM_BUILTIN_ARRAY_NEW},
+          // Alias for the argument version of the native function.
+          {"Array_withSize", VM_BUILTIN_ARRAY_NEW},
+          {"Array_push", VM_BUILTIN_ARRAY_PUSH},
+          {"Array_set", VM_BUILTIN_ARRAY_SET},
+          {"Map_new", VM_BUILTIN_MAP_NEW},
+          {"Map_get", VM_BUILTIN_MAP_GET},
+          {"Map_set", VM_BUILTIN_MAP_SET},
+          {"Math_pow", VM_BUILTIN_MATH_POW},
+          {"Promise_fulfill", VM_BUILTIN_PROMISE_FULFILL},
+          {"Promise_new", VM_BUILTIN_PROMISE_NEW},
+          {"Promise_reject", VM_BUILTIN_PROMISE_REJECT},
+          {"Promise_then", VM_BUILTIN_PROMISE_THEN},
+          {"String_charAt", VM_BUILTIN_STRINGS_GET},
+          {"String_length", VM_BUILTIN_STRING_LENGTH},
+          {"String_startsWith", VM_BUILTIN_STRINGS_STARTWITH},
+          {"String_substr", VM_BUILTIN_STRINGS_SUBSTRING},
+          {"String_valueOf", VM_BUILTIN_STRINGS_VALUEOF},
+      };
 
-  Function& function = functions_.emplace_back();
-  function.name = name;
-  function.call_idx = call_idx;
-  function.argc = capture_arguments.size() + arguments.size();
+  // Since some built-in functions (i.e. Array_withSize) overload a single
+  // native function, this count can differ from `kBuiltInCallIdx.size()`.
+  static constexpr size_t kBuiltInCallCount = 19;
 
-  for (const auto& capture : capture_arguments) {
-    function.symbol_to_local_idx[capture.idx.value()] = function.next_id++;
-  }
-
-  for (const auto& arg : arguments) {
-    function.symbol_to_local_idx[arg.idx.value()] = function.next_id++;
-  }
-}
-void ProgramBuilder::ExitFunctionScope() {
-  function_decl_stack_.pop();
-}
-
-void ProgramBuilder::PushSymbol(NamedBinding symbol) {
-  uint32_t local_idx = GetIdFor(symbol);
-  GetCurrentCode().PushLocal(local_idx);
-}
-
-void ProgramBuilder::StoreSymbol(NamedBinding symbol) {
-  uint32_t local_idx = GetIdFor(symbol);
-  GetCurrentCode().StoreLocal(local_idx);
-}
-
-uint32_t ProgramBuilder::GetIdFor(NamedBinding lookup) {
-  auto& current_scope_symbols = GetCurrentScope().symbol_to_local_idx;
-  if (auto it = current_scope_symbols.find(lookup.idx.value());
-      it != current_scope_symbols.end())
-    return lookup.idx.value();
-
-  uint32_t id = GetCurrentScope().next_id++;
-  current_scope_symbols[lookup.idx.value()] = id;
-  return lookup.idx.value();
-}
-
-uint32_t ProgramBuilder::GetIdForConstant(const std::string& value) {
-  if (auto it = const_ids_.find(value); it != const_ids_.cend())
+  if (auto it = kBuiltInCallIdx.find(name); it != kBuiltInCallIdx.end())
     return it->second;
 
-  const_ids_[value] = next_const_id_;
-  return next_const_id_++;
+  if (auto it = std::find(external_functions_.begin(),
+                          external_functions_.end(), name);
+      it != external_functions_.end()) {
+    // Functions provided to the VM appear directly after built-ins within the
+    // function look-up table (calculate the index and convert to VM_BUILTIN).
+    return VM_BUILTIN(std::distance(external_functions_.begin(), it) +
+                      kBuiltInCallCount);
+  }
+
+  return std::nullopt;
 }
 
-Assembler& ProgramBuilder::GetCurrentCode() {
-  return GetCurrentScope().code;
-}
+std::vector<uint8_t> ProgramBuilder::GenerateImage(
+    std::vector<ByteCodeGenerator::FunctionObject> objects,
+    std::vector<const FunctionSymbol*> external_functions) {
+  std::vector<std::string> constants = constant_pool_.GetStrings();
 
-std::vector<uint8_t> ProgramBuilder::GenerateImage() {
   vm_prog_header_t header = {
       .version = 0,
-      .function_count = static_cast<uint16_t>(functions_.size()),
-      .constant_count = static_cast<uint16_t>(const_ids_.size())};
+      .function_count = static_cast<uint16_t>(objects.size()),
+      .constant_count = static_cast<uint16_t>(constants.size())};
   memcpy(&header.magic, "INK!", 4);
 
   size_t offset = sizeof(vm_prog_header_t);
   std::vector<uint8_t> program_image(offset);
 
-  std::sort(functions_.begin(), functions_.end(),
-            [](const Function& a, const Function& b) {
-              return a.call_idx < b.call_idx;
+  std::sort(objects.begin(), objects.end(),
+            [](const ByteCodeGenerator::FunctionObject& a,
+               const ByteCodeGenerator::FunctionObject& b) {
+              if (a.symbol->declaration.name == "main")
+                return true;
+              if (b.symbol->declaration.name == "main")
+                return false;
+              return a.symbol->declaration.name < b.symbol->declaration.name;
             });
 
   std::vector<uint8_t> debug_info;
   std::vector<size_t> debug_offset;
-  for (Function fn : functions_) {
+  for (auto& obj : objects) {
     debug_offset.push_back(debug_info.size());
 
-    if (fn.name.empty()) {
+    const auto& name = obj.symbol->declaration.name;
+
+    if (name.empty()) {
       debug_info.push_back('\0');
       continue;
     }
 
-    debug_info.resize(debug_info.size() + fn.name.size() + sizeof(char) /*\0*/);
-    memcpy(debug_info.data() + debug_offset.back(), fn.name.data(),
-           fn.name.size());
-    debug_info[debug_offset.back() + fn.name.size()] = '\0';
+    debug_info.resize(debug_info.size() + name.size() + sizeof(char) /*\0*/);
+    memcpy(debug_info.data() + debug_offset.back(), name.data(), name.size());
+    debug_info[debug_offset.back() + name.size()] = '\0';
   }
 
   program_image.resize(offset + sizeof(vm_section_t) + debug_info.size());
@@ -122,18 +124,30 @@ std::vector<uint8_t> ProgramBuilder::GenerateImage() {
          debug_info.data(), debug_info.size());
   offset = program_image.size();
 
+  std::unordered_map<uint32_t, uint32_t> call_idx_remapping;
+  for (size_t i = 0; i < objects.size(); ++i) {
+    const FunctionSymbol& symbol = *objects[i].symbol;
+    call_idx_remapping[symbol.symbol_id] = next_call_idx_++;
+  }
+
+  for (const auto* symbol : external_functions) {
+    if (auto call_idx = LinkExternalCallIdx(symbol->GetName()))
+      call_idx_remapping[symbol->symbol_id] = *call_idx;
+  }
+
   size_t bytecode_size = 0;
-  for (Function fn : functions_) {
-    std::vector<uint8_t> fn_bytecode = fn.code.Build();
+  for (size_t idx = 0; idx < objects.size(); ++idx) {
+    const auto& obj = objects[idx];
+    std::vector<uint8_t> fn_bytecode =
+        obj.bytecode.Build(nullptr, call_idx_remapping);
     program_image.resize(offset + sizeof(vm_section_t) + fn_bytecode.size());
 
-    vm_section_t section = {.type = vm_section_t::FUNCTION,
-                            .size = static_cast<uint32_t>(fn_bytecode.size()),
-                            .fn = {.argument_count = fn.argc,
-                                   .local_count = fn.next_id,
-                                   .name_offset = static_cast<uint16_t>(
-                                       debug_offset[fn.call_idx])}};
-
+    vm_section_t section = {
+        .type = vm_section_t::FUNCTION,
+        .size = static_cast<uint32_t>(fn_bytecode.size()),
+        .fn = {.argument_count = static_cast<uint16_t>(obj.argument_count),
+               .local_count = static_cast<uint16_t>(obj.local_count),
+               .name_offset = static_cast<uint16_t>(debug_offset[idx])}};
     memcpy(program_image.data() + offset, &section, sizeof(vm_section_t));
     memcpy(program_image.data() + offset + sizeof(vm_section_t),
            fn_bytecode.data(), fn_bytecode.size());
@@ -145,13 +159,8 @@ std::vector<uint8_t> ProgramBuilder::GenerateImage() {
   header.debug_size = debug_info.size();
   memcpy(program_image.data(), &header, sizeof(vm_prog_header_t));
 
-  std::vector<std::string_view> constants_by_id(const_ids_.size());
-  for (const auto& [value, id] : const_ids_) {
-    constants_by_id[id] = value;
-  }
-
-  for (size_t id = 0; id < constants_by_id.size(); ++id) {
-    const auto& value = constants_by_id[id];
+  for (size_t id = 0; id < constants.size(); ++id) {
+    const auto& value = constants[id];
     program_image.resize(offset + sizeof(vm_section_t) + value.size());
 
     vm_section_t section = {.type = vm_section_t::CONST_STR,

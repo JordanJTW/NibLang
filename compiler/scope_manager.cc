@@ -50,9 +50,9 @@ std::optional<NamedBinding> ScopeManager::FindBindingFor(
   while (true) {
     const auto& current_scope = scopes_[current_id];
 
-    if (auto found = current_scope.symbols.find(name.data());
-        found != current_scope.symbols.end()) {
-      return found->second;
+    if (auto found = current_scope.binding_lookup.find(name.data());
+        found != current_scope.binding_lookup.end()) {
+      return current_scope.bindings_for_scope[found->second];
     }
 
     if (current_scope.scope_type == ScopeType::FunctionScope) {
@@ -95,13 +95,23 @@ NamedBinding ScopeManager::InsertNameIntoScope(
                           .symbol_id = std::move(symbol_id),
                           .idx = std::move(idx),
                           .parent_type_id = std::move(parent_type_id)};
-  scopes_[active_scope_id_].symbols[name.data()] = binding;
+  auto& scope = scopes_[active_scope_id_];
+  size_t binding_idx = scope.bindings_for_scope.size();
+  scope.binding_lookup[name.data()] = binding_idx;
+  scope.bindings_for_scope.push_back(binding);
   return binding;
 }
 
 NamedBinding ScopeManager::DeclareVariableBinding(std::string_view name,
                                                   TypeId type_id) {
   return InsertNameIntoScope(name, NamedBinding::Variable, type_id,
+                             /*symbol_id=*/std::nullopt,
+                             scopes_[function_scope_id_].next_symbol_idx++);
+}
+
+NamedBinding ScopeManager::DeclareArgumentBinding(std::string_view name,
+                                                  TypeId type_id) {
+  return InsertNameIntoScope(name, NamedBinding::Argument, type_id,
                              /*symbol_id=*/std::nullopt,
                              scopes_[function_scope_id_].next_symbol_idx++);
 }
@@ -128,17 +138,6 @@ NamedBinding ScopeManager::DeclareTemplateBinding(std::string_view name,
                              /*symbol_id=*/std::nullopt);
 }
 
-std::vector<NamedBinding> ScopeManager::GetBindingsForScope(
-    ScopeId scope_id,
-    NamedBinding::Kind filter_kind) const {
-  std::vector<NamedBinding> result;
-  for (const auto& [name, binding] : scopes_[scope_id].symbols) {
-    if (binding.kind == filter_kind)
-      result.push_back(binding);
-  }
-  return result;
-}
-
 void ScopeManager::PrintScopeTree(std::ostream& os,
                                   ScopeId current_id,
                                   size_t indent_level) const {
@@ -152,10 +151,11 @@ void ScopeManager::PrintScopeTree(std::ostream& os,
      << "' (Type: " << scope.scope_type << ", Parent: " << scope.parent_scope_id
      << ")" << std::endl;
 
-  if (!scope.symbols.empty()) {
+  if (!scope.bindings_for_scope.empty()) {
     os << indent << "  Symbols:\n";
-    for (const auto& [name, binding] : scope.symbols) {
-      os << indent << "    - " << name << " = " << binding << std::endl;
+    for (const auto& [name, idx] : scope.binding_lookup) {
+      os << indent << "    - " << name << " = " << scope.bindings_for_scope[idx]
+         << std::endl;
     }
   }
 

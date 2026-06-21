@@ -98,7 +98,8 @@ class GoldenTest : public ::testing::Test {
   }
 
   std::vector<uint8_t> BuildProgram(std::string program_text) {
-    std::string full_program_text = kPreamble + program_text;
+    std::string full_program_text =
+        kPreamble + "\nfn main() {\n" + program_text + "\n}";
     Block root_block = Parser{full_program_text}.Parse();
 
     SemanticAnalyzer{type_context_, scope_manager_, error_collector_}.Check(
@@ -109,11 +110,30 @@ class GoldenTest : public ::testing::Test {
       return {};
     }
 
-    ProgramBuilder builder;
-    ByteCodeGenerator{builder, type_context_}.EmitBlock(root_block);
-    builder.GetCurrentCode().Return();
+    std::vector<ByteCodeGenerator::FunctionObject> function_objects;
+    std::vector<const FunctionSymbol*> external_functions;
 
-    return builder.GenerateImage();
+    ConstantPool constant_pool;
+    for (const auto& [id, symbol] : type_context_.symbol_table()) {
+      if (const auto* fn_symbol = std::get_if<FunctionSymbol>(&symbol)) {
+        if (fn_symbol->instances.empty())
+          continue;
+
+        if (!fn_symbol->IsExtern()) {
+          CHECK(fn_symbol->declaration.body);
+
+          std::vector<SymbolId> called_symbols;
+          function_objects.push_back(
+              ByteCodeGenerator{type_context_, scope_manager_, constant_pool}
+                  .Build(*fn_symbol, called_symbols));
+        } else {
+          external_functions.push_back(fn_symbol);
+        }
+      }
+    }
+
+    ProgramBuilder builder{constant_pool, kExternalFunctionNames};
+    return builder.GenerateImage(function_objects, external_functions);
   }
 
   void RunProgram(const std::vector<uint8_t>& program) {
@@ -133,7 +153,7 @@ class GoldenTest : public ::testing::Test {
 
   MockNativeFunc native_check_fn_;
   ScopeManager scope_manager_;
-  TypeContext type_context_{scope_manager_, kExternalFunctionNames};
+  TypeContext type_context_{scope_manager_};
   MockErrorCollector error_collector_;
 };
 
@@ -306,6 +326,36 @@ TEST_F(GoldenTest, Closure) {
     EXPECT_CALL(native_check_fn_, Call(ElementsAre(StringType("foo"))))
         .WillOnce(FreeArgsAndReturnVoidType());
     EXPECT_CALL(native_check_fn_, Call(ElementsAre(StringType("war"))))
+        .WillOnce(FreeArgsAndReturnVoidType());
+  }
+
+  RunProgram(program);
+}
+
+TEST_F(GoldenTest, Captures) {
+  error_collector_.DelegateToFake();
+
+  auto program = BuildProgram(R"(
+    fn call_closure(arg: fn(i32), x: i32) {
+      foo(x);
+    }
+
+    let x = 23;
+    let foo = fn (i: i32) {
+      check(x + i);
+    };
+
+    call_closure(foo, 5);
+    call_closure(foo, 32);
+  )");
+
+  ASSERT_FALSE(error_collector_.HasErrors());
+
+  {
+    testing::InSequence _;
+    EXPECT_CALL(native_check_fn_, Call(ElementsAre(Int32Type(28))))
+        .WillOnce(FreeArgsAndReturnVoidType());
+    EXPECT_CALL(native_check_fn_, Call(ElementsAre(Int32Type(55))))
         .WillOnce(FreeArgsAndReturnVoidType());
   }
 

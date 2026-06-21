@@ -39,11 +39,15 @@ using InstanceCache =
 
 struct FunctionSymbol {
   FunctionDeclaration& declaration;
-  std::string qualified_name;
+  std::optional<StructDeclaration*> parent_declaration;
+  SymbolId symbol_id;
   ScopeId scope_id;
-  std::unordered_map<std::string, TypeId> default_template_type_ids;
 
+  std::unordered_map<std::string, TypeId> default_template_type_ids;
   InstanceCache instances;
+
+  bool IsExtern() const;
+  std::string GetName() const;
 };
 
 struct StructSymbol {
@@ -60,6 +64,7 @@ struct NamedBinding {
     Function,
     Struct,
     Field,
+    Argument,
     Variable,
     Capture,
     Narrowed,
@@ -155,7 +160,7 @@ enum FunctionKind {
 };
 
 struct ResolvedCall {
-  CallIdx function_idx;
+  SymbolId target_symbol_id;
   FunctionKind kind;
 };
 
@@ -254,9 +259,6 @@ struct NilCoalescingExpression {
 
 struct ResolvedFunction {
   NamedBinding function_symbol;
-  std::vector<NamedBinding> variables_to_capture;
-
-  std::vector<NamedBinding> arguments;
 };
 
 struct TemplateArgument {

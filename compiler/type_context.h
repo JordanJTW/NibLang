@@ -38,8 +38,6 @@ struct FunctionType {
   };
 };
 
-// enum class TypeResolutionState { ForwardDeclaration, Resolving, Complete };
-
 struct StructType {
   // TypeResolutionState resolution_state;
   const StructDeclaration& declaration;
@@ -80,9 +78,7 @@ class TypeContext {
     kCount
   };
 
-  explicit TypeContext(
-      ScopeManager& scope_manager,
-      std::span<const std::string_view> external_functions = {});
+  explicit TypeContext(ScopeManager& scope_manager);
 
   // Returns the FunctionDeclaration for the last function scope visited.
   FunctionDeclaration& GetCurrentFunction();
@@ -104,7 +100,7 @@ class TypeContext {
   // will be passed to the symbol but does NOT effect the binding.
   SymbolId DeclareFunctionSymbol(
       FunctionDeclaration& declaration,
-      std::optional<std::string> qualified_name = std::nullopt);
+      std::optional<StructDeclaration*> parent_declaration = std::nullopt);
 
   // Declares a new function symbol in the current scope. Functions are
   // structurally typed based on signature. If this functions signature has not
@@ -115,7 +111,6 @@ class TypeContext {
   std::optional<NamedBinding> DefineFunction(
       SymbolId symbol_id,
       ErrorCollector* error_collector,
-      std::optional<const StructDeclaration*> self_struct = std::nullopt,
       std::optional<TypeId> self_id = std::nullopt);
 
   // Returns the TypeId for a given ParsedType if it can be resolved.
@@ -141,14 +136,6 @@ class TypeContext {
   const T* GetTypeInfo(TypeId type_id) const {
     auto it = type_lookup_.find(type_id);
     return it != type_lookup_.end() ? std::get_if<T>(&it->second) : nullptr;
-  }
-
-  const FunctionDeclaration& GetFunctionDeclaration(
-      NamedBinding::Idx fn_idx) const {
-    auto it = function_lookup_.find(fn_idx);
-    CHECK(it != function_lookup_.end())
-        << "FunctionDeclaration not registered for index: " << fn_idx;
-    return *it->second;
   }
 
   // Returns a human readable representation of an interned `type_id`.
@@ -184,12 +171,10 @@ class TypeContext {
     return current_functions;
   }
 
+  const auto& symbol_table() const { return symbol_table_; }
+
  private:
   ScopeManager& scope_manager_;
-
-  enum class CreateIfMissing { YES, NO };
-  std::optional<CallIdx> GetCallIdxFor(const std::string& name,
-                                       CreateIfMissing create);
 
   CallIdx next_call_idx_ = 0;  // 0 is assigned to "main" by default.
   std::unordered_map<std::string, CallIdx> assigned_call_idx_;
@@ -214,15 +199,9 @@ class TypeContext {
       variant<BuiltInType, FunctionType, OptionalType, StructType, UnionType>;
   std::unordered_map<TypeId, TypeInfo> type_lookup_;
 
-  // Function declarations can be looked up by CallIdx since they are 1:1.
-  std::unordered_map<NamedBinding::Idx, const FunctionDeclaration*>
-      function_lookup_;
-
   std::unordered_map<SymbolId, std::variant<FunctionSymbol, StructSymbol>>
       symbol_table_;
   SymbolId next_symbol_id_{0};
-
-  std::vector<std::string> external_functions_;
 
   std::vector<RealizedFunction> realized_functions_;
 };

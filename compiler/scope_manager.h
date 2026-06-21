@@ -44,6 +44,8 @@ class ScopeManager {
 
   // Returns a NamedBinding of Kind::Variable declared in the current scope.
   NamedBinding DeclareVariableBinding(std::string_view name, TypeId type_id);
+  // Returns a NamedBinding of Kind::Argument declared in the current scope.
+  NamedBinding DeclareArgumentBinding(std::string_view name, TypeId type_id);
   // Returns a NamedBinding of Kind::Capture declared in the current scope.
   NamedBinding DeclareCaptureBinding(std::string_view name, TypeId type_id);
   // Returns a NamedBinding of Kind::Narrowed declared in the current scope.
@@ -60,9 +62,9 @@ class ScopeManager {
       std::optional<NamedBinding::Idx> idx = std::nullopt,
       std::optional<TypeId> parent_type_id = std::nullopt);
 
-  std::vector<NamedBinding> GetBindingsForScope(
-      ScopeId scope_id,
-      NamedBinding::Kind filter_kind) const;
+  const auto& GetBindingsForScope(ScopeId scope_id) const {
+    return scopes_[scope_id].bindings_for_scope;
+  }
 
   template <typename Fn>
   auto WithScope(ScopeId scope_id, Fn&& block) {
@@ -102,7 +104,8 @@ class ScopeManager {
     ScopeId parent_scope_id;
     std::string name;
 
-    std::unordered_map<std::string, NamedBinding> symbols;
+    std::unordered_map<std::string, size_t> binding_lookup;
+    std::vector<NamedBinding> bindings_for_scope;  // Preserve declaration order
     NamedBinding::Idx next_symbol_idx{0};  // Unique ID for variables in scope
     std::vector<ScopeId> children;
   };

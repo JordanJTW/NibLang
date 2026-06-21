@@ -24,14 +24,11 @@ using ::testing::Return;
 
 namespace {
 
-// Used for testing GetNameFromTypeId with variadic (extern) functions.
-constexpr std::array<std::string_view, 1> kExternalFunctions = {"log"};
-
 class TypeContextTest : public ::testing::Test {
  protected:
   ErrorCollector error_collector;
   ScopeManager scope_manager;
-  TypeContext type_context{scope_manager, kExternalFunctions};
+  TypeContext type_context{scope_manager};
 };
 
 TEST_F(TypeContextTest, GetTypeIdFor_BuiltInType) {
@@ -132,7 +129,8 @@ TEST_F(TypeContextTest, DeclareStructSymbol_NoTemplate) {
   };
 
   auto symbol = type_context.DeclareStructSymbol(declaration);
-  EXPECT_GT(symbol.realized_type_id, TypeContext::LiteralType::kCount);
+  // Realized TypeId should be assigned (and after built-in types).
+  EXPECT_GE(symbol.realized_type_id, TypeContext::LiteralType::kCount);
   EXPECT_EQ(symbol.kind, NamedBinding::Struct);
   EXPECT_FALSE(symbol.idx.has_value());  // Structs have no index
 
@@ -320,24 +318,10 @@ TEST_F(TypeContextTest, DefineFunction_ExternMethod) {
 
   auto method_symbol_id = type_context.DeclareFunctionSymbol(method_decl);
   auto method_binding = type_context.DefineFunction(
-      method_symbol_id, &error_collector, &struct_decl,
-      *struct_binding.realized_type_id);
+      method_symbol_id, &error_collector, *struct_binding.realized_type_id);
   ASSERT_TRUE(method_binding.has_value());
   EXPECT_EQ(method_binding->kind, NamedBinding::Function);
-  EXPECT_EQ(method_binding->idx, VM_BUILTIN_STRING_LENGTH);
-}
-
-TEST_F(TypeContextTest, DefineFunction_UnknownExtern) {
-  FunctionDeclaration extern_fn{
-      .name = "UnknownExternFunction",
-      .arguments = {{"arg", ParsedType{"i32"}}},
-      .return_type = ParsedType{"i32"},
-      .function_kind = FunctionKind::Extern,
-  };
-
-  auto symbol_id = type_context.DeclareFunctionSymbol(extern_fn);
-  auto symbol = type_context.DefineFunction(symbol_id, &error_collector);
-  EXPECT_FALSE(symbol.has_value());  // CallIdx can not be determined
+  EXPECT_EQ(method_binding->symbol_id, method_symbol_id);
 }
 
 TEST_F(TypeContextTest, IsTypeSubsetOf) {
@@ -462,26 +446,6 @@ TEST_F(TypeContextTest, GetNameFromTypeId) {
   ASSERT_TRUE(union_id.has_value());
   std::string union_name = type_context.GetNameFromTypeId(union_id.value());
   EXPECT_EQ(union_name, "Union[i32, f32]");
-}
-
-TEST_F(TypeContextTest, GetFunctionDeclaration) {
-  FunctionDeclaration fn_decl{
-      .name = "test_fn",
-      .arguments = {{"arg1", ParsedType{"i32"}}},
-      .return_type = ParsedType{"bool"},
-      .function_kind = FunctionKind::Free,
-      .body = std::make_unique<Block>(),
-  };
-  auto symbol_id = type_context.DeclareFunctionSymbol(fn_decl);
-  auto symbol = type_context.DefineFunction(symbol_id, &error_collector);
-  ASSERT_TRUE(symbol.has_value());
-  ASSERT_TRUE(symbol->idx.has_value());
-
-  const auto& retrieved_fn =
-      type_context.GetFunctionDeclaration(symbol->idx.value());
-  EXPECT_EQ(retrieved_fn.name, "test_fn");
-  EXPECT_EQ(retrieved_fn.arguments.size(), 1);
-  EXPECT_EQ(retrieved_fn.arguments[0].first, "arg1");
 }
 
 TEST_F(TypeContextTest, GetTypeIdFor_Never) {

@@ -33,7 +33,6 @@ class ByteCodeGenerator {
   struct FunctionObject {
     const FunctionSymbol* symbol;
     Assembler bytecode;
-    size_t capture_count;
     size_t argument_count;
     size_t local_count;
   };

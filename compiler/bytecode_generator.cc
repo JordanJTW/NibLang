@@ -40,7 +40,6 @@ ByteCodeGenerator::ByteCodeGenerator(const TypeContext& type_context,
 ByteCodeGenerator::FunctionObject ByteCodeGenerator::Build(
     const FunctionSymbol& symbol,
     std::vector<SymbolId>& called_symbols) && {
-  size_t capture_count = 0;
   size_t argument_count = 0;
 
   const auto& [key, instance_id] = *symbol.instances.begin();
@@ -53,7 +52,7 @@ ByteCodeGenerator::FunctionObject ByteCodeGenerator::Build(
        scope_manager_.GetBindingsForScope(type->scope_id)) {
     if (binding.kind == NamedBinding::Kind::Capture) {
       symbol_to_local_idx_[binding.idx.value()] = next_local_idx_++;
-      capture_count++;
+      argument_count++;
     }
   }
 
@@ -75,8 +74,8 @@ ByteCodeGenerator::FunctionObject ByteCodeGenerator::Build(
     bytecode_.Return();
 
   called_symbols = std::move(called_symbols_);
-  return FunctionObject{&symbol, std::move(bytecode_), capture_count,
-                        argument_count, symbol_to_local_idx_.size()};
+  return FunctionObject{&symbol, std::move(bytecode_), argument_count,
+                        symbol_to_local_idx_.size()};
 }
 
 void ByteCodeGenerator::EmitBlock(const Block& block,

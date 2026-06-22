@@ -42,14 +42,11 @@ ByteCodeGenerator::FunctionObject ByteCodeGenerator::Build(
     std::vector<SymbolId>& called_symbols) && {
   size_t argument_count = 0;
 
-  const auto& [key, instance_id] = *symbol.instances.begin();
-
-  const FunctionType* const type =
-      type_context_.GetTypeInfo<FunctionType>(instance_id);
+  const auto& [key, instance] = *symbol.instances.begin();
 
   // Process captures first to reflect their position in an OP_BIND.
   for (const auto& binding :
-       scope_manager_.GetBindingsForScope(type->scope_id)) {
+       scope_manager_.GetBindingsForScope(instance.scope_id)) {
     if (binding.kind == NamedBinding::Kind::Capture) {
       symbol_to_local_idx_[binding.idx.value()] = next_local_idx_++;
       argument_count++;
@@ -57,7 +54,7 @@ ByteCodeGenerator::FunctionObject ByteCodeGenerator::Build(
   }
 
   for (const auto& binding :
-       scope_manager_.GetBindingsForScope(type->scope_id)) {
+       scope_manager_.GetBindingsForScope(instance.scope_id)) {
     if (binding.kind == NamedBinding::Kind::Argument) {
       symbol_to_local_idx_[binding.idx.value()] = next_local_idx_++;
       argument_count++;
@@ -331,12 +328,11 @@ void ByteCodeGenerator::EmitExpression(
                 type_context_.GetSymbol<FunctionSymbol>(
                     closure.fn.resolved->function_symbol.symbol_id.value());
 
-            const auto* closure_type = type_context_.GetTypeInfo<FunctionType>(
-                closure_symbol->instances.begin()->second);
+            const auto& [_, instance] = *closure_symbol->instances.begin();
 
             size_t capture_count = 0;
             for (const auto& binding :
-                 scope_manager_.GetBindingsForScope(closure_type->scope_id)) {
+                 scope_manager_.GetBindingsForScope(instance.scope_id)) {
               if (binding.kind != NamedBinding::Capture)
                 continue;
 

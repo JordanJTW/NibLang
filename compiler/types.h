@@ -34,8 +34,13 @@ struct InstanceHash {
   }
 };
 
+struct TypeInstance {
+  TypeId type_id;
+  ScopeId scope_id;
+};
+
 using InstanceCache =
-    std::unordered_map<std::vector<TypeId>, TypeId, InstanceHash>;
+    std::unordered_map<std::vector<TypeId>, TypeInstance, InstanceHash>;
 
 struct FunctionSymbol {
   FunctionDeclaration& declaration;

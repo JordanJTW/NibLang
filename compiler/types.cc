@@ -56,7 +56,7 @@ std::string FunctionSymbol::GetName() const {
 }
 
 std::ostream& operator<<(std::ostream& os, const NamedBinding& symbol) {
-  os << "{kind=" << symbol.kind << ", type_id="
+  os << "{name=" << symbol.name << ", kind=" << symbol.kind << ", type_id="
      << (symbol.realized_type_id ? std::to_string(*symbol.realized_type_id)
                                  : "?")
      << ", symbol_id="

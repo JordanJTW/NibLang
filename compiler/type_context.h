@@ -28,9 +28,6 @@ struct FunctionType {
   TypeId return_type;
   bool is_variadic{false};
 
-  // Represents the lexical scope of the function definition.
-  ScopeId scope_id;
-
   bool operator==(const FunctionType& other) const;
 
   struct Hash {
@@ -179,7 +176,7 @@ class TypeContext {
   CallIdx next_call_idx_ = 0;  // 0 is assigned to "main" by default.
   std::unordered_map<std::string, CallIdx> assigned_call_idx_;
 
-  std::optional<TypeId> DeclareFunctionType(
+  std::optional<TypeInstance> DeclareFunctionType(
       FunctionDeclaration& decl,
       ErrorCollector* error_collector,
       std::optional<TypeId> self_id = std::nullopt);

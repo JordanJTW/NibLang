@@ -58,7 +58,6 @@ NamedBinding TypeContext::DeclareStructSymbol(StructDeclaration& declaration) {
   // its TypeId so that conrete struct/function declarations will fully resolve.
   if (!declaration.IsTemplate()) {
     type_id = next_type_id_++;
-    symbol.instances[{}] = *type_id;
   }
 
   SymbolId symbol_id = next_symbol_id_++;
@@ -88,6 +87,10 @@ void TypeContext::DefineStructType(TypeId self_id,
   struct_type.template_arguments = template_arguemnts;
   struct_type.scope_id = scope_manager_.EnterScope(
       ScopeManager::StructScope, "struct " + symbol.declaration.name);
+
+  // Cache the instance early in case a member/method is refers to self.
+  symbol.instances[template_arguemnts] =
+      TypeInstance{self_id, struct_type.scope_id};
 
   NamedBinding::Idx field_idx = 0;
   for (const auto& [name, type] : symbol.declaration.fields) {
@@ -163,10 +166,12 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
 
   fn.resolved = ResolvedFunction{};
 
-  std::optional<TypeId> type_id;
+  std::optional<TypeInstance> instance;
   if (fn.template_arguments.empty()) {
-    if ((type_id = DeclareFunctionType(fn, error_collector, self_id))) {
-      symbol->instances[{*self_id}] = *type_id;
+    if ((instance = DeclareFunctionType(fn, error_collector, self_id))) {
+      std::vector<TypeId> instance_key =
+          self_id ? std::vector<TypeId>{*self_id} : std::vector<TypeId>{};
+      symbol->instances[std::move(instance_key)] = *instance;
     } else {
       LOG(INFO) << "Failed to declare function type";
       return std::nullopt;
@@ -187,6 +192,7 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
     }
   }
 
+  auto type_id = instance ? instance->type_id : std::optional<TypeId>{};
   NamedBinding binding = scope_manager_.InsertNameIntoScope(
       fn.name, NamedBinding::Function, std::move(type_id), symbol_id,
       /*idx=*/std::nullopt, std::move(self_id));
@@ -383,7 +389,7 @@ bool TypeContext::IsTypeNilable(TypeId type_id) const {
   return type_id == LiteralType::Nil || UnwrapOptionalTypeId(type_id);
 }
 
-std::optional<TypeId> TypeContext::DeclareFunctionType(
+std::optional<TypeInstance> TypeContext::DeclareFunctionType(
     FunctionDeclaration& fn,
     ErrorCollector* error_collector,
     std::optional<TypeId> self_id) {
@@ -422,16 +428,16 @@ std::optional<TypeId> TypeContext::DeclareFunctionType(
   realized_functions_.push_back(RealizedFunction{scope_id, fn, *return_type});
 
   auto key = FunctionType{std::move(argument_types), return_type.value(),
-                          fn.is_variadic, scope_id};
+                          fn.is_variadic};
   if (const auto& it = interned_fn_type_.find(key);
       it != interned_fn_type_.end()) {
-    return it->second;
+    return TypeInstance{it->second, scope_id};
   }
 
   TypeId type_id = next_type_id_++;
   interned_fn_type_[key] = type_id;
   type_lookup_[type_id] = key;
-  return type_id;
+  return TypeInstance{type_id, scope_id};
 }
 
 bool TypeContext::IsTypeSubsetOf(TypeId sub_type_id, TypeId super_type_id) {
@@ -603,12 +609,10 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
   if (StructSymbol* symbol = std::get_if<StructSymbol>(&it->second)) {
     if (auto it = symbol->instances.find(argument_type_ids);
         it != symbol->instances.end()) {
-      return it->second;
+      return it->second.type_id;
     }
 
     TypeId self_id = next_type_id_++;
-    symbol->instances[argument_type_ids] = self_id;
-
     LOG(INFO) << "New Struct.TemplateOf(" << symbol->declaration.name << ") + ["
               << ss.str() << "] => " << self_id;
 
@@ -646,7 +650,7 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
   if (FunctionSymbol* symbol = std::get_if<FunctionSymbol>(&it->second)) {
     if (auto it = symbol->instances.find(argument_type_ids);
         it != symbol->instances.end()) {
-      return it->second;
+      return it->second.type_id;
     }
 
     const auto& template_arguments = symbol->declaration.template_arguments;
@@ -675,7 +679,7 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
           //       templates would inherit this scope environment if a type is
           //       processed later
           // TODO: Handle `self_id` better. Define it early to prevent cycles.
-          auto self_id = scope_manager_.NewScope(
+          auto instance = scope_manager_.NewScope(
               ScopeManager::TemplateScope, "fn " + symbol->declaration.name,
               [&]() {
                 for (size_t i = 0; i < template_arguments.size(); ++i)
@@ -687,13 +691,13 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
                                            binding.parent_type_id);
               });
 
-          if (self_id) {
-            symbol->instances[argument_type_ids] = *self_id;
+          if (instance) {
+            symbol->instances[argument_type_ids] = *instance;
 
             LOG(INFO) << "New Function.TemplateOf(" << symbol->declaration.name
-                      << ") + [" << ss.str() << "] => " << *self_id;
+                      << ") + [" << ss.str() << "] => " << instance->type_id;
           }
-          return self_id;
+          return instance->type_id;
         });
   }
 

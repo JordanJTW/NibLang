@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/logo.png?raw=true"/>
+<img src="assets/logo-new.png?raw=true"/>
 
 [![Build/Test](https://github.com/JordanJTW/NibLang/actions/workflows/cmake-single-platform.yml/badge.svg)](https://github.com/JordanJTW/NibLang/actions/workflows/cmake-single-platform.yml)
 

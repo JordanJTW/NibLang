@@ -1011,6 +1011,13 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
     return ExpressionResult{*callable_type_id};
   }
 
+  if (const auto* const alias_type =
+          type_context_.GetTypeInfo<AliasType>(*callable_type_id)) {
+    return TypeCheckCallExpr(call_expr,
+                             ExpressionResult{alias_type->target_type_id},
+                             context, debug_metadata);
+  }
+
   error_collector_.Add("type is not callable: " +
                            type_context_.GetNameFromTypeId(*callable_type_id),
                        debug_metadata);

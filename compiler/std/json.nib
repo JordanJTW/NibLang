@@ -36,17 +36,61 @@ fn expect_char(input: String, parser: Parser, expected: Codepoint) {
 
 fn parse_string(input: String, parser: Parser) -> String {
   parser.idx = parser.idx + 1; // skip initial "
-  let start_idx: i32 = parser.idx;
+  let chunk_start: i32 = parser.idx;
+  let result: String = "";
+  let has_escapes: bool = false;
 
   while (parser.idx < input.length()) {
     let ch: Codepoint = input.charAt(parser.idx);
+
     if (ch == '"') {  // closing "
-      let tmp: String = input.substr(start_idx, parser.idx);  // [start, end)
+      if (!has_escapes) {
+        // Fast path: No escapes found at all, return single zero-copy slice
+        let tmp: String = input.substr(chunk_start, parser.idx);
+        parser.idx = parser.idx + 1; // skip closing "
+        return tmp;
+      }
+      
+      // Append final remaining chunk before closing quote
+      if (parser.idx > chunk_start) {
+        result = result + input.substr(chunk_start, parser.idx);
+      }
       parser.idx = parser.idx + 1; // skip closing "
-      return tmp;
+      return result;
     }
+
+    if (ch == '\\') {
+      has_escapes = true;
+      
+      // Flush everything from the last checkpoint up to the backslash
+      if (parser.idx > chunk_start) {
+        result = result + input.substr(chunk_start, parser.idx);
+      }
+
+      parser.idx = parser.idx + 1; // skip '\'
+      if (parser.idx >= input.length()) {
+        throw "invalid trailing escape sequence";
+      }
+
+      // Append the translated escape character
+      let escape_ch: Codepoint = input.charAt(parser.idx);
+      if (escape_ch == '"')  { result = result + "\""; }
+      if (escape_ch == '\\') { result = result + "\\"; }
+      if (escape_ch == '/')  { result = result + "/";  }
+      if (escape_ch == 'b')  { result = result + "\b"; }
+      if (escape_ch == 'f')  { result = result + "\f"; }
+      if (escape_ch == 'n')  { result = result + "\n"; }
+      if (escape_ch == 'r')  { result = result + "\r"; }
+      if (escape_ch == 't')  { result = result + "\t"; }
+
+      parser.idx = parser.idx + 1; // skip escape character
+      chunk_start = parser.idx;    // reset checkpoint for next raw chunk
+      continue;
+    }
+
     parser.idx = parser.idx + 1;
   }
+
   throw "unterminated string";
 }
 

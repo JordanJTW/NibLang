@@ -65,6 +65,7 @@ struct StructSymbol {
 struct NamedBinding {
   using Idx = size_t;
 
+  std::string name;
   enum Kind {
     Function,
     Struct,
@@ -73,20 +74,22 @@ struct NamedBinding {
     Variable,
     Capture,
     Narrowed,
-    Template
+    Template,
+    TypeAlias,
   } kind;
   std::optional<TypeId> realized_type_id;
   std::optional<SymbolId> symbol_id;
-  std::optional<TypeId> parent_type_id;
 
   inline bool IsRealized() { return realized_type_id.has_value(); }
   inline bool IsType() {
-    return kind == Function || kind == Struct || kind == Template;
+    return kind == Function || kind == Struct || kind == Template ||
+           kind == TypeAlias;
   }
 
-  std::string name;
   // Used for function table resolution, struct field ordering, etc.
   std::optional<Idx> idx;
+
+  std::optional<TypeId> parent_type_id;
 
   inline bool operator==(const NamedBinding& other) const {
     return kind == other.kind && realized_type_id == other.realized_type_id &&
@@ -242,6 +245,11 @@ struct ParsedType {
   Metadata metadata;
 };
 
+struct TypeAliasStatement {
+  Token name;
+  std::unique_ptr<ParsedType> type;
+};
+
 std::ostream& operator<<(std::ostream& os, const ParsedType& type);
 
 enum class TypeCastStrategy {
@@ -376,7 +384,8 @@ struct Statement {
                ContinueStatement,            // continue;
                AssignStatement,              // let x: i32 = 42;
                StructDeclaration,            // struct Foo { ... }
-               ImportStatement               // @import "path/to/import"
+               ImportStatement,              // @import "path/to/import"
+               TypeAliasStatement            // type name = ParsedType;
                >
       as;
   Metadata meta;

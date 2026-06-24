@@ -89,8 +89,8 @@ NamedBinding ScopeManager::InsertNameIntoScope(
     std::optional<SymbolId> symbol_id,
     std::optional<NamedBinding::Idx> idx,
     std::optional<TypeId> parent_type_id) {
-  NamedBinding binding = {.kind = kind,
-                          .name = name.data(),
+  NamedBinding binding = {.name = name.data(),
+                          .kind = kind,
                           .realized_type_id = std::move(type_id),
                           .symbol_id = std::move(symbol_id),
                           .idx = std::move(idx),

@@ -173,7 +173,7 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
           self_id ? std::vector<TypeId>{*self_id} : std::vector<TypeId>{};
       symbol->instances[std::move(instance_key)] = *instance;
     } else {
-      LOG(INFO) << "Failed to declare function type";
+      LOG(ERROR) << "Failed to declare function type";
       return std::nullopt;
     }
   } else {
@@ -197,7 +197,6 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
       fn.name, NamedBinding::Function, std::move(type_id), symbol_id,
       /*idx=*/std::nullopt, std::move(self_id));
   fn.resolved->function_symbol = binding;
-  // function_lookup_[call_idx.value()] = &fn;
   return binding;
 }
 
@@ -226,12 +225,17 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
 
             // Structure types are resolved nominally, while Functions would be
             // resolved structurally to allow for flexible callbacks, etc.
-            if (auto binding =
-                    scope_manager_.FindBindingFor(type_name, ScopeManager::All);
-                binding.has_value() &&
-                (binding->kind == NamedBinding::Struct ||
-                 binding->kind == NamedBinding::Template)) {
-              return binding->realized_type_id;
+            if (auto binding = scope_manager_.FindBindingFor(
+                    type_name, ScopeManager::All)) {
+              if (binding->IsType()) {
+                // Add an error when trying to get a TypeId of a base template.
+                if (!binding->realized_type_id.has_value())
+                  LOG(ERROR) << "Base template has no TypeId: " << type_name;
+
+                return binding->realized_type_id;
+              } else {
+                LOG(ERROR) << "value binding is out of scope!";
+              }
             }
             return std::nullopt;
           },
@@ -385,6 +389,23 @@ TypeId TypeContext::GetUnionOf(const std::vector<TypeId>& types) {
   return type_id;
 }
 
+TypeId TypeContext::GetAliasOf(std::string_view name, const ParsedType& type) {
+  // All alias are nominally typed by definition so assign a new TypeId.
+  TypeId type_id = next_type_id_++;
+  // The TypeId is assigned and added to the scope to allow for recursive type
+  // aliases but the `target_type_id` is unknown until it has been resolved.
+  scope_manager_.InsertNameIntoScope(name, NamedBinding::TypeAlias, type_id,
+                                     /*symbol_id=*/std::nullopt);
+
+  std::optional<TypeId> target_type_id = GetTypeIdFor(type);
+  if (target_type_id) {
+    type_lookup_[type_id] = AliasType{name.data(), *target_type_id};
+  } else {
+    LOG(ERROR) << "Failed to GetTypeIdFor";
+  }
+  return type_id;
+}
+
 bool TypeContext::IsTypeNilable(TypeId type_id) const {
   return type_id == LiteralType::Nil || UnwrapOptionalTypeId(type_id);
 }
@@ -443,6 +464,17 @@ std::optional<TypeInstance> TypeContext::DeclareFunctionType(
 bool TypeContext::IsTypeSubsetOf(TypeId sub_type_id, TypeId super_type_id) {
   if (sub_type_id == super_type_id)
     return true;
+
+  auto follow_alias = [this](TypeId type_id) {
+    while (const auto* alias =
+               std::get_if<AliasType>(&type_lookup_.at(type_id))) {
+      type_id = alias->target_type_id;
+    }
+    return type_id;
+  };
+
+  sub_type_id = follow_alias(sub_type_id);
+  super_type_id = follow_alias(super_type_id);
 
   if (sub_type_id == LiteralType::Never || super_type_id == LiteralType::Any)
     return true;
@@ -584,6 +616,10 @@ std::string TypeContext::GetNameFromTypeId(TypeId type_id) const {
                  },
                  [&](const OptionalType type) {
                    return GetNameFromTypeId(type.wrapped_type) + "?";
+                 },
+                 [&](const AliasType type) {
+                   return "alias " + type.name + "[" +
+                          std::to_string(type.target_type_id) + "]";
                  }},
       it->second);
 }
@@ -751,6 +787,18 @@ ParsedType TypeContext::GetParsedTypeFromId(TypeId type_id) const {
 
                    return ParsedType{ParsedOptionalType{
                        std::make_shared<ParsedType>(std::move(wrapped_type))}};
+                 },
+                 [&](const AliasType& type) {
+                   // AliasType's do not map 1:1 back to a ParsedType but it is
+                   // safe to simply unwrap them and return the target TypeId.
+                   return GetParsedTypeFromId(type.target_type_id);
                  }},
       it->second);
+}
+
+std::ostream& operator<<(std::ostream& os, const TypeContext& context) {
+  for (size_t id = 0; id < context.next_type_id_; ++id) {
+    os << id << ". " << context.GetNameFromTypeId(id) << "\n";
+  }
+  return os;
 }

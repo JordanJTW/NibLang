@@ -33,6 +33,8 @@ std::ostream& operator<<(std::ostream& os, NamedBinding::Kind kind) {
       return os << "Narrowed";
     case NamedBinding::Template:
       return os << "Template";
+    case NamedBinding::TypeAlias:
+      return os << "TypeAlias";
   }
 
   __builtin_unreachable();  // All Symbol::Kind MUST be handled above.

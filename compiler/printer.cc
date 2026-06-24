@@ -245,6 +245,10 @@ void Printer::Print(const Statement& stmt, size_t indent) {
             std::cout << "ImportStatement(\"" << import.path << "\")"
                       << std::endl;
           },
+          [&](const TypeAliasStatement& alias) {
+            std::cout << "TypeAliasStatement(" << alias.name.value << " = "
+                      << *alias.type << ")" << std::endl;
+          },
       },
       stmt.as);
 }

@@ -66,6 +66,34 @@ void SemanticAnalyzer::Check(Block& block, TypeId function_type_id) {
     }
   }
 
+  // Collect alias to types. This needs to happen after the initial struct names
+  // are populated in the scope but before the types are actually instantiated.
+  for (auto& statement : block.statements) {
+    if (auto* alias = std::get_if<TypeAliasStatement>(&statement->as)) {
+      // If this is an alias to a specific type, it acts more like a link with
+      // no new type created just another binding to the existing type under a
+      // new name. This ensures aliased types can still be constructed, etc.
+      if (auto* target = std::get_if<std::string>(&alias->type->type)) {
+        std::optional<NamedBinding> target_binding =
+            scope_manager_.FindBindingFor(*target, ScopeManager::All);
+        if (!target_binding->IsType()) {
+          error_collector_.Add("Cannot create type alias '" +
+                                   alias->name.value +
+                                   "' from value identifier '" + *target + "'",
+                               alias->type->metadata);
+        }
+        scope_manager_.InsertNameIntoScope(
+            alias->name.value, NamedBinding::TypeAlias,
+            target_binding->realized_type_id, target_binding->symbol_id,
+            target_binding->idx, target_binding->parent_type_id);
+      } else {
+        // In the case of an alias to a more complex type we do assign a new
+        // type to allow for recursive definitions i.e. alias Foo = Array[Foo].
+        type_context_.GetAliasOf(alias->name.value, *alias->type);
+      }
+    }
+  }
+
   // Type check the full struct bodies (and functions) once all types are known.
   // Errors are logged from within `DefineStructType` and `DefineFunction`.
   for (auto& [self, declaration] : struct_decls) {
@@ -232,7 +260,8 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
           [&](StructDeclaration& struct_decl) {
             // Function bodies are checked only when a FunctionType is realized
           },
-          [&](ImportStatement& import) { /*nothing to type check*/ },
+          [&](const ImportStatement& import) { /*nothing to check*/ },
+          [&](const TypeAliasStatement& alias) { /* nothing to check */ },
       },
       statement->as);
 }

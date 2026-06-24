@@ -29,6 +29,7 @@ enum class TokenKind {
   kKwStruct,          // struct
   kKwExtern,          // extern
   kKwLet,             // let
+  kKwAlias,           // alias
   kKwStatic,          // static
   kKwAs,              // as
   kKwTypeOf,          // of

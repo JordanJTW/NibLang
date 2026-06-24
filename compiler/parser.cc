@@ -293,6 +293,30 @@ void Parser::ParseBlock(Block& block, BlockType type) {
       continue;
     }
 
+    if (current_token_.kind == TokenKind::kKwAlias) {
+      AdvanceToken();  // Past "alias"
+
+      ASSIGN_OR_CONTINUE(
+          name_token,
+          ExpectNextToken(TokenKind::kIdent, "expected type alias name"));
+
+      CONTINUE_IF_FALSE(ExpectNextToken(TokenKind::kAssign, "expected '='"));
+
+      std::optional<ParsedType> type = ParseType();
+      if (!type) {
+        HandleError("invalid type expression");
+        continue;
+      }
+
+      CONTINUE_IF_FALSE(ExpectNextToken(TokenKind::kEndExpr, "expected ';'"));
+
+      block.statements.push_back(
+          std::make_unique<Statement>(Statement{TypeAliasStatement{
+              std::move(name_token.value()),
+              std::make_unique<ParsedType>(std::move(type.value()))}}));
+      continue;
+    }
+
     if (current_token_.kind == TokenKind::kKwImport) {
       AdvanceToken();  // Past @import
 

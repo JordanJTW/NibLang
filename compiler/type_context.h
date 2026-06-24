@@ -60,6 +60,11 @@ struct OptionalType {
   TypeId wrapped_type;
 };
 
+struct AliasType {
+  std::string name;
+  TypeId target_type_id;
+};
+
 // Stores context for structural and nominal typing through-out the compiler.
 class TypeContext {
  public:
@@ -122,6 +127,9 @@ class TypeContext {
   // Returns the TypeId for the union of `types`.
   TypeId GetUnionOf(const std::vector<TypeId>& types);
 
+  // Creates an alias of `name` pointing to `type`.
+  TypeId GetAliasOf(std::string_view name, const ParsedType& type);
+
   // Returns if TypeId if Nil or could be Nil i.e. Nil + Optional.
   bool IsTypeNilable(TypeId type_id) const;
 
@@ -171,6 +179,8 @@ class TypeContext {
   const auto& symbol_table() const { return symbol_table_; }
 
  private:
+  friend std::ostream& operator<<(std::ostream&, const TypeContext&);
+
   ScopeManager& scope_manager_;
 
   CallIdx next_call_idx_ = 0;  // 0 is assigned to "main" by default.
@@ -192,8 +202,12 @@ class TypeContext {
   // Declaring an interned "type" for the built-ins simplifies `IsTypeSubsetOf`.
   struct BuiltInType {};
 
-  using TypeInfo = std::
-      variant<BuiltInType, FunctionType, OptionalType, StructType, UnionType>;
+  using TypeInfo = std::variant<AliasType,
+                                BuiltInType,
+                                FunctionType,
+                                OptionalType,
+                                StructType,
+                                UnionType>;
   std::unordered_map<TypeId, TypeInfo> type_lookup_;
 
   std::unordered_map<SymbolId, std::variant<FunctionSymbol, StructSymbol>>
@@ -202,3 +216,5 @@ class TypeContext {
 
   std::vector<RealizedFunction> realized_functions_;
 };
+
+std::ostream& operator<<(std::ostream&, const TypeContext&);

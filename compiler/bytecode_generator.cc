@@ -78,73 +78,74 @@ ByteCodeGenerator::FunctionObject ByteCodeGenerator::Build(
 void ByteCodeGenerator::EmitBlock(const Block& block,
                                   std::optional<LoopContext> loop_ctx) {
   for (const auto& stmt : block.statements) {
-    std::visit(Overloaded{
-                   [&](const std::unique_ptr<Expression>& expr) {
-                     EmitExpression(expr);
+    std::visit(
+        Overloaded{
+            [&](const std::unique_ptr<Expression>& expr) {
+              EmitExpression(expr);
 
-                     // Expressions always leave a value on the stack (if not
-                     // Void) so when executed as a Statement the unused value
-                     // must be consumed.
-                     if (expr->type != TypeContext::LiteralType::Void)
-                       bytecode_.StackDel();
-                   },
-                   [&](const FunctionDeclaration& fn) {
-                     // Will be handled as separate FunctionSymbol codegen.
-                   },
-                   [&](const ReturnStatement& ret) {
-                     EmitExpression(ret.value);
-                     bytecode_.Return();
-                   },
-                   [&](const ThrowStatement& thr) {
-                     EmitExpression(thr.value);
-                     bytecode_.Throw();
-                   },
-                   [&](const IfStatement& if_stmt) {
-                     EmitExpression(if_stmt.condition);
-                     std::string id = std::to_string(next_unique_id_++);
-                     bytecode_.JumpIfFalse("else" + id);
-                     EmitBlock(if_stmt.then_body, loop_ctx);
-                     bytecode_.Jump("end_if" + id);
-                     bytecode_.Label("else" + id);
-                     EmitBlock(if_stmt.else_body, loop_ctx);
-                     bytecode_.Label("end_if" + id);
-                   },
-                   [&](const WhileStatement& while_stmt) {
-                     std::string id = std::to_string(next_unique_id_++);
-                     std::string condition_label = "while_cond" + id;
-                     std::string end_label = "while_end" + id;
+              // Expressions always leave a value on the stack (if not
+              // Void) so when executed as a Statement the unused value
+              // must be consumed.
+              if (expr->type != TypeContext::LiteralType::Void)
+                bytecode_.StackDel();
+            },
+            [&](const FunctionDeclaration& fn) {
+              // Will be handled as separate FunctionSymbol codegen.
+            },
+            [&](const ReturnStatement& ret) {
+              EmitExpression(ret.value);
+              bytecode_.Return();
+            },
+            [&](const ThrowStatement& thr) {
+              EmitExpression(thr.value);
+              bytecode_.Throw();
+            },
+            [&](const IfStatement& if_stmt) {
+              EmitExpression(if_stmt.condition);
+              std::string id = std::to_string(next_unique_id_++);
+              bytecode_.JumpIfFalse("else" + id);
+              EmitBlock(if_stmt.then_body, loop_ctx);
+              bytecode_.Jump("end_if" + id);
+              bytecode_.Label("else" + id);
+              EmitBlock(if_stmt.else_body, loop_ctx);
+              bytecode_.Label("end_if" + id);
+            },
+            [&](const WhileStatement& while_stmt) {
+              std::string id = std::to_string(next_unique_id_++);
+              std::string condition_label = "while_cond" + id;
+              std::string end_label = "while_end" + id;
 
-                     bytecode_.Label(condition_label);
-                     EmitExpression(while_stmt.condition);
-                     bytecode_.JumpIfFalse(end_label);
-                     EmitBlock(while_stmt.body,
-                               LoopContext{end_label, condition_label});
-                     bytecode_.Jump(condition_label);
-                     bytecode_.Label(end_label);
-                   },
-                   [&](const BreakStatement&) {
-                     CHECK(loop_ctx) << "break statement not within a loop";
-                     bytecode_.Jump(loop_ctx->break_label);
-                   },
-                   [&](const ContinueStatement&) {
-                     CHECK(loop_ctx) << "continue statement not within a loop";
-                     bytecode_.Jump(loop_ctx->continue_label);
-                   },
-                   [&](const AssignStatement& assign) {
-                     EmitExpression(assign.value);
-                     CHECK(assign.resolved)
-                         << "Unresolved variable in assignment: "
-                         << assign.name;
+              bytecode_.Label(condition_label);
+              EmitExpression(while_stmt.condition);
+              bytecode_.JumpIfFalse(end_label);
+              EmitBlock(while_stmt.body,
+                        LoopContext{end_label, condition_label});
+              bytecode_.Jump(condition_label);
+              bytecode_.Label(end_label);
+            },
+            [&](const BreakStatement&) {
+              CHECK(loop_ctx) << "break statement not within a loop";
+              bytecode_.Jump(loop_ctx->break_label);
+            },
+            [&](const ContinueStatement&) {
+              CHECK(loop_ctx) << "continue statement not within a loop";
+              bytecode_.Jump(loop_ctx->continue_label);
+            },
+            [&](const AssignStatement& assign) {
+              EmitExpression(assign.value);
+              CHECK(assign.resolved)
+                  << "Unresolved variable in assignment: " << assign.name;
 
-                     StoreSymbol(assign.resolved->symbol);
-                   },
-                   [&](const StructDeclaration& struct_decl) {
-                     // SemanticAnalyzer produces FunctionSymbols for methods
-                     // and they will be handled as separate functions.
-                   },
-                   [&](ImportStatement& import) { /*nothing to compile*/ },
-               },
-               stmt->as);
+              StoreSymbol(assign.resolved->symbol);
+            },
+            [&](const StructDeclaration& struct_decl) {
+              // SemanticAnalyzer produces FunctionSymbols for methods
+              // and they will be handled as separate functions.
+            },
+            [&](const ImportStatement& import) { /*nothing to compile*/ },
+            [&](const TypeAliasStatement& alias) { /*nothing to compile*/ },
+        },
+        stmt->as);
   }
 }
 

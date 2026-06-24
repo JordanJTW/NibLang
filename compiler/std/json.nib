@@ -4,6 +4,9 @@
 
 @import "std/types.nib"
 
+alias JsonValue =
+    (bool | i32 | f32 | String | Array[JsonValue] | Map[String, JsonValue]);
+
 struct Parser {
   idx: i32;
 }
@@ -156,10 +159,10 @@ fn parse_number(input: String, parser: Parser) -> i32 | f32 {
   return value;
 }
 
-fn parse_object(input: String, parser: Parser) -> Map {
+fn parse_object(input: String, parser: Parser) -> Map[String, JsonValue] {
   parser.idx = parser.idx + 1;
   skip_whitespace(input, parser);
-  let obj: Map = Map.new();
+  let obj = Map.of(String, JsonValue).new();
 
   if (parser.idx >= input.length()) {
     throw "unterminated obj";
@@ -191,12 +194,12 @@ fn parse_object(input: String, parser: Parser) -> Map {
   }
 }
 
-fn parse_array(input: String, parser: Parser) -> Array {
+fn parse_array(input: String, parser: Parser) -> Array[JsonValue] {
   expect_char(input, parser, '['); // [
 
   skip_whitespace(input, parser);
 
-  let array = Array.new();
+  let array = Array.of(JsonValue).new();
 
   if (parser.idx < input.length() &&
       input.charAt(parser.idx) == ']') {
@@ -233,7 +236,7 @@ fn parse_array(input: String, parser: Parser) -> Array {
   return array;
 }
 
-fn parse_value(input: String, parser: Parser) -> bool | i32 | f32 | Array | String | Map {
+fn parse_value(input: String, parser: Parser) -> JsonValue {
   skip_whitespace(input, parser);
 
   if (parser.idx >= input.length()) {

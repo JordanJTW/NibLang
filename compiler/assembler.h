@@ -9,6 +9,7 @@
 #include <initializer_list>
 #include <map>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "src/types.h"

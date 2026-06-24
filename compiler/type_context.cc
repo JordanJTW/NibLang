@@ -462,6 +462,7 @@ std::optional<TypeInstance> TypeContext::DeclareFunctionType(
 }
 
 bool TypeContext::IsTypeSubsetOf(TypeId sub_type_id, TypeId super_type_id) {
+  // Fast-path without unwrapping aliases just compare the IDs.
   if (sub_type_id == super_type_id)
     return true;
 
@@ -475,6 +476,10 @@ bool TypeContext::IsTypeSubsetOf(TypeId sub_type_id, TypeId super_type_id) {
 
   sub_type_id = follow_alias(sub_type_id);
   super_type_id = follow_alias(super_type_id);
+
+  // Re-compare the type IDs after unwrapping aliases.
+  if (sub_type_id == super_type_id)
+    return true;
 
   if (sub_type_id == LiteralType::Never || super_type_id == LiteralType::Any)
     return true;

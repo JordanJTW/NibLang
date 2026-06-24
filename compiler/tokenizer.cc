@@ -100,10 +100,11 @@ Token Tokenizer::next() {
   }
 
   size_t start_idx = offset_;
-  auto make_token = [&](TokenKind kind, std::string value = "") {
+  auto make_token = [&](TokenKind kind,
+                        std::optional<std::string> value = std::nullopt) {
     size_t length = offset_ - start_idx;
     return Token{
-        kind, value.empty() ? data_.substr(start_idx, length) : value,
+        kind, value.has_value() ? *value : data_.substr(start_idx, length),
         Metadata{TextRange{start_idx, offset_}, TextRange{line_, line_ + 1}}};
   };
 

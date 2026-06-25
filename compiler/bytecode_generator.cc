@@ -325,23 +325,12 @@ void ByteCodeGenerator::EmitExpression(
           [&](const ClosureExpression& closure) {
             CHECK(closure.fn.resolved) << "Unresolved function!";
 
-            const auto* closure_symbol =
-                type_context_.GetSymbol<FunctionSymbol>(
-                    closure.fn.resolved->function_symbol.symbol_id.value());
-
-            const auto& [_, instance] = *closure_symbol->instances.begin();
-
-            size_t capture_count = 0;
-            for (const auto& binding :
-                 scope_manager_.GetBindingsForScope(instance.scope_id)) {
-              if (binding.kind != NamedBinding::Capture)
-                continue;
-
+            for (const auto& binding : closure.fn.resolved->required_captures)
               PushSymbol(binding);
-              capture_count++;
-            }
-            bytecode_.PatchBind(*closure.fn.resolved->function_symbol.symbol_id,
-                                /*argc=*/capture_count);
+
+            bytecode_.PatchBind(
+                *closure.fn.resolved->function_symbol.symbol_id,
+                /*argc=*/closure.fn.resolved->required_captures.size());
             called_symbols_.push_back(
                 *closure.fn.resolved->function_symbol.symbol_id);
           },

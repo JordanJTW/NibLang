@@ -272,6 +272,8 @@ struct NilCoalescingExpression {
 
 struct ResolvedFunction {
   NamedBinding function_symbol;
+
+  std::vector<NamedBinding> required_captures;
 };
 
 struct TemplateArgument {

@@ -194,7 +194,8 @@ int main(int argc, char* argv[]) {
   for (File& file : files) {
     ErrorCollector error_collector;
     SemanticAnalyzer analyzer(type_context, scope_manager, error_collector);
-    analyzer.Check(file.root_block, TypeContext::Any);
+    SemanticAnalyzer::FunctionContext context = {{}, TypeContext::Any};
+    analyzer.Check(file.root_block, context);
 
     if (error_collector.HasErrors()) {
       std::cerr << "Errors in file: " << file.resolved_path << "\n";

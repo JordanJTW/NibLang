@@ -19,7 +19,12 @@ class SemanticAnalyzer {
                             ScopeManager& scope_manager,
                             ErrorCollector& error_collector);
 
-  void Check(Block& block, TypeId return_type_id);
+  struct FunctionContext {
+    std::vector<NamedBinding> required_captures;
+    const TypeId return_type_id;
+  };
+
+  void Check(Block& block, FunctionContext& context);
 
   struct ScopeNarrowingInfo {
     NamedBinding symbol;
@@ -44,11 +49,12 @@ class SemanticAnalyzer {
   using Result = std::optional<SemanticAnalyzer::ExpressionResult>;
 
   std::optional<ExpressionResult> CheckExpression(
-      std::unique_ptr<Expression>& expression);
+      std::unique_ptr<Expression>& expression,
+      FunctionContext& context);
 
  private:
   void CheckStatement(std::unique_ptr<Statement>& statement,
-                      TypeId return_type_id);
+                      FunctionContext& context);
 
   struct ArgumentResult {
     SemanticAnalyzer::Result result;
@@ -72,6 +78,7 @@ class SemanticAnalyzer {
 
   Result TypeCheckCallExpr(CallExpression& call_expr,
                            ExpressionResult callee_result,
+                           FunctionContext& context,
                            Metadata debug_metdata);
 
   TypeContext& type_context_;

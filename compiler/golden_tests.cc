@@ -102,8 +102,9 @@ class GoldenTest : public ::testing::Test {
         kPreamble + "\nfn main() {\n" + program_text + "\n}";
     Block root_block = Parser{full_program_text}.Parse();
 
+    SemanticAnalyzer::FunctionContext context = {{}, TypeContext::Any};
     SemanticAnalyzer{type_context_, scope_manager_, error_collector_}.Check(
-        root_block, TypeContext::Any);
+        root_block, context);
 
     if (error_collector_.HasErrors()) {
       error_collector_.PrintAllErrors(full_program_text);
@@ -337,7 +338,7 @@ TEST_F(GoldenTest, Captures) {
 
   auto program = BuildProgram(R"(
     fn call_closure(arg: fn(i32), x: i32) {
-      foo(x);
+      arg(x);
     }
 
     let x = 23;

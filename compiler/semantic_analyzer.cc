@@ -54,7 +54,7 @@ SemanticAnalyzer::SemanticAnalyzer(TypeContext& type_context,
       scope_manager_(scope_manager),
       error_collector_(error_collector) {}
 
-void SemanticAnalyzer::Check(Block& block, TypeId function_type_id) {
+void SemanticAnalyzer::Check(Block& block, FunctionContext& context) {
   // Collect user-defined type names to ensure they're available for function
   // signatures, field types, etc. This also allows for recursive types (e.g. a
   // struct that has a field of its own type).
@@ -115,7 +115,7 @@ void SemanticAnalyzer::Check(Block& block, TypeId function_type_id) {
   }
 
   for (auto& statement : block.statements) {
-    CheckStatement(statement, function_type_id);
+    CheckStatement(statement, context);
   }
 
   std::vector<TypeContext::RealizedFunction> function_bodies =
@@ -130,8 +130,10 @@ void SemanticAnalyzer::Check(Block& block, TypeId function_type_id) {
         continue;
 
       scope_manager_.WithScope(realized_function.scope_id, [&]() {
-        Check(*realized_function.delcaration.body,
-              realized_function.return_type_id);
+        FunctionContext fn_context{{}, realized_function.return_type_id};
+        Check(*realized_function.delcaration.body, fn_context);
+        realized_function.delcaration.resolved->required_captures =
+            std::move(fn_context.required_captures);
       });
     }
 
@@ -140,15 +142,17 @@ void SemanticAnalyzer::Check(Block& block, TypeId function_type_id) {
 }
 
 void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
-                                      TypeId return_type_id) {
+                                      FunctionContext& context) {
   std::visit(
       Overloaded{
-          [&](std::unique_ptr<Expression>& expr) { CheckExpression(expr); },
+          [&](std::unique_ptr<Expression>& expr) {
+            CheckExpression(expr, context);
+          },
           [&](FunctionDeclaration& fn) {
             // Function bodies are checked only when a FunctionType is realized
           },
           [&](ReturnStatement& ret) {
-            Result return_result = CheckExpression(ret.value);
+            Result return_result = CheckExpression(ret.value, context);
 
             if (!return_result.has_value())
               return;
@@ -163,18 +167,18 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
             }
 
             if (!type_context_.IsTypeSubsetOf(*return_result->type_id,
-                                              return_type_id)) {
+                                              context.return_type_id)) {
               error_collector_.Add(
                   "Returning " +
                       type_context_.GetNameFromTypeId(*return_result->type_id) +
                       " from function with return type " +
-                      type_context_.GetNameFromTypeId(return_type_id),
+                      type_context_.GetNameFromTypeId(context.return_type_id),
                   statement->meta);
             }
           },
-          [&](ThrowStatement& thr) { CheckExpression(thr.value); },
+          [&](ThrowStatement& thr) { CheckExpression(thr.value, context); },
           [&](IfStatement& if_stmt) {
-            Result result = CheckExpression(if_stmt.condition);
+            Result result = CheckExpression(if_stmt.condition, context);
 
             const auto narrowing_info = result
                                             ? result->narrowing_info
@@ -187,7 +191,7 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
                                                       narrowing.if_branch_type);
               }
 
-              Check(if_stmt.then_body, return_type_id);
+              Check(if_stmt.then_body, context);
             }
             {
               AutoScope _{scope_manager_, ScopeManager::BlockScope, "else"};
@@ -196,14 +200,14 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
                     narrowing.symbol, narrowing.else_branch_type);
               }
 
-              Check(if_stmt.else_body, return_type_id);
+              Check(if_stmt.else_body, context);
             }
           },
           [&](WhileStatement& while_stmt) {
-            CheckExpression(while_stmt.condition);
+            CheckExpression(while_stmt.condition, context);
             {
               AutoScope _{scope_manager_, ScopeManager::BlockScope, "while"};
-              Check(while_stmt.body, return_type_id);
+              Check(while_stmt.body, context);
             }
           },
           // `break` and `continue` are single word statements.
@@ -225,7 +229,7 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
               parsed_type_id = type_context_.GetTypeIdFor(*assign.type);
             }
 
-            Result value_result = CheckExpression(assign.value);
+            Result value_result = CheckExpression(assign.value, context);
             if (!value_result.has_value())
               return;
 
@@ -267,7 +271,8 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
 }
 
 SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
-    std::unique_ptr<Expression>& expression) {
+    std::unique_ptr<Expression>& expression,
+    FunctionContext& context) {
   Result result = std::visit(
       Overloaded{
           [&](PrimaryExpression& primary) -> SemanticAnalyzer::Result {
@@ -302,14 +307,10 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                         // Any value symbols found now must be captured.
                         if (binding->kind == NamedBinding::Variable ||
                             binding->kind == NamedBinding::Capture) {
-                          // FunctionDeclaration& fn =
-                          //     type_context_.GetCurrentFunction();
-                          // fn.resolved->variables_to_capture.push_back(*binding);
-
+                          context.required_captures.push_back(*binding);
                           // Variables will ALWAYS have a realized TypeId.
                           binding = scope_manager_.DeclareCaptureBinding(
                               ident.name, *binding->realized_type_id);
-                          // fn.resolved->capture_arguments.push_back(*binding);
                         }
 
                         ident.resolved = ResolvedIdentifier{*binding};
@@ -348,8 +349,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                 primary.value);
           },
           [&](BinaryExpression& binary) -> SemanticAnalyzer::Result {
-            Result lhs = CheckExpression(binary.lhs);
-            Result rhs = CheckExpression(binary.rhs);
+            Result lhs = CheckExpression(binary.lhs, context);
+            Result rhs = CheckExpression(binary.rhs, context);
 
             if (!lhs.has_value() || !rhs.has_value())
               return std::nullopt;
@@ -437,20 +438,20 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             return ExpressionResult(*lhs->type_id);
           },
           [&](CallExpression& call_expr) -> SemanticAnalyzer::Result {
-            Result callee_result = CheckExpression(call_expr.callee);
+            Result callee_result = CheckExpression(call_expr.callee, context);
 
             // Short-circuit if the callee was invalid.
             if (!callee_result.has_value())
               return std::nullopt;
 
             Result type_check_result = TypeCheckCallExpr(
-                call_expr, callee_result.value(), expression->meta);
+                call_expr, callee_result.value(), context, expression->meta);
 
             return type_check_result;
           },
           [&](AssignmentExpression& assign) -> SemanticAnalyzer::Result {
-            Result lhs = CheckExpression(assign.lhs);
-            Result rhs = CheckExpression(assign.rhs);
+            Result lhs = CheckExpression(assign.lhs, context);
+            Result rhs = CheckExpression(assign.rhs, context);
 
             if (!lhs.has_value() || !rhs.has_value())
               return std::nullopt;
@@ -483,7 +484,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
           },
           [&](MemberAccessExpression& member_access)
               -> SemanticAnalyzer::Result {
-            Result object_result = CheckExpression(member_access.object);
+            Result object_result =
+                CheckExpression(member_access.object, context);
             if (!object_result)
               return std::nullopt;
 
@@ -531,8 +533,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             return std::nullopt;
           },
           [&](ArrayAccessExpression& array_access) -> SemanticAnalyzer::Result {
-            Result object = CheckExpression(array_access.array);
-            Result index = CheckExpression(array_access.index);
+            Result object = CheckExpression(array_access.array, context);
+            Result index = CheckExpression(array_access.index, context);
 
             if (!object.has_value() || !object->has_type_id() ||
                 !index.has_value() || !index->has_type_id())
@@ -550,8 +552,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             return ExpressionResult{LiteralType::Any};
           },
           [&](LogicExpression& logic) -> SemanticAnalyzer::Result {
-            Result lhs = CheckExpression(logic.lhs);
-            Result rhs = CheckExpression(logic.rhs);
+            Result lhs = CheckExpression(logic.lhs, context);
+            Result rhs = CheckExpression(logic.rhs, context);
 
             if (!lhs.has_value() || !lhs->has_type_id() || !rhs.has_value() ||
                 !rhs->has_type_id())
@@ -594,17 +596,17 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             return std::nullopt;
           },
           [&](PrefixUnaryExpression& prefix) -> SemanticAnalyzer::Result {
-            Result operand = CheckExpression(prefix.operand);
+            Result operand = CheckExpression(prefix.operand, context);
             // TODO: Check that `op` is valid for `operand`.
             return operand;
           },
           [&](PostfixUnaryExpression& postfix) -> SemanticAnalyzer::Result {
-            Result operand = CheckExpression(postfix.operand);
+            Result operand = CheckExpression(postfix.operand, context);
             // TODO: Check that `op` is valid for `operand`.
             return operand;
           },
           [&](TypeCastExpression& cast) -> SemanticAnalyzer::Result {
-            Result original_result = CheckExpression(cast.expr);
+            Result original_result = CheckExpression(cast.expr, context);
             if (!original_result.has_value())
               return std::nullopt;
 
@@ -661,7 +663,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             // OptionalChainExpression is a "pseudo-AST node" which represents
             // the END of a chain of ?. accesses (i.e. where to jump to in case
             // of Nil) and resolves to the final type wrapped as an Optional.
-            Result result = CheckExpression(optional_chain.root);
+            Result result = CheckExpression(optional_chain.root, context);
             if (!result.has_value())
               return std::nullopt;
 
@@ -679,8 +681,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             return new_result;
           },
           [&](NilCoalescingExpression& coalescing) -> Result {
-            Result lhs = CheckExpression(coalescing.lhs);
-            Result rhs = CheckExpression(coalescing.rhs);
+            Result lhs = CheckExpression(coalescing.lhs, context);
+            Result rhs = CheckExpression(coalescing.rhs, context);
 
             if (!lhs.has_value() || !rhs.has_value())
               return std::nullopt;
@@ -716,7 +718,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                 type_context_.GetUnionOf({*lhs_type_id, *rhs->type_id})};
           },
           [&](OptionalAccessExpression& optional_access) -> Result {
-            Result result = CheckExpression(optional_access.target);
+            Result result = CheckExpression(optional_access.target, context);
 
             if (!result.has_value())
               return std::nullopt;
@@ -739,7 +741,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             return std::nullopt;
           },
           [&](TemplateInstantiationExpression& template_expr) -> Result {
-            Result result = CheckExpression(template_expr.generic_target);
+            Result result =
+                CheckExpression(template_expr.generic_target, context);
 
             if (!result.has_value())
               return std::nullopt;
@@ -902,14 +905,16 @@ std::optional<TypeId> SemanticAnalyzer::InstantiateType(
 SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
     CallExpression& call_expr,
     ExpressionResult callee_result,
+    FunctionContext& context,
     Metadata debug_metadata) {
   // Ensure all arguments are type-checked regardless of the target.
   std::vector<ArgumentResult> argument_results;
   argument_results.reserve(call_expr.arguments.size());
   std::transform(call_expr.arguments.begin(), call_expr.arguments.end(),
                  std::back_inserter(argument_results),
-                 [this](std::unique_ptr<Expression>& expr) {
-                   return ArgumentResult{CheckExpression(expr), expr->meta};
+                 [this, &context](std::unique_ptr<Expression>& expr) {
+                   return ArgumentResult{CheckExpression(expr, context),
+                                         expr->meta};
                  });
 
   std::optional<TypeId> callable_type_id = callee_result.type_id;

@@ -166,7 +166,7 @@ class TypeContext {
 
   struct RealizedFunction {
     ScopeId scope_id;
-    const FunctionDeclaration& delcaration;
+    FunctionDeclaration& delcaration;
     TypeId return_type_id;
   };
 

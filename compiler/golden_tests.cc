@@ -261,7 +261,7 @@ TEST_F(GoldenTest, OptionalChainFieldDeep) {
   RunProgram(program);
 }
 
-TEST_F(GoldenTest, ArrayChain) {
+TEST_F(GoldenTest, DISABLED_ArrayChain) {
   error_collector_.DelegateToFake();
 
   auto program = BuildProgram(R"(

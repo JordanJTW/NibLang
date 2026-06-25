@@ -281,7 +281,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                     [&](const StringLiteral&) -> SemanticAnalyzer::Result {
                       if (auto binding = scope_manager_.FindBindingFor(
                               "String", ScopeManager::All)) {
-                        return ExpressionResult(*binding);
+                        return ExpressionResult(*binding->realized_type_id);
                       }
 
                       error_collector_.Add("unknown identifier: String",

@@ -272,11 +272,11 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
       type.type);
 }
 
-TypeId TypeContext::WrapTypeIdAsOptional(TypeId type_id) {
+TypeId TypeContext::GetOptionalOf(TypeId type_id) {
   return type_registry_.NewOptionalType(type_id);
 }
 
-std::optional<TypeId> TypeContext::UnwrapOptionalTypeId(TypeId type_id) const {
+std::optional<TypeId> TypeContext::UnwrapOptional(TypeId type_id) const {
   if (const auto* optional = type_registry_.GetType<OptionalType>(type_id))
     return optional->wrapped_type;
 
@@ -331,7 +331,7 @@ TypeId TypeContext::GetAliasOf(std::string_view name, const ParsedType& type) {
 }
 
 bool TypeContext::IsTypeNilable(TypeId type_id) const {
-  return type_id == LiteralType::Nil || UnwrapOptionalTypeId(type_id);
+  return type_id == LiteralType::Nil || UnwrapOptional(type_id);
 }
 
 std::optional<TypeInstance> TypeContext::DeclareFunctionType(

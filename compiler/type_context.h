@@ -49,11 +49,11 @@ class TypeContext {
   // Returns the TypeId for a given ParsedType if it can be resolved.
   std::optional<TypeId> GetTypeIdFor(const ParsedType& type);
 
-  // Wraps a TypeId as an optional type, creating a new TypeId if needed.
-  TypeId WrapTypeIdAsOptional(TypeId type_id);
-  // Unwraps an optional TypeId to get the wrapped TypeId, returns std::nullopt
-  // if the given TypeId is not an optional type.
-  std::optional<TypeId> UnwrapOptionalTypeId(TypeId type_id) const;
+  // If `type_id` is an Optional[T], returns T. Otherwise, returns std::nullopt.
+  std::optional<TypeId> UnwrapOptional(TypeId type_id) const;
+
+  // Wraps `type_id` as an Optional[T]. Returns the TypeId for Optional[T].
+  TypeId GetOptionalOf(TypeId type_id);
 
   // Returns the TypeId for the union of `types`.
   TypeId GetUnionOf(const std::vector<TypeId>& types);

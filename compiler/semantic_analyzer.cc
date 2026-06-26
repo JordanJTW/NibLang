@@ -406,7 +406,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
               }
 
               if (symbol_to_narrow) {
-                auto unwrapped_type_id = type_context_.UnwrapOptionalTypeId(
+                auto unwrapped_type_id = type_context_.UnwrapOptional(
                     symbol_to_narrow->realized_type_id.value());
 
                 // This should NEVER be hit. See compatibility check above.
@@ -519,8 +519,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                                      expression->meta);
               }
             } else {
-              if (auto unwrapped_type_id = type_context_.UnwrapOptionalTypeId(
-                      *object_result->type_id)) {
+              if (auto unwrapped_type_id =
+                      type_context_.UnwrapOptional(*object_result->type_id)) {
                 error_collector_.Add(
                     "Attempting member access on Optional type: " +
                         type_registry_.GetNameFromTypeId(
@@ -655,8 +655,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
 
             TypeId result_type_id = as_type.value();
             if (cast.strategy == TypeCastStrategy::OPTIONAL) {
-              result_type_id =
-                  type_context_.WrapTypeIdAsOptional(as_type.value());
+              result_type_id = type_context_.GetOptionalOf(as_type.value());
             }
 
             return ExpressionResult(result_type_id, original_result->binding);
@@ -673,9 +672,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                 << "Only realized results can participate in an optional chain";
 
             TypeId result_type_id = *result->type_id;
-            if (!type_context_.UnwrapOptionalTypeId(result_type_id)) {
-              result_type_id =
-                  type_context_.WrapTypeIdAsOptional(result_type_id);
+            if (!type_context_.UnwrapOptional(result_type_id)) {
+              result_type_id = type_context_.GetOptionalOf(result_type_id);
             }
 
             ExpressionResult new_result(result_type_id, result->binding);
@@ -709,7 +707,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             }
 
             std::optional<TypeId> lhs_type_id =
-                type_context_.UnwrapOptionalTypeId(*lhs->type_id);
+                type_context_.UnwrapOptional(*lhs->type_id);
             if (!lhs_type_id) {
               error_collector_.Add("LHS is not optional; ?? is a no-op",
                                    coalescing.lhs->meta);
@@ -732,7 +730,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             }
 
             if (auto unwrapped =
-                    type_context_.UnwrapOptionalTypeId(*result->type_id)) {
+                    type_context_.UnwrapOptional(*result->type_id)) {
               return ExpressionResult{unwrapped.value(), result->binding};
             }
 

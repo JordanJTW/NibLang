@@ -61,16 +61,19 @@ class TypeContext {
   // Creates an alias of `name` pointing to `type`.
   TypeId GetAliasOf(std::string_view name, const ParsedType& type);
 
+  // Realizes a template of a struct or function pointed to by `binding` into a
+  // concrete TypeId using `argument_type_ids` as template arguments.
+  // `binding` MUST have a `symbol_id` of the template Symbol to realize.
+  std::optional<TypeId> GetTemplateOf(
+      NamedBinding binding,
+      const std::vector<TypeId>& argument_type_ids);
+
   // Returns if TypeId if Nil or could be Nil i.e. Nil + Optional.
   bool IsTypeNilable(TypeId type_id) const;
 
   // Returns true if `sub_type_id` is a subset of `super_type_id` (i.e. can be
   // used in its place). This is used for function argument type checking, etc.
   bool IsTypeSubsetOf(TypeId sub_type, TypeId super_type) const;
-
-  std::optional<TypeId> GetTemplateOf(
-      NamedBinding binding,
-      const std::vector<TypeId>& argument_type_ids);
 
   ParsedType GetParsedTypeFromId(TypeId) const;
 

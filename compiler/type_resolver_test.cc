@@ -13,6 +13,7 @@
 #include "compiler/error_collector.h"
 #include "compiler/gtest_helpers.h"
 #include "compiler/type_context.h"
+#include "compiler/type_registry.h"
 #include "compiler/types.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -50,7 +51,8 @@ class TypeResolverTest : public ::testing::Test {
  protected:
   ErrorCollector error_collector;
   ScopeManager scope_manager;
-  TypeContext type_context{scope_manager};
+  TypeRegistry type_registry{scope_manager};
+  TypeContext type_context{scope_manager, type_registry, error_collector};
   TypeResolver type_resolver{type_context, error_collector};
 
   TypeResolver::Bindings bindings;

@@ -29,14 +29,18 @@ target_link_libraries(scope_manager PRIVATE logging types)
 
 add_library(semantic_analyzer semantic_analyzer.cc)
 target_include_directories(semantic_analyzer PRIVATE ${PROJECT_SOURCE_DIR})
-target_link_libraries(semantic_analyzer PRIVATE error_collector logging printer scope_manager type_context type_resolver)
+target_link_libraries(semantic_analyzer PRIVATE error_collector logging printer scope_manager type_context type_registry type_resolver)
 
 add_library(tokenizer tokenizer.cc)
 target_include_directories(tokenizer PRIVATE ${PROJECT_SOURCE_DIR})
 
 add_library(type_context type_context.cc)
 target_include_directories(type_context PRIVATE ${PROJECT_SOURCE_DIR})
-target_link_libraries(type_context PRIVATE error_collector logging scope_manager tokenizer)
+target_link_libraries(type_context PRIVATE error_collector logging scope_manager tokenizer type_registry)
+
+add_library(type_registry type_registry.cc)
+target_include_directories(type_registry PRIVATE ${PROJECT_SOURCE_DIR})
+target_link_libraries(type_registry PRIVATE error_collector logging scope_manager tokenizer)
 
 add_library(type_resolver type_resolver.cc)
 target_include_directories(type_resolver PRIVATE ${PROJECT_SOURCE_DIR})
@@ -47,7 +51,7 @@ target_include_directories(types PRIVATE ${PROJECT_SOURCE_DIR})
 
 add_executable(compiler main.cc)
 target_include_directories(compiler PRIVATE ${PROJECT_SOURCE_DIR})
-target_link_libraries(compiler PRIVATE bytecode_generator parser program_builder scope_manager type_context)
+target_link_libraries(compiler PRIVATE bytecode_generator parser program_builder scope_manager type_context type_registry)
 
 include(GoogleTest)
 

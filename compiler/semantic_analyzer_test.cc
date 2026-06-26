@@ -14,6 +14,7 @@
 #include "compiler/gtest_helpers.h"
 #include "compiler/scope_manager.h"
 #include "compiler/type_context.h"
+#include "compiler/type_registry.h"
 #include "compiler/types.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -26,28 +27,31 @@ using ::testing::Return;
 
 namespace {
 
+using LiteralType = TypeRegistry::LiteralType;
+
 class SemanticAnalyzerTest : public ::testing::Test {
  protected:
   ErrorCollector error_collector;
   ScopeManager scope_manager;
-  TypeContext type_context{scope_manager};
+  TypeRegistry type_registry{scope_manager};
+  TypeContext type_context{scope_manager, type_registry, error_collector};
   SemanticAnalyzer semantic_analyzer{type_context, scope_manager,
-                                     error_collector};
+                                     error_collector, type_registry};
 };
 
 TEST_F(SemanticAnalyzerTest, Expression_PrimaryExpr_BuiltInValue) {
   static const std::vector<std::tuple<std::string, PrimaryExpression, TypeId>>
       kPrimaryExpressionToTypeId = {
-          {"i32", PrimaryExpression{109}, TypeContext::i32},
-          {"f32", PrimaryExpression{3.14159f}, TypeContext::f32},
-          {"bool", PrimaryExpression{true}, TypeContext::Bool},
+          {"i32", PrimaryExpression{109}, LiteralType::i32},
+          {"f32", PrimaryExpression{3.14159f}, LiteralType::f32},
+          {"bool", PrimaryExpression{true}, LiteralType::Bool},
       };
 
   for (const auto& [name, primary_expr, expected_type_id] :
        kPrimaryExpressionToTypeId) {
     SCOPED_TRACE("Testing PrimaryExpression for: " + name);
     auto expr = std::make_unique<Expression>(Expression{primary_expr});
-    SemanticAnalyzer::FunctionContext context = {{}, TypeContext::Void};
+    SemanticAnalyzer::FunctionContext context = {{}, LiteralType::Void};
     auto result = semantic_analyzer.CheckExpression(expr, context);
 
     ASSERT_TRUE(result.has_value());

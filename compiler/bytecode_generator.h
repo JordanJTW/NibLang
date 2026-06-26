@@ -26,8 +26,7 @@ class ConstantPool {
 
 class ByteCodeGenerator {
  public:
-  explicit ByteCodeGenerator(const TypeContext& type_context,
-                             const ScopeManager& scope_manager,
+  explicit ByteCodeGenerator(const ScopeManager& scope_manager,
                              ConstantPool& constant_pool);
 
   struct FunctionObject {
@@ -77,7 +76,6 @@ class ByteCodeGenerator {
                 std::optional<OptionalChainContext> optional_chain_ctx);
   void EmitOp(const Token& op, bool is_string);
 
-  const TypeContext& type_context_;
   const ScopeManager& scope_manager_;
   ConstantPool& constant_pool_;
 

@@ -13,6 +13,7 @@
 #include "compiler/error_collector.h"
 #include "compiler/gtest_helpers.h"
 #include "compiler/type_context.h"
+#include "compiler/type_registry.h"
 #include "compiler/types.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -22,6 +23,8 @@ using ::testing::ElementsAre;
 using ::testing::i32;
 using ::testing::ident;
 using ::testing::Return;
+
+using LiteralType = TypeRegistry::LiteralType;
 
 namespace {
 
@@ -124,27 +127,27 @@ TEST_F(ScopeManagerTest, NonLinearLookupViaOverrideScopeId) {
 
 TEST_F(ScopeManagerTest, DeclareVariableBinding) {
   auto binding =
-      scope_manager.DeclareVariableBinding("test_var", TypeContext::i32);
+      scope_manager.DeclareVariableBinding("test_var", LiteralType::i32);
   EXPECT_EQ(binding.kind, NamedBinding::Variable);
-  EXPECT_EQ(binding.realized_type_id, TypeContext::i32);
+  EXPECT_EQ(binding.realized_type_id, LiteralType::i32);
   EXPECT_TRUE(binding.idx.has_value());
 }
 
 TEST_F(ScopeManagerTest, DeclareCaptureBinding) {
   auto binding =
-      scope_manager.DeclareCaptureBinding("test_capture", TypeContext::f32);
+      scope_manager.DeclareCaptureBinding("test_capture", LiteralType::f32);
   EXPECT_EQ(binding.kind, NamedBinding::Capture);
-  EXPECT_EQ(binding.realized_type_id, TypeContext::f32);
+  EXPECT_EQ(binding.realized_type_id, LiteralType::f32);
   EXPECT_TRUE(binding.idx.has_value());
 }
 
 TEST_F(ScopeManagerTest, FindBindingFor_Variable) {
-  scope_manager.DeclareVariableBinding("test_var", TypeContext::i32);
+  scope_manager.DeclareVariableBinding("test_var", LiteralType::i32);
   auto binding =
       scope_manager.FindBindingFor("test_var", ScopeManager::ScopeToCheck::All);
   ASSERT_TRUE(binding.has_value());
   EXPECT_EQ(binding->kind, NamedBinding::Variable);
-  EXPECT_EQ(binding->realized_type_id, TypeContext::i32);
+  EXPECT_EQ(binding->realized_type_id, LiteralType::i32);
 }
 
 TEST_F(ScopeManagerTest, FindBindingFor_NotFound) {
@@ -155,23 +158,23 @@ TEST_F(ScopeManagerTest, FindBindingFor_NotFound) {
 
 TEST_F(ScopeManagerTest, FindBindingFor_Shadowing) {
   auto outer_binding =
-      scope_manager.DeclareVariableBinding("var", TypeContext::i32);
+      scope_manager.DeclareVariableBinding("var", LiteralType::i32);
 
   // Enter block scope
   scope_manager.EnterScope(ScopeManager::ScopeType::BlockScope, "block");
-  auto inner = scope_manager.DeclareVariableBinding("var", TypeContext::f32);
+  auto inner = scope_manager.DeclareVariableBinding("var", LiteralType::f32);
 
   // Should find inner binding in current scope
   auto symbol_current =
       scope_manager.FindBindingFor("var", ScopeManager::ScopeToCheck::Current);
   ASSERT_TRUE(symbol_current.has_value());
-  EXPECT_EQ(symbol_current->realized_type_id, TypeContext::f32);
+  EXPECT_EQ(symbol_current->realized_type_id, LiteralType::f32);
 
   // Should find inner binding in all scopes (shadows outer)
   auto symbol_all =
       scope_manager.FindBindingFor("var", ScopeManager::ScopeToCheck::All);
   ASSERT_TRUE(symbol_all.has_value());
-  EXPECT_EQ(symbol_all->realized_type_id, TypeContext::f32);
+  EXPECT_EQ(symbol_all->realized_type_id, LiteralType::f32);
 
   scope_manager.ExitScope();
 
@@ -179,23 +182,23 @@ TEST_F(ScopeManagerTest, FindBindingFor_Shadowing) {
   auto symbol_after_exit =
       scope_manager.FindBindingFor("var", ScopeManager::ScopeToCheck::All);
   ASSERT_TRUE(symbol_after_exit.has_value());
-  EXPECT_EQ(symbol_after_exit->realized_type_id, TypeContext::i32);
+  EXPECT_EQ(symbol_after_exit->realized_type_id, LiteralType::i32);
 }
 
 TEST_F(ScopeManagerTest, FindBindingFor_ScopeChecks) {
-  scope_manager.DeclareVariableBinding("v1", TypeContext::i32);
+  scope_manager.DeclareVariableBinding("v1", LiteralType::i32);
 
   scope_manager.EnterScope(ScopeManager::ScopeType::FunctionScope, "fn");
-  scope_manager.DeclareVariableBinding("v2", TypeContext::Bool);
+  scope_manager.DeclareVariableBinding("v2", LiteralType::Bool);
 
   scope_manager.EnterScope(ScopeManager::ScopeType::BlockScope, "block");
-  scope_manager.DeclareVariableBinding("v3", TypeContext::f32);
+  scope_manager.DeclareVariableBinding("v3", LiteralType::f32);
 
   // (BlockScope) v3 accessible but not v1 or v2
   auto symbol_current =
       scope_manager.FindBindingFor("v3", ScopeManager::ScopeToCheck::Current);
   ASSERT_TRUE(symbol_current.has_value());
-  EXPECT_EQ(symbol_current->realized_type_id, TypeContext::f32);
+  EXPECT_EQ(symbol_current->realized_type_id, LiteralType::f32);
 
   EXPECT_FALSE(
       scope_manager.FindBindingFor("v1", ScopeManager::ScopeToCheck::Current));
@@ -206,28 +209,28 @@ TEST_F(ScopeManagerTest, FindBindingFor_ScopeChecks) {
   auto v1_all =
       scope_manager.FindBindingFor("v1", ScopeManager::ScopeToCheck::All);
   ASSERT_TRUE(v1_all.has_value());
-  EXPECT_EQ(v1_all->realized_type_id, TypeContext::i32);
+  EXPECT_EQ(v1_all->realized_type_id, LiteralType::i32);
 
   auto v2_all =
       scope_manager.FindBindingFor("v2", ScopeManager::ScopeToCheck::All);
   ASSERT_TRUE(v2_all.has_value());
-  EXPECT_EQ(v2_all->realized_type_id, TypeContext::Bool);
+  EXPECT_EQ(v2_all->realized_type_id, LiteralType::Bool);
 
   auto v3_all =
       scope_manager.FindBindingFor("v3", ScopeManager::ScopeToCheck::All);
   ASSERT_TRUE(v3_all.has_value());
-  EXPECT_EQ(v3_all->realized_type_id, TypeContext::f32);
+  EXPECT_EQ(v3_all->realized_type_id, LiteralType::f32);
 
   // (FunctionScope) v2 and v3 accessible but not v1
   auto v2_fn =
       scope_manager.FindBindingFor("v2", ScopeManager::ScopeToCheck::Function);
   ASSERT_TRUE(v2_fn.has_value());
-  EXPECT_EQ(v2_fn->realized_type_id, TypeContext::Bool);
+  EXPECT_EQ(v2_fn->realized_type_id, LiteralType::Bool);
 
   auto v3_fn =
       scope_manager.FindBindingFor("v3", ScopeManager::ScopeToCheck::Function);
   ASSERT_TRUE(v3_fn.has_value());
-  EXPECT_EQ(v3_fn->realized_type_id, TypeContext::f32);
+  EXPECT_EQ(v3_fn->realized_type_id, LiteralType::f32);
 
   EXPECT_FALSE(
       scope_manager.FindBindingFor("v1", ScopeManager::ScopeToCheck::Function));

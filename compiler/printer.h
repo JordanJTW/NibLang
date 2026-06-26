@@ -7,12 +7,12 @@
 #include <cstddef>
 #include <string>
 
-#include "compiler/type_context.h"
+#include "compiler/type_registry.h"
 #include "compiler/types.h"
 
 class Printer {
  public:
-  Printer(const TypeContext* type_context) : type_context_(type_context) {}
+  Printer(const TypeRegistry* type_registry) : type_registry_(type_registry) {}
 
   void Print(const Block& block);
   void Print(const Statement& stmt, size_t indent = 0);
@@ -20,10 +20,10 @@ class Printer {
   void Print(const FunctionDeclaration& fn, size_t indent = 0);
 
  private:
-  const TypeContext* const type_context_;
+  const TypeRegistry* const type_registry_;
 
   std::string GetTypeName(TypeId type_id) const {
-    return type_context_ ? type_context_->GetNameFromTypeId(type_id)
-                         : "<unknown>";
+    return type_registry_ ? type_registry_->GetNameFromTypeId(type_id)
+                          : "<unknown>";
   }
 };

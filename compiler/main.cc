@@ -188,13 +188,15 @@ int main(int argc, char* argv[]) {
       CalculateImportsFor(opts.input_path, env_search_path);
 
   ScopeManager scope_manager;
-  TypeContext type_context(scope_manager);
+  TypeRegistry type_registry{scope_manager};
 
   bool any_errors = false;
   for (File& file : files) {
     ErrorCollector error_collector;
-    SemanticAnalyzer analyzer(type_context, scope_manager, error_collector);
-    SemanticAnalyzer::FunctionContext context = {{}, TypeContext::Any};
+    TypeContext type_context(scope_manager, type_registry, error_collector);
+    SemanticAnalyzer analyzer(type_context, scope_manager, error_collector,
+                              type_registry);
+    SemanticAnalyzer::FunctionContext context = {{}, TypeRegistry::Any};
     analyzer.Check(file.root_block, context);
 
     if (error_collector.HasErrors()) {
@@ -206,7 +208,7 @@ int main(int argc, char* argv[]) {
 
   if (opts.mode == OutputMode::Ast) {
     for (const File& file : files)
-      Printer(&type_context).Print(file.root_block);
+      Printer(&type_registry).Print(file.root_block);
 
     return 0;
   }
@@ -233,16 +235,16 @@ int main(int argc, char* argv[]) {
       return;
     }
 
+    ByteCodeGenerator generator{scope_manager, constant_pool};
     function_objects.push_back(
-        ByteCodeGenerator{type_context, scope_manager, constant_pool}.Build(
-            symbol, called_symbols));
+        std::move(generator).Build(symbol, called_symbols));
 
     for (SymbolId id : called_symbols) {
       symbols_to_process.push_back(id);
     }
   };
 
-  for (const auto& [id, symbol] : type_context.symbol_table()) {
+  for (const auto& [id, symbol] : type_registry.symbol_table()) {
     if (const auto* fn_symbol = std::get_if<FunctionSymbol>(&symbol)) {
       if (fn_symbol->declaration.name == "main") {
         process_symbol(*fn_symbol);
@@ -258,8 +260,7 @@ int main(int argc, char* argv[]) {
     if (processed_symbols.contains(id))
       continue;
 
-    if (const auto* fn_symbol =
-            std::get_if<FunctionSymbol>(&type_context.symbol_table().at(id))) {
+    if (const auto* fn_symbol = type_registry.GetSymbol<FunctionSymbol>(id)) {
       process_symbol(*fn_symbol);
     }
   }

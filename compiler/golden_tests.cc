@@ -102,9 +102,10 @@ class GoldenTest : public ::testing::Test {
         kPreamble + "\nfn main() {\n" + program_text + "\n}";
     Block root_block = Parser{full_program_text}.Parse();
 
-    SemanticAnalyzer::FunctionContext context = {{}, TypeContext::Any};
-    SemanticAnalyzer{type_context_, scope_manager_, error_collector_}.Check(
-        root_block, context);
+    SemanticAnalyzer::FunctionContext context = {{}, TypeRegistry::Any};
+    SemanticAnalyzer{type_context_, scope_manager_, error_collector_,
+                     type_registry_}
+        .Check(root_block, context);
 
     if (error_collector_.HasErrors()) {
       error_collector_.PrintAllErrors(full_program_text);
@@ -115,7 +116,7 @@ class GoldenTest : public ::testing::Test {
     std::vector<const FunctionSymbol*> external_functions;
 
     ConstantPool constant_pool;
-    for (const auto& [id, symbol] : type_context_.symbol_table()) {
+    for (const auto& [id, symbol] : type_registry_.symbol_table()) {
       if (const auto* fn_symbol = std::get_if<FunctionSymbol>(&symbol)) {
         if (fn_symbol->instances.empty())
           continue;
@@ -125,8 +126,8 @@ class GoldenTest : public ::testing::Test {
 
           std::vector<SymbolId> called_symbols;
           function_objects.push_back(
-              ByteCodeGenerator{type_context_, scope_manager_, constant_pool}
-                  .Build(*fn_symbol, called_symbols));
+              ByteCodeGenerator{scope_manager_, constant_pool}.Build(
+                  *fn_symbol, called_symbols));
         } else {
           external_functions.push_back(fn_symbol);
         }
@@ -154,8 +155,9 @@ class GoldenTest : public ::testing::Test {
 
   MockNativeFunc native_check_fn_;
   ScopeManager scope_manager_;
-  TypeContext type_context_{scope_manager_};
+  TypeRegistry type_registry_{scope_manager_};
   MockErrorCollector error_collector_;
+  TypeContext type_context_{scope_manager_, type_registry_, error_collector_};
 };
 
 TEST_F(GoldenTest, AssignStatment) {

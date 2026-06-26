@@ -30,12 +30,9 @@ Overloaded(Ts...) -> Overloaded<Ts...>;
 
 }  // namespace
 
-ByteCodeGenerator::ByteCodeGenerator(const TypeContext& type_context,
-                                     const ScopeManager& scope_manager,
+ByteCodeGenerator::ByteCodeGenerator(const ScopeManager& scope_manager,
                                      ConstantPool& constant_pool)
-    : type_context_(type_context),
-      scope_manager_(scope_manager),
-      constant_pool_(constant_pool) {}
+    : scope_manager_(scope_manager), constant_pool_(constant_pool) {}
 
 ByteCodeGenerator::FunctionObject ByteCodeGenerator::Build(
     const FunctionSymbol& symbol,
@@ -86,7 +83,7 @@ void ByteCodeGenerator::EmitBlock(const Block& block,
               // Expressions always leave a value on the stack (if not
               // Void) so when executed as a Statement the unused value
               // must be consumed.
-              if (expr->type != TypeContext::LiteralType::Void)
+              if (expr->type != TypeRegistry::Void)
                 bytecode_.StackDel();
             },
             [&](const FunctionDeclaration& fn) {
@@ -212,9 +209,8 @@ void ByteCodeGenerator::EmitExpression(
             if (binary.resolved->specialization ==
                 ResolvedBinary::Specialization::Nil) {
               const std::unique_ptr<Expression>& target =
-                  binary.lhs->type == TypeContext::LiteralType::Nil
-                      ? binary.rhs
-                      : binary.lhs;
+                  binary.lhs->type == TypeRegistry::Nil ? binary.rhs
+                                                        : binary.lhs;
               EmitExpression(target);
               switch (binary.op) {
                 case TokenKind::kCompareEq:

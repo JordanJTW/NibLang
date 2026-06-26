@@ -17,7 +17,8 @@ class SemanticAnalyzer {
  public:
   explicit SemanticAnalyzer(TypeContext& type_context,
                             ScopeManager& scope_manager,
-                            ErrorCollector& error_collector);
+                            ErrorCollector& error_collector,
+                            TypeRegistry& type_registry);
 
   struct FunctionContext {
     std::vector<NamedBinding> required_captures;
@@ -84,4 +85,5 @@ class SemanticAnalyzer {
   TypeContext& type_context_;
   ScopeManager& scope_manager_;
   ErrorCollector& error_collector_;
+  TypeRegistry& type_registry_;
 };

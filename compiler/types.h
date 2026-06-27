@@ -82,8 +82,7 @@ struct NamedBinding {
 
   inline bool IsRealized() { return realized_type_id.has_value(); }
   inline bool IsType() {
-    return kind == Function || kind == Struct || kind == Template ||
-           kind == TypeAlias;
+    return kind == Struct || kind == Template || kind == TypeAlias;
   }
 
   // Used for function table resolution, struct field ordering, etc.
@@ -294,7 +293,6 @@ struct FunctionDeclaration {
 
   std::unique_ptr<Block> body;
   std::optional<ResolvedFunction> resolved;
-  size_t local_count = 0;
 };
 
 struct ClosureExpression {

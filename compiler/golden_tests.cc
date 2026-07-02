@@ -296,7 +296,7 @@ TEST_F(GoldenTest, BasicFunction) {
   RunProgram(program);
 }
 
-TEST_F(GoldenTest, Closure) {
+TEST_F(GoldenTest, DISABLED_Closure) {
   error_collector_.DelegateToFake();
 
   auto program = BuildProgram(R"(

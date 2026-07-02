@@ -19,6 +19,7 @@ target_link_libraries(printer PRIVATE type_context types)
 
 add_library(parser parser.cc)
 target_include_directories(parser PRIVATE ${PROJECT_SOURCE_DIR})
+target_link_libraries(parser PRIVATE error_collector tokenizer types)
 
 add_library(program_builder program_builder.cc)
 target_include_directories(program_builder PRIVATE ${PROJECT_SOURCE_DIR})

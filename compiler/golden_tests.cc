@@ -100,7 +100,7 @@ class GoldenTest : public ::testing::Test {
   std::vector<uint8_t> BuildProgram(std::string program_text) {
     std::string full_program_text =
         kPreamble + "\nfn main() {\n" + program_text + "\n}";
-    Block root_block = Parser{full_program_text}.Parse();
+    Block root_block = Parser{full_program_text, error_collector_}.Parse();
 
     SemanticAnalyzer::FunctionContext context = {{}, TypeRegistry::Any};
     SemanticAnalyzer{type_context_, scope_manager_, error_collector_,

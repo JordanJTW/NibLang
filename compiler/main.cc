@@ -36,6 +36,7 @@ struct File {
   std::vector<std::string> import_paths;
   Block root_block;
   std::string file_contents;
+  std::unique_ptr<ErrorCollector> error_collector;
 };
 
 std::string OpenFileWithFallback(std::ifstream& file,
@@ -81,7 +82,8 @@ std::optional<File> CollectImportsFor(std::string_view path,
   std::string file_contents{std::istreambuf_iterator<char>(file_to_compile),
                             std::istreambuf_iterator<char>()};
 
-  Block root_block = Parser{file_contents}.Parse();
+  auto error_collector = std::make_unique<ErrorCollector>();
+  Block root_block = Parser{file_contents, *error_collector}.Parse();
 
   std::vector<std::string> import_paths;
   for (const auto& statement : root_block.statements) {
@@ -91,7 +93,8 @@ std::optional<File> CollectImportsFor(std::string_view path,
   }
 
   return File{std::move(resolved_path), std::move(import_paths),
-              std::move(root_block), std::move(file_contents)};
+              std::move(root_block), std::move(file_contents),
+              std::move(error_collector)};
 }
 
 std::vector<File> CalculateImportsFor(std::string_view path,
@@ -193,7 +196,7 @@ int main(int argc, char* argv[]) {
 
   bool any_errors = false;
   for (File& file : files) {
-    ErrorCollector error_collector;
+    ErrorCollector& error_collector = *file.error_collector;
     TypeContext type_context(scope_manager, type_registry, error_collector);
     SemanticAnalyzer analyzer(type_context, scope_manager, error_collector,
                               type_registry);

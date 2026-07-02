@@ -26,29 +26,6 @@ std::unique_ptr<Expression> make_primary_expression(T&& value,
       Expression{PrimaryExpression{std::forward<T>(value)}, token.meta});
 }
 
-void print_error(const std::string& file,
-                 Metadata metadata,
-                 std::string_view message) {
-  size_t line_start = file.rfind('\n', metadata.column_range.start);
-  if (line_start == std::string_view::npos)
-    line_start = 0;
-  else
-    ++line_start;
-
-  size_t line_end = file.find('\n', metadata.column_range.start);
-  if (line_end == std::string_view::npos)
-    line_end = file.size();
-
-  std::string line = file.substr(line_start, line_end - line_start);
-  size_t relative_offset = metadata.column_range.start - line_start;
-
-  std::string kErrorPrefix =
-      "Error: " + std::to_string(metadata.line_range.start) + ": ";
-  std::cerr << kErrorPrefix << line << std::endl
-            << std::setw(kErrorPrefix.length() + relative_offset) << " "
-            << "^ " << message << std::endl;
-}
-
 struct EscapeResult {
   uint32_t codepoint;
   size_t bytes_consumed;
@@ -433,7 +410,7 @@ std::unique_ptr<Expression> Parser::ParseValue() {
       return make_primary_expression(Nil{}, current_token_);
     }
     default:
-      print_error(text_, current_token_.meta, "unknown literal type");
+      error_collector_.Add("unknown literal type", current_token_.meta);
       return nullptr;
   }
 }
@@ -1065,8 +1042,8 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
     }
 
     if (static_modifier_token) {
-      print_error(text_, static_modifier_token->meta,
-                  "'static' is only valid on method declarations");
+      error_collector_.Add("'static' is only valid on method declarations",
+                           static_modifier_token->meta);
       // Purposefully do not attempt error recovery as we are already on a new
       // token at this point and it is only a modifier for other keywords.
       continue;
@@ -1120,8 +1097,8 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
   if (function_kind == FunctionKind::Anonymous) {
     // Perform single-token deletion recovery to try to keep parsing happy.
     if (current_token_.kind == TokenKind::kIdent) {
-      print_error(text_, current_token_.meta,
-                  "Anonymous functions should not have a name");
+      error_collector_.Add("Anonymous functions should not have a name",
+                           current_token_.meta);
       AdvanceToken();  // skip name
     }
     function_name = SpannedText{
@@ -1189,8 +1166,8 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
         AdvanceToken();  // skip ...
 
         if (current_token_.kind != TokenKind::kCloseParen) {
-          print_error(text_, current_token_.meta,
-                      "'...' must be the last argument in a function");
+          error_collector_.Add("'...' must be the last argument in a function",
+                               current_token_.meta);
           return std::nullopt;
         }
         break;
@@ -1274,14 +1251,14 @@ void Parser::AdvanceToken() {
   current_token_ = tokenizer_.next();
   while (true) {
     if (current_token_.kind == TokenKind::kTokenError) {
-      print_error(text_, current_token_.meta, current_token_.value);
+      error_collector_.Add(current_token_.value, current_token_.meta);
       current_token_ = tokenizer_.next();
       continue;
     }
 
     if (current_token_.kind == TokenKind::kUnknown) {
-      print_error(text_, current_token_.meta,
-                  "unknown token: \"" + current_token_.value + "\"");
+      error_collector_.Add("unknown token: \"" + current_token_.value + "\"",
+                           current_token_.meta);
       current_token_ = tokenizer_.next();
       continue;
     }
@@ -1308,7 +1285,7 @@ std::optional<Token> Parser::ExpectNextToken(TokenKind expected_kind,
 }
 
 void Parser::HandleError(std::string_view message) {
-  print_error(text_, current_token_.meta, message);
+  error_collector_.Add(message, current_token_.meta);
 
   auto is_start_of_statement = [](TokenKind kind) {
     return kind == TokenKind::kKwLet || kind == TokenKind::kKwStruct ||

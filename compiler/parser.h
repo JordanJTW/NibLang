@@ -8,13 +8,15 @@
 #include <string_view>
 #include <variant>
 
+#include "compiler/error_collector.h"
 #include "compiler/program_builder.h"
 #include "compiler/tokenizer.h"
 #include "compiler/types.h"
 
 class Parser {
  public:
-  explicit Parser(const std::string& text) : text_(text), tokenizer_(text_) {
+  explicit Parser(const std::string& text, ErrorCollector& error_collector)
+      : text_(text), error_collector_(error_collector), tokenizer_(text_) {
     AdvanceToken();
   }
 
@@ -56,7 +58,9 @@ class Parser {
   void HandleError(std::string_view message);
 
   const std::string& text_;
+  ErrorCollector& error_collector_;
   Tokenizer tokenizer_;
+
   Token current_token_;
   size_t anonymous_fn_counter_{0};
 };

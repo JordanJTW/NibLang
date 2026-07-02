@@ -205,7 +205,7 @@ int main(int argc, char* argv[]) {
 
     if (error_collector.HasErrors()) {
       std::cerr << "Errors in file: " << file.resolved_path << "\n";
-      error_collector.PrintAllErrors(file.file_contents);
+      error_collector.PrintAllErrors(file.resolved_path, file.file_contents);
       any_errors = true;
     }
   }

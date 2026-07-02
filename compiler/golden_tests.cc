@@ -108,7 +108,7 @@ class GoldenTest : public ::testing::Test {
         .Check(root_block, context);
 
     if (error_collector_.HasErrors()) {
-      error_collector_.PrintAllErrors(full_program_text);
+      error_collector_.PrintAllErrors(":text:", full_program_text);
       return {};
     }
 

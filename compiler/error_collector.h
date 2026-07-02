@@ -16,7 +16,8 @@ class ErrorCollector {
   virtual ~ErrorCollector() = default;
 
   virtual void Add(std::string_view message, Metadata meta);
-  virtual void PrintAllErrors(std::string_view file_contents) const;
+  virtual void PrintAllErrors(std::string_view path,
+                              std::string_view contents) const;
   virtual bool HasErrors() const;
 
  private:

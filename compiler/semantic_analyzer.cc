@@ -245,6 +245,11 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
               return;
             }
 
+            if (value_result->binding && value_result->binding->symbol_id) {
+              error_collector_.Add("expected value", assign.value->meta);
+              return;
+            }
+
             if (parsed_type_id.has_value()) {
               if (!type_context_.IsTypeSubsetOf(*value_result->type_id,
                                                 *parsed_type_id)) {
@@ -325,10 +330,24 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                       // Fallback seatch to ALL scopes for functions/structs.
                       binding = scope_manager_.FindBindingFor(
                           ident.name, ScopeManager::All);
-                      if (binding && (binding->kind == NamedBinding::Function ||
-                                      binding->kind == NamedBinding::Struct)) {
-                        ident.resolved = ResolvedIdentifier{*binding};
-                        return ExpressionResult(*binding);
+                      if (binding) {
+                        switch (binding->kind) {
+                          case NamedBinding::Function:
+                          case NamedBinding::Struct: {
+                            ident.resolved = ResolvedIdentifier{*binding};
+                            return ExpressionResult(*binding);
+                          }
+
+                          case NamedBinding::Argument:
+                          case NamedBinding::Capture:
+                          case NamedBinding::Field:
+                          case NamedBinding::Narrowed:
+                          case NamedBinding::Variable:
+                            error_collector_.Add(
+                                "refers to variable out of scope",
+                                expression->meta);
+                            return std::nullopt;
+                        }
                       }
 
                       error_collector_.Add("unknown identifier: " + ident.name,
@@ -595,7 +614,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
           [&](ClosureExpression& closure) -> SemanticAnalyzer::Result {
             SymbolId symbol_id = type_registry_.NewFunctionSymbol(closure.fn);
             if (auto binding = type_context_.DefineFunction(symbol_id)) {
-              return ExpressionResult(*binding);
+              return ExpressionResult(*binding->realized_type_id);
             }
             CHECK(false) << "Failed to declare symbol for closure";
             return std::nullopt;
@@ -806,8 +825,8 @@ void SemanticAnalyzer::TypeCheckCallArguments(
                              std::to_string(supplied_argc),
                          debug_metadata);
   } else {
-    // If more arguments are supplied than expected, this is a variadic
-    // function and any additional args do not need to be checked ("any" type).
+    // If more arguments are supplied than expected, this is a variadic function
+    // and any additional args do not need to be checked ("any" type).
     for (size_t i = 0; i < expected_argument_types.size(); ++i) {
       const auto& argument_result = call_arugment_results[i];
       const auto& expected_type = expected_argument_types[i];
@@ -817,6 +836,11 @@ void SemanticAnalyzer::TypeCheckCallArguments(
       if (!argument_result.result.has_value() ||
           !argument_result.result->has_type_id())
         continue;
+
+      if (argument_result.result->binding->symbol_id.has_value()) {
+        error_collector_.Add("types can not be passed as function arguments",
+                             debug_metadata);
+      }
 
       if (!type_context_.IsTypeSubsetOf(*argument_result.result->type_id,
                                         expected_type) &&
@@ -987,8 +1011,9 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
 
       // Account for the implicit "self" argument for method calls
       if (symbol.declaration.function_kind == FunctionKind::Method) {
-        argument_results.insert(argument_results.begin(),
-                                ArgumentResult{callee_result});
+        argument_results.insert(
+            argument_results.begin(),
+            ArgumentResult{ExpressionResult(*callee_result.type_id)});
       }
       call_expr.resolved = ResolvedCall{*callee_result.binding->symbol_id,
                                         symbol.declaration.function_kind};

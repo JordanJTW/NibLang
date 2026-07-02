@@ -209,8 +209,8 @@ std::string TypeRegistry::GetNameFromTypeId(TypeId type_id) const {
                    return GetNameFromTypeId(type.wrapped_type) + "?";
                  },
                  [&](const AliasType type) {
-                   return "alias " + type.name + "[" +
-                          std::to_string(type.target_type_id) + "]";
+                   return "Alias[" + type.name + " => " +
+                          GetNameFromTypeId(type.target_type_id) + "]";
                  }},
       it->second);
 }

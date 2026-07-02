@@ -75,6 +75,11 @@ target_link_libraries(type_context_test PRIVATE gmock_main type_context types)
 target_include_directories(type_context_test PRIVATE ${PROJECT_SOURCE_DIR})
 gtest_discover_tests(type_context_test)
 
+add_executable(type_registry_test type_registry_test.cc)
+target_link_libraries(type_registry_test PRIVATE gmock_main type_registry types)
+target_include_directories(type_registry_test PRIVATE ${PROJECT_SOURCE_DIR})
+gtest_discover_tests(type_registry_test)
+
 add_executable(type_resolver_test type_resolver_test.cc)
 target_link_libraries(type_resolver_test PRIVATE gmock_main type_resolver types)
 target_include_directories(type_resolver_test PRIVATE ${PROJECT_SOURCE_DIR})

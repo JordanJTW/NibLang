@@ -4,6 +4,7 @@
 
 #include "compiler/type_resolver.h"
 
+#include <algorithm>
 #include <string>
 #include <vector>
 

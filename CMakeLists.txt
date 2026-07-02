@@ -25,6 +25,20 @@ if(ENABLE_ASAN)
   set(CMAKE_XCODE_SCHEME_ADDRESS_SANITIZER ON)
 endif()
 
+option(ENABLE_COVERAGE "Enable code coverage instrumentation" OFF)
+
+if(ENABLE_COVERAGE)
+  message(STATUS "Enabling Coverage Report")
+
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    add_compile_options(-fprofile-instr-generate -fcoverage-mapping)
+    add_link_options(-fprofile-instr-generate -fcoverage-mapping)
+  elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    add_compile_options(--coverage -O0 -g)
+    add_link_options(--coverage)
+  endif()
+endif()
+
 # Fetch the latest gtest (main) and enable testing for the project
 include(FetchContent)
 fetchcontent_declare(

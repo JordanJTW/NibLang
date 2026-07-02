@@ -15,6 +15,7 @@
 #include "compiler/bytecode_generator.h"
 #include "compiler/error_collector.h"
 #include "compiler/gtest_helpers.h"
+#include "compiler/mock_error_collector.h"
 #include "compiler/parser.h"
 #include "compiler/program_builder.h"
 #include "compiler/semantic_analyzer.h"
@@ -34,20 +35,6 @@ using ::testing::ident;
 using ::testing::Return;
 
 namespace {
-
-class MockErrorCollector : public ErrorCollector {
- public:
-  // Mock only the Add method
-  MOCK_METHOD(void, Add, (std::string_view message, Metadata meta), (override));
-
-  // Optional: Setup a proxy so that calls to Add actually
-  // store the error in the base class during a test.
-  void DelegateToFake() {
-    ON_CALL(*this, Add).WillByDefault([this](std::string_view m, Metadata mt) {
-      this->ErrorCollector::Add(m, mt);
-    });
-  }
-};
 
 using MockNativeFunc =
     testing::MockFunction<vm_value_t(std::vector<vm_value_t>)>;

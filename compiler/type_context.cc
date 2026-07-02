@@ -96,33 +96,20 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
 
   FunctionDeclaration& fn = symbol->declaration;
 
-  // std::string qualified_name = fn.name;
-  // bool is_function_extern = fn.function_kind == FunctionKind::Extern;
-  // if (object) {
-  //   qualified_name = object.value()->name + "_" + fn.name;
-  //   is_function_extern = object.value()->is_extern && !fn.body;
-  // }
-  // std::optional<NamedBinding::Idx> call_idx;
-  // // Extern (native) functions must have a hardcoded CallIdx already
-  // assigned. if (is_function_extern) {
-  //   call_idx = GetCallIdxFor(qualified_name, CreateIfMissing::NO);
-  //   if (!call_idx) {
-  //     LOG(ERROR) << "extern function '" << qualified_name << "' is not
-  //     found"; return std::nullopt;
-  //   }
-  // } else {
-  //   if (!fn.body) {
-  //     LOG(ERROR) << "non-extern functions MUST have a body: " << fn.name;
-  //     return std::nullopt;
-  //   }
+  if (!symbol->IsExtern()) {
+    if (!fn.body) {
+      error_collector_.Add(
+          "non-extern functions MUST have a body: " + fn.name.text,
+          fn.name.metadata);
+      return std::nullopt;
+    }
 
-  //   if (error_collector && fn.is_variadic) {
-  //     LOG(ERROR) << "'...' is only allowed in extern functions";
-  //     return std::nullopt;
-  //   }
-
-  //   call_idx = GetCallIdxFor(qualified_name, CreateIfMissing::YES);
-  // }
+    if (fn.variadic_span.has_value()) {
+      error_collector_.Add("'...' is only allowed in extern functions",
+                           *fn.variadic_span);
+      return std::nullopt;
+    }
+  }
 
   fn.resolved = ResolvedFunction{};
 
@@ -133,7 +120,7 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
           self_id ? std::vector<TypeId>{*self_id} : std::vector<TypeId>{};
       symbol->instances[std::move(instance_key)] = *instance;
     } else {
-      LOG(ERROR) << "Failed to declare function type";
+      // Errors logged in DeclareFunctionType()
       return std::nullopt;
     }
   } else {
@@ -141,6 +128,7 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
       if (!argument.default_type.has_value())
         continue;
 
+      // Default template names must be resolved in their declaration context.
       auto type_id = GetTypeIdFor(*argument.default_type);
       if (!type_id.has_value()) {
         error_collector_.Add("unknown type provided as template argument",
@@ -189,14 +177,25 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
                     type_name, ScopeManager::All)) {
               if (binding->IsType()) {
                 // Add an error when trying to get a TypeId of a base template.
-                if (!binding->realized_type_id.has_value())
-                  LOG(ERROR) << "Base template has no TypeId: " << type_name;
+                if (!binding->realized_type_id.has_value()) {
+                  error_collector_.Add("invalid use of template-name '" +
+                                           type_name +
+                                           "' without an argument list",
+                                       type.metadata);
+                }
 
                 return binding->realized_type_id;
               } else {
-                LOG(ERROR) << "value binding is out of scope!";
+                // This can only happen in edge-cases like a variable appearing
+                // in the scope from an import or when instantiating a template.
+                error_collector_.Add("variable can not be used as a type",
+                                     type.metadata);
+                return std::nullopt;
               }
             }
+
+            error_collector_.Add("unknown type '" + type_name + "'",
+                                 type.metadata);
             return std::nullopt;
           },
           [&](const ParsedUnionType& type) -> std::optional<TypeId> {
@@ -344,8 +343,6 @@ std::optional<TypeInstance> TypeContext::DeclareFunctionType(
       scope_manager_.DeclareArgumentBinding(name, *type_id);
       argument_types.push_back(*type_id);
     } else {
-      // TODO: Print error message on bad argument type.
-      LOG(ERROR) << "Bad argument in: " << fn.name.text;
       return std::nullopt;
     }
   }
@@ -358,11 +355,8 @@ std::optional<TypeInstance> TypeContext::DeclareFunctionType(
   std::optional<TypeId> return_type = GetTypeIdFor(fn.return_type);
   // Missing return types are already handled in the Parser (resolving to
   // Void) so if `return_type` has no value here it is truly an unknown type.
-  if (!return_type.has_value()) {
-    LOG(ERROR) << "No return type " << fn.return_type;
-    // TODO: Print error message on bad return type.
+  if (!return_type.has_value())
     return std::nullopt;
-  }
 
   scope_manager_.ExitScope();
 

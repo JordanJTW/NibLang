@@ -763,9 +763,11 @@ std::unique_ptr<Expression> Parser::ParsePrimary() {
     }
 
     case TokenKind::kKwFn: {
+      auto start_token = current_token_;
       if (auto fn = ParseFunctionDeclaration(FunctionKind::Anonymous)) {
         return std::make_unique<Expression>(
-            Expression{ClosureExpression{std::move(*fn)}});
+            Expression{ClosureExpression{std::move(*fn)},
+                       Metadata::fromTokens(start_token, current_token_)});
       }
       return nullptr;
     }

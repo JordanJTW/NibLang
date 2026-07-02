@@ -131,7 +131,7 @@ void ByteCodeGenerator::EmitBlock(const Block& block,
             [&](const AssignStatement& assign) {
               EmitExpression(assign.value);
               CHECK(assign.resolved)
-                  << "Unresolved variable in assignment: " << assign.name;
+                  << "Unresolved variable in assignment: " << assign.name.text;
 
               StoreSymbol(assign.resolved->symbol);
             },
@@ -274,7 +274,8 @@ void ByteCodeGenerator::EmitExpression(
             if (access_mode == AccessMode::LOAD ||
                 access_mode == AccessMode::STORE) {
               CHECK(member_access.resolved)
-                  << "Unresolved field access: " << member_access.member_name
+                  << "Unresolved field access: "
+                  << member_access.member_name.text
                   << " at line: " << expr->meta.line_range.start;
 
               MemberIdx idx = member_access.resolved->index;

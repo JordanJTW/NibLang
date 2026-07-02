@@ -62,10 +62,17 @@ struct StructSymbol {
   InstanceCache instances;
 };
 
+struct SpannedText {
+  std::string text;
+  Metadata metadata;
+
+  static SpannedText FromToken(Token token);
+};
+
 struct NamedBinding {
   using Idx = size_t;
 
-  std::string name;
+  SpannedText name;
   enum Kind {
     Function,
     Struct,
@@ -92,7 +99,7 @@ struct NamedBinding {
 
   inline bool operator==(const NamedBinding& other) const {
     return kind == other.kind && realized_type_id == other.realized_type_id &&
-           symbol_id == other.symbol_id && name == other.name &&
+           symbol_id == other.symbol_id && name.text == other.name.text &&
            idx == other.idx;
   }
 };
@@ -185,7 +192,7 @@ struct ResolvedAccess {
 
 struct MemberAccessExpression {
   std::unique_ptr<Expression> object;
-  std::string member_name;
+  SpannedText member_name;
   std::optional<ResolvedAccess> resolved;
 };
 
@@ -245,7 +252,7 @@ struct ParsedType {
 };
 
 struct TypeAliasStatement {
-  Token name;
+  SpannedText name;
   std::unique_ptr<ParsedType> type;
 };
 
@@ -276,20 +283,17 @@ struct ResolvedFunction {
 };
 
 struct TemplateArgument {
-  std::string name;
+  SpannedText name;
   std::optional<ParsedType> default_type;
 };
 
 struct FunctionDeclaration {
-  // Function name is expected to be empty for `Anonymous` functions.
-  std::string name;
-  std::vector<std::pair<std::string, ParsedType>> arguments;
+  SpannedText name;
+  std::vector<std::pair<SpannedText, ParsedType>> arguments;
   ParsedType return_type;
   FunctionKind function_kind;
   std::vector<TemplateArgument> template_arguments;
-  bool is_variadic = false;
-
-  Metadata argument_range;
+  std::optional<Metadata> variadic_span;
 
   std::unique_ptr<Block> body;
   std::optional<ResolvedFunction> resolved;
@@ -353,24 +357,24 @@ struct BreakStatement {};
 struct ContinueStatement {};
 
 struct StructDeclaration {
-  std::string name;
+  SpannedText name;
   std::vector<TemplateArgument> template_arguments;
-  std::vector<std::pair<std::string, ParsedType>> fields;
-  std::vector<std::pair<std::string, FunctionDeclaration>> methods;
+  std::vector<std::pair<SpannedText, ParsedType>> fields;
+  std::vector<std::pair<SpannedText, FunctionDeclaration>> methods;
   bool is_extern;
 
   bool IsTemplate() const { return !template_arguments.empty(); }
 };
 
 struct AssignStatement {
-  std::string name;
+  SpannedText name;
   std::optional<ParsedType> type;
   std::unique_ptr<Expression> value;
   std::optional<ResolvedIdentifier> resolved;
 };
 
 struct ImportStatement {
-  std::string path;
+  SpannedText path;
 };
 
 struct Statement {

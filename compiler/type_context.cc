@@ -47,7 +47,7 @@ void TypeContext::DefineStructType(
   StructType struct_type(symbol.declaration);
   struct_type.template_arguments = template_arguemnts;
   struct_type.scope_id = scope_manager_.EnterScope(
-      ScopeManager::StructScope, "struct " + symbol.declaration.name);
+      ScopeManager::StructScope, "struct " + symbol.declaration.name.text);
 
   // Cache the instance early in case a member/method is refers to self.
   symbol.instances[template_arguemnts] =
@@ -57,14 +57,14 @@ void TypeContext::DefineStructType(
   for (const auto& [name, type] : symbol.declaration.fields) {
     auto type_id = GetTypeIdFor(type);
     if (!type_id.has_value()) {
-      error_collector_.Add("Unknown type for struct field: " + name,
+      error_collector_.Add("Unknown type for struct field: " + name.text,
                            type.metadata);
       continue;
     }
 
-    if (scope_manager_.FindBindingFor(name, ScopeManager::Current)) {
-      error_collector_.Add("Duplicate field name in struct: " + name,
-                           type.metadata);
+    if (scope_manager_.FindBindingFor(name.text, ScopeManager::Current)) {
+      error_collector_.Add("Duplicate field name in struct: " + name.text,
+                           name.metadata);
       continue;
     }
 
@@ -148,7 +148,7 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
         continue;
       }
 
-      symbol->default_template_type_ids[argument.name] = *type_id;
+      symbol->default_template_type_ids[argument.name.text] = *type_id;
     }
   }
 
@@ -313,7 +313,7 @@ TypeId TypeContext::GetUnionOf(const std::vector<TypeId>& types) {
   return type_registry_.NewUnionType(std::move(key));
 }
 
-TypeId TypeContext::GetAliasOf(std::string_view name, const ParsedType& type) {
+TypeId TypeContext::GetAliasOf(SpannedText name, const ParsedType& type) {
   // All alias are nominally typed by definition so assign a new TypeId.
   TypeId type_id = type_registry_.NewTypeId();
   // The TypeId is assigned and added to the scope to allow for recursive type
@@ -323,9 +323,7 @@ TypeId TypeContext::GetAliasOf(std::string_view name, const ParsedType& type) {
 
   std::optional<TypeId> target_type_id = GetTypeIdFor(type);
   if (target_type_id) {
-    type_registry_.NewAliasType(name.data(), type_id, *target_type_id);
-  } else {
-    LOG(ERROR) << "Failed to GetTypeIdFor";
+    type_registry_.NewAliasType(name.text, type_id, *target_type_id);
   }
   return type_id;
 }
@@ -337,8 +335,8 @@ bool TypeContext::IsTypeNilable(TypeId type_id) const {
 std::optional<TypeInstance> TypeContext::DeclareFunctionType(
     FunctionDeclaration& fn,
     std::optional<TypeId> self_id) {
-  ScopeId scope_id =
-      scope_manager_.EnterScope(ScopeManager::FunctionScope, "fn " + fn.name);
+  ScopeId scope_id = scope_manager_.EnterScope(ScopeManager::FunctionScope,
+                                               "fn " + fn.name.text);
 
   std::vector<TypeId> argument_types;
   for (const auto& [name, type] : fn.arguments) {
@@ -347,15 +345,14 @@ std::optional<TypeInstance> TypeContext::DeclareFunctionType(
       argument_types.push_back(*type_id);
     } else {
       // TODO: Print error message on bad argument type.
-      LOG(ERROR) << "Bad argument in: " << fn.name;
+      LOG(ERROR) << "Bad argument in: " << fn.name.text;
       return std::nullopt;
     }
   }
 
   if (fn.function_kind == FunctionKind::Method &&
       (argument_types.size() == 0 || argument_types[0] != self_id)) {
-    error_collector_.Add("Methods must begin with a `self` argument",
-                         fn.argument_range);
+    error_collector_.Add("Methods must begin with a `self` argument", {});
   }
 
   std::optional<TypeId> return_type = GetTypeIdFor(fn.return_type);
@@ -372,7 +369,7 @@ std::optional<TypeInstance> TypeContext::DeclareFunctionType(
   realized_functions_.push_back(RealizedFunction{scope_id, fn, *return_type});
 
   auto key = FunctionType{std::move(argument_types), return_type.value(),
-                          fn.is_variadic};
+                          fn.variadic_span.has_value()};
   TypeId type_id = type_registry_.NewFunctionType(std::move(key));
   return TypeInstance{type_id, scope_id};
 }
@@ -468,14 +465,14 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
     }
 
     TypeId self_id = type_registry_.NewTypeId();
-    LOG(INFO) << "New Struct.TemplateOf(" << symbol->declaration.name << ") + ["
-              << ss.str() << "] => " << self_id;
+    LOG(INFO) << "New Struct.TemplateOf(" << symbol->declaration.name.text
+              << ") + [" << ss.str() << "] => " << self_id;
 
     const auto& template_arguments = symbol->declaration.template_arguments;
 
     if (argument_type_ids.size() < template_arguments.size()) {
       error_collector_.Add(
-          "Template struct " + symbol->declaration.name + " requires " +
+          "Template struct " + symbol->declaration.name.text + " requires " +
               std::to_string(template_arguments.size()) +
               " template arguments but only " +
               std::to_string(argument_type_ids.size()) + " were provided",
@@ -489,8 +486,8 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
           //       templates would inherit this scope environment if a type is
           //       processed later
           return scope_manager_.NewScope(
-              ScopeManager::TemplateScope, "struct " + symbol->declaration.name,
-              [&]() {
+              ScopeManager::TemplateScope,
+              "struct " + symbol->declaration.name.text, [&]() {
                 for (size_t i = 0; i < template_arguments.size(); ++i)
                   scope_manager_.DeclareTemplateBinding(
                       template_arguments[i].name, argument_type_ids[i]);
@@ -512,7 +509,7 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
 
     if (argument_type_ids.size() < template_arguments.size()) {
       error_collector_.Add(
-          "Template fn " + symbol->declaration.name + " requires " +
+          "Template fn " + symbol->declaration.name.text + " requires " +
               std::to_string(template_arguments.size()) +
               " template arguments but only " +
               std::to_string(argument_type_ids.size()) + " were provided",
@@ -536,8 +533,8 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
           //       processed later
           // TODO: Handle `self_id` better. Define it early to prevent cycles.
           auto instance = scope_manager_.NewScope(
-              ScopeManager::TemplateScope, "fn " + symbol->declaration.name,
-              [&]() {
+              ScopeManager::TemplateScope,
+              "fn " + symbol->declaration.name.text, [&]() {
                 for (size_t i = 0; i < template_arguments.size(); ++i)
                   scope_manager_.DeclareTemplateBinding(
                       template_arguments[i].name, argument_type_ids[i]);
@@ -549,8 +546,9 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
           if (instance) {
             symbol->instances[argument_type_ids] = *instance;
 
-            LOG(INFO) << "New Function.TemplateOf(" << symbol->declaration.name
-                      << ") + [" << ss.str() << "] => " << instance->type_id;
+            LOG(INFO) << "New Function.TemplateOf("
+                      << symbol->declaration.name.text << ") + [" << ss.str()
+                      << "] => " << instance->type_id;
           }
           return instance->type_id;
         });
@@ -582,7 +580,7 @@ ParsedType TypeContext::GetParsedTypeFromId(TypeId type_id) const {
                  },
                  [&](const StructType& type) {
                    if (type.declaration.IsTemplate()) {
-                     auto base_type = ParsedType{type.declaration.name};
+                     auto base_type = ParsedType{type.declaration.name.text};
 
                      std::vector<ParsedType> parameter_types;
                      for (TypeId type_id : type.template_arguments)
@@ -593,7 +591,7 @@ ParsedType TypeContext::GetParsedTypeFromId(TypeId type_id) const {
                          std::move(parameter_types)}};
                    }
 
-                   return ParsedType{type.declaration.name};
+                   return ParsedType{type.declaration.name.text};
                  },
                  [&](const UnionType& type) {
                    std::vector<ParsedType> union_types;

@@ -58,4 +58,5 @@ class Parser {
   const std::string& text_;
   Tokenizer tokenizer_;
   Token current_token_;
+  size_t anonymous_fn_counter_{0};
 };

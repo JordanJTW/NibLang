@@ -209,7 +209,7 @@ void Printer::Print(const Statement& stmt, size_t indent) {
           },
           [&](const AssignStatement& assign) {
             std::cout << std::string(indent, ' ')
-                      << "AssignStatement: " << assign.name;
+                      << "AssignStatement: " << assign.name.text;
             if (assign.type.has_value())
               std::cout << " Declared Type: " << assign.type.value()
                         << " Type: " << GetTypeName(assign.value->type)
@@ -225,28 +225,28 @@ void Printer::Print(const Statement& stmt, size_t indent) {
           [&](const StructDeclaration& struct_decl) {
             std::cout << std::string(indent, ' ') << "StructDeclaration: "
                       << (struct_decl.is_extern ? "extern " : "")
-                      << struct_decl.name << std::endl;
+                      << struct_decl.name.text << std::endl;
 
             std::cout << std::string(indent + 2, ' ') << "Fields:" << std::endl;
             for (const auto& field : struct_decl.fields) {
-              std::cout << std::string(indent + 4, ' ') << field.first << ": "
-                        << field.second << std::endl;
+              std::cout << std::string(indent + 4, ' ') << field.first.text
+                        << ": " << field.second << std::endl;
             }
 
             std::cout << std::string(indent + 2, ' ')
                       << "Methods:" << std::endl;
             for (auto& method : struct_decl.methods) {
-              std::cout << std::string(indent + 4, ' ') << method.first << ":"
-                        << std::endl;
+              std::cout << std::string(indent + 4, ' ') << method.first.text
+                        << ":" << std::endl;
               Print(method.second, indent + 6);
             }
           },
           [&](const ImportStatement& import) {
-            std::cout << "ImportStatement(\"" << import.path << "\")"
+            std::cout << "ImportStatement(\"" << import.path.text << "\")"
                       << std::endl;
           },
           [&](const TypeAliasStatement& alias) {
-            std::cout << "TypeAliasStatement(" << alias.name.value << " = "
+            std::cout << "TypeAliasStatement(" << alias.name.text << " = "
                       << *alias.type << ")" << std::endl;
           },
       },
@@ -301,9 +301,8 @@ void Printer::Print(const Expression& expr, size_t indent) {
             print_resolved_call(call.resolved, indent + 2);
           },
           [&](const MemberAccessExpression& member_access) {
-            std::cout << std::string(indent, ' ')
-                      << "MemberAccessExpression: " << member_access.member_name
-                      << std::endl;
+            std::cout << std::string(indent, ' ') << "MemberAccessExpression: "
+                      << member_access.member_name.text << std::endl;
             std::cout << std::string(indent + 2, ' ')
                       << "Type: " << GetTypeName(expr.type) << std::endl;
 
@@ -408,12 +407,12 @@ void Printer::Print(const Expression& expr, size_t indent) {
 }
 
 void Printer::Print(const FunctionDeclaration& fn, size_t indent) {
-  std::cout << std::string(indent, ' ') << "FunctionDeclaration: " << fn.name
-            << std::endl;
+  std::cout << std::string(indent, ' ')
+            << "FunctionDeclaration: " << fn.name.text << std::endl;
   std::cout << std::string(indent + 2, ' ') << "Arguments:" << std::endl;
   for (const auto& arg : fn.arguments) {
-    std::cout << std::string(indent + 4, ' ') << arg.first << ": " << arg.second
-              << std::endl;
+    std::cout << std::string(indent + 4, ' ') << arg.first.text << ": "
+              << arg.second << std::endl;
   }
   std::cout << std::string(indent + 2, ' ') << "Return: " << fn.return_type
             << std::endl;

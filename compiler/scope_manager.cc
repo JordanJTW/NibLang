@@ -83,13 +83,13 @@ std::optional<NamedBinding> ScopeManager::FindBindingFor(
 }
 
 NamedBinding ScopeManager::InsertNameIntoScope(
-    std::string_view name,
+    SpannedText name,
     NamedBinding::Kind kind,
     std::optional<TypeId> type_id,
     std::optional<SymbolId> symbol_id,
     std::optional<NamedBinding::Idx> idx,
     std::optional<TypeId> parent_type_id) {
-  NamedBinding binding = {.name = name.data(),
+  NamedBinding binding = {.name = name,
                           .kind = kind,
                           .realized_type_id = std::move(type_id),
                           .symbol_id = std::move(symbol_id),
@@ -97,28 +97,28 @@ NamedBinding ScopeManager::InsertNameIntoScope(
                           .parent_type_id = std::move(parent_type_id)};
   auto& scope = scopes_[active_scope_id_];
   size_t binding_idx = scope.bindings_for_scope.size();
-  scope.binding_lookup[name.data()] = binding_idx;
+  scope.binding_lookup[name.text] = binding_idx;
   scope.bindings_for_scope.push_back(binding);
   return binding;
 }
 
-NamedBinding ScopeManager::DeclareVariableBinding(std::string_view name,
+NamedBinding ScopeManager::DeclareVariableBinding(SpannedText name,
                                                   TypeId type_id) {
-  return InsertNameIntoScope(name, NamedBinding::Variable, type_id,
+  return InsertNameIntoScope(std::move(name), NamedBinding::Variable, type_id,
                              /*symbol_id=*/std::nullopt,
                              scopes_[function_scope_id_].next_symbol_idx++);
 }
 
-NamedBinding ScopeManager::DeclareArgumentBinding(std::string_view name,
+NamedBinding ScopeManager::DeclareArgumentBinding(SpannedText name,
                                                   TypeId type_id) {
-  return InsertNameIntoScope(name, NamedBinding::Argument, type_id,
+  return InsertNameIntoScope(std::move(name), NamedBinding::Argument, type_id,
                              /*symbol_id=*/std::nullopt,
                              scopes_[function_scope_id_].next_symbol_idx++);
 }
 
-NamedBinding ScopeManager::DeclareCaptureBinding(std::string_view name,
+NamedBinding ScopeManager::DeclareCaptureBinding(SpannedText name,
                                                  TypeId type_id) {
-  return InsertNameIntoScope(name, NamedBinding::Capture, type_id,
+  return InsertNameIntoScope(std::move(name), NamedBinding::Capture, type_id,
                              /*symbol_id=*/std::nullopt,
                              scopes_[function_scope_id_].next_symbol_idx++);
 }
@@ -132,9 +132,9 @@ NamedBinding ScopeManager::DeclareNarrowedBinding(
                              binding_to_narrow.idx);
 }
 
-NamedBinding ScopeManager::DeclareTemplateBinding(std::string_view name,
+NamedBinding ScopeManager::DeclareTemplateBinding(SpannedText name,
                                                   TypeId type_id) {
-  return InsertNameIntoScope(name, NamedBinding::Template, type_id,
+  return InsertNameIntoScope(std::move(name), NamedBinding::Template, type_id,
                              /*symbol_id=*/std::nullopt);
 }
 

@@ -91,11 +91,12 @@ std::vector<uint8_t> ProgramBuilder::GenerateImage(
   std::sort(objects.begin(), objects.end(),
             [](const ByteCodeGenerator::FunctionObject& a,
                const ByteCodeGenerator::FunctionObject& b) {
-              if (a.symbol->declaration.name == "main")
+              if (a.symbol->declaration.name.text == "main")
                 return true;
-              if (b.symbol->declaration.name == "main")
+              if (b.symbol->declaration.name.text == "main")
                 return false;
-              return a.symbol->declaration.name < b.symbol->declaration.name;
+              return a.symbol->declaration.name.text <
+                     b.symbol->declaration.name.text;
             });
 
   std::vector<uint8_t> debug_info;
@@ -103,7 +104,7 @@ std::vector<uint8_t> ProgramBuilder::GenerateImage(
   for (auto& obj : objects) {
     debug_offset.push_back(debug_info.size());
 
-    const auto& name = obj.symbol->declaration.name;
+    const auto& name = obj.symbol->declaration.name.text;
 
     if (name.empty()) {
       debug_info.push_back('\0');

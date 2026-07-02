@@ -43,19 +43,19 @@ class ScopeManager {
       std::optional<ScopeId> override_scope_id = std::nullopt) const;
 
   // Returns a NamedBinding of Kind::Variable declared in the current scope.
-  NamedBinding DeclareVariableBinding(std::string_view name, TypeId type_id);
+  NamedBinding DeclareVariableBinding(SpannedText name, TypeId type_id);
   // Returns a NamedBinding of Kind::Argument declared in the current scope.
-  NamedBinding DeclareArgumentBinding(std::string_view name, TypeId type_id);
+  NamedBinding DeclareArgumentBinding(SpannedText name, TypeId type_id);
   // Returns a NamedBinding of Kind::Capture declared in the current scope.
-  NamedBinding DeclareCaptureBinding(std::string_view name, TypeId type_id);
+  NamedBinding DeclareCaptureBinding(SpannedText name, TypeId type_id);
   // Returns a NamedBinding of Kind::Narrowed declared in the current scope.
   NamedBinding DeclareNarrowedBinding(NamedBinding binding_to_narrow,
                                       TypeId narrowed_type);
   // Returns a NamedBinding to Kind::Template declared in the current scope.
-  NamedBinding DeclareTemplateBinding(std::string_view name, TypeId type_id);
+  NamedBinding DeclareTemplateBinding(SpannedText name, TypeId type_id);
 
   NamedBinding InsertNameIntoScope(
-      std::string_view name,
+      SpannedText name,
       NamedBinding::Kind kind,
       std::optional<TypeId> type_id,
       std::optional<SymbolId> symbol_id,

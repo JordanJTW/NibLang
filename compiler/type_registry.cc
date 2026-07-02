@@ -55,7 +55,7 @@ TypeRegistry::TypeRegistry(ScopeManager& scope_manager)
 
 NamedBinding TypeRegistry::NewStructSymbol(StructDeclaration& declaration) {
   StructSymbol symbol = scope_manager_.NewScope(
-      ScopeManager::StructScope, "struct " + declaration.name, [&]() {
+      ScopeManager::StructScope, "struct " + declaration.name.text, [&]() {
         StructSymbol symbol = {declaration, scope_manager_.GetActiveScopeId()};
 
         for (auto& [name, fn] : declaration.methods) {
@@ -182,10 +182,10 @@ std::string TypeRegistry::GetNameFromTypeId(TypeId type_id) const {
                  },
                  [&](const StructType type) {
                    if (type.template_arguments.empty())
-                     return "struct " + type.declaration.name;
+                     return "struct " + type.declaration.name.text;
 
                    std::stringstream ss;
-                   ss << "struct " << type.declaration.name << "[";
+                   ss << "struct " << type.declaration.name.text << "[";
                    for (size_t i = 0; i < type.template_arguments.size(); ++i) {
                      if (i > 0)
                        ss << ", ";

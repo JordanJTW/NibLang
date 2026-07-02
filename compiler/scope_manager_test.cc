@@ -34,7 +34,7 @@ class ScopeManagerTest : public ::testing::Test {
 };
 
 TEST_F(ScopeManagerTest, DeclareAndFindRootVariable) {
-  scope_manager.DeclareVariableBinding("foo", TypeId{36});
+  scope_manager.DeclareVariableBinding(SpannedText{"foo"}, TypeId{36});
 
   auto binding = scope_manager.FindBindingFor("foo", ScopeManager::Current);
   ASSERT_TRUE(binding.has_value());
@@ -43,18 +43,20 @@ TEST_F(ScopeManagerTest, DeclareAndFindRootVariable) {
 }
 
 TEST_F(ScopeManagerTest, CorrectBindingKinds) {
-  auto var_b = scope_manager.DeclareVariableBinding("v", TypeId{1});
+  auto var_b =
+      scope_manager.DeclareVariableBinding(SpannedText{"v"}, TypeId{1});
   EXPECT_EQ(var_b.kind, NamedBinding::Variable);
 
-  auto cap_b = scope_manager.DeclareCaptureBinding("c", TypeId{2});
+  auto cap_b = scope_manager.DeclareCaptureBinding(SpannedText{"c"}, TypeId{2});
   EXPECT_EQ(cap_b.kind, NamedBinding::Capture);
 
-  auto tpl_b = scope_manager.DeclareTemplateBinding("t", TypeId{3});
+  auto tpl_b =
+      scope_manager.DeclareTemplateBinding(SpannedText{"t"}, TypeId{3});
   EXPECT_EQ(tpl_b.kind, NamedBinding::Template);
 }
 
 TEST_F(ScopeManagerTest, ClimbScopeTreeToFindSymbol) {
-  scope_manager.DeclareVariableBinding("global_var", TypeId{100});
+  scope_manager.DeclareVariableBinding(SpannedText{"global_var"}, TypeId{100});
 
   scope_manager.EnterScope(ScopeManager::FunctionScope, "my_func");
   scope_manager.EnterScope(ScopeManager::BlockScope, "local_block");
@@ -65,10 +67,12 @@ TEST_F(ScopeManagerTest, ClimbScopeTreeToFindSymbol) {
 }
 
 TEST_F(ScopeManagerTest, LocalShadowingHidesParent) {
-  scope_manager.DeclareVariableBinding("x", TypeId{1});  // Global X
+  scope_manager.DeclareVariableBinding(SpannedText{"x"},
+                                       TypeId{1});  // Global X
 
   scope_manager.EnterScope(ScopeManager::BlockScope, "inner_block");
-  scope_manager.DeclareVariableBinding("x", TypeId{2});  // Inner Shadow X
+  scope_manager.DeclareVariableBinding(SpannedText{"x"},
+                                       TypeId{2});  // Inner Shadow X
 
   auto binding = scope_manager.FindBindingFor("x", ScopeManager::All);
   ASSERT_TRUE(binding.has_value());
@@ -76,10 +80,10 @@ TEST_F(ScopeManagerTest, LocalShadowingHidesParent) {
 }
 
 TEST_F(ScopeManagerTest, ScopeToCheckCurrentStrictness) {
-  scope_manager.DeclareVariableBinding("outer_var", TypeId{1});
+  scope_manager.DeclareVariableBinding(SpannedText{"outer_var"}, TypeId{1});
 
   scope_manager.EnterScope(ScopeManager::BlockScope, "inner_block");
-  scope_manager.DeclareVariableBinding("inner_var", TypeId{2});
+  scope_manager.DeclareVariableBinding(SpannedText{"inner_var"}, TypeId{2});
 
   EXPECT_TRUE(scope_manager.FindBindingFor("inner_var", ScopeManager::Current)
                   .has_value());
@@ -89,10 +93,10 @@ TEST_F(ScopeManagerTest, ScopeToCheckCurrentStrictness) {
 }
 
 TEST_F(ScopeManagerTest, ScopeToCheckFunctionBoundary) {
-  scope_manager.DeclareVariableBinding("global_type", TypeId{42});
+  scope_manager.DeclareVariableBinding(SpannedText{"global_type"}, TypeId{42});
 
   scope_manager.EnterScope(ScopeManager::FunctionScope, "foo");
-  scope_manager.DeclareVariableBinding("func_local", TypeId{1});
+  scope_manager.DeclareVariableBinding(SpannedText{"func_local"}, TypeId{1});
 
   scope_manager.EnterScope(ScopeManager::BlockScope, "nested_block");
 
@@ -105,12 +109,12 @@ TEST_F(ScopeManagerTest, ScopeToCheckFunctionBoundary) {
 }
 
 TEST_F(ScopeManagerTest, NonLinearLookupViaOverrideScopeId) {
-  auto global_binding =
-      scope_manager.DeclareVariableBinding("module_a_const", TypeId{99});
+  auto global_binding = scope_manager.DeclareVariableBinding(
+      SpannedText{"module_a_const"}, TypeId{99});
 
   ScopeId branch_id =
       scope_manager.EnterScope(ScopeManager::FunctionScope, "module_b_func");
-  scope_manager.DeclareVariableBinding("local_b_var", TypeId{2});
+  scope_manager.DeclareVariableBinding(SpannedText{"local_b_var"}, TypeId{2});
 
   EXPECT_TRUE(scope_manager.FindBindingFor("local_b_var", ScopeManager::All)
                   .has_value());
@@ -126,23 +130,24 @@ TEST_F(ScopeManagerTest, NonLinearLookupViaOverrideScopeId) {
 }
 
 TEST_F(ScopeManagerTest, DeclareVariableBinding) {
-  auto binding =
-      scope_manager.DeclareVariableBinding("test_var", LiteralType::i32);
+  auto binding = scope_manager.DeclareVariableBinding(SpannedText{"test_var"},
+                                                      LiteralType::i32);
   EXPECT_EQ(binding.kind, NamedBinding::Variable);
   EXPECT_EQ(binding.realized_type_id, LiteralType::i32);
   EXPECT_TRUE(binding.idx.has_value());
 }
 
 TEST_F(ScopeManagerTest, DeclareCaptureBinding) {
-  auto binding =
-      scope_manager.DeclareCaptureBinding("test_capture", LiteralType::f32);
+  auto binding = scope_manager.DeclareCaptureBinding(
+      SpannedText{"test_capture"}, LiteralType::f32);
   EXPECT_EQ(binding.kind, NamedBinding::Capture);
   EXPECT_EQ(binding.realized_type_id, LiteralType::f32);
   EXPECT_TRUE(binding.idx.has_value());
 }
 
 TEST_F(ScopeManagerTest, FindBindingFor_Variable) {
-  scope_manager.DeclareVariableBinding("test_var", LiteralType::i32);
+  scope_manager.DeclareVariableBinding(SpannedText{"test_var"},
+                                       LiteralType::i32);
   auto binding =
       scope_manager.FindBindingFor("test_var", ScopeManager::ScopeToCheck::All);
   ASSERT_TRUE(binding.has_value());
@@ -157,12 +162,13 @@ TEST_F(ScopeManagerTest, FindBindingFor_NotFound) {
 }
 
 TEST_F(ScopeManagerTest, FindBindingFor_Shadowing) {
-  auto outer_binding =
-      scope_manager.DeclareVariableBinding("var", LiteralType::i32);
+  auto outer_binding = scope_manager.DeclareVariableBinding(SpannedText{"var"},
+                                                            LiteralType::i32);
 
   // Enter block scope
   scope_manager.EnterScope(ScopeManager::ScopeType::BlockScope, "block");
-  auto inner = scope_manager.DeclareVariableBinding("var", LiteralType::f32);
+  auto inner = scope_manager.DeclareVariableBinding(SpannedText{"var"},
+                                                    LiteralType::f32);
 
   // Should find inner binding in current scope
   auto symbol_current =
@@ -186,13 +192,13 @@ TEST_F(ScopeManagerTest, FindBindingFor_Shadowing) {
 }
 
 TEST_F(ScopeManagerTest, FindBindingFor_ScopeChecks) {
-  scope_manager.DeclareVariableBinding("v1", LiteralType::i32);
+  scope_manager.DeclareVariableBinding(SpannedText{"v1"}, LiteralType::i32);
 
   scope_manager.EnterScope(ScopeManager::ScopeType::FunctionScope, "fn");
-  scope_manager.DeclareVariableBinding("v2", LiteralType::Bool);
+  scope_manager.DeclareVariableBinding(SpannedText{"v2"}, LiteralType::Bool);
 
   scope_manager.EnterScope(ScopeManager::ScopeType::BlockScope, "block");
-  scope_manager.DeclareVariableBinding("v3", LiteralType::f32);
+  scope_manager.DeclareVariableBinding(SpannedText{"v3"}, LiteralType::f32);
 
   // (BlockScope) v3 accessible but not v1 or v2
   auto symbol_current =

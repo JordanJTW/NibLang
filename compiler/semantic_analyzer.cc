@@ -79,19 +79,18 @@ void SemanticAnalyzer::Check(Block& block, FunctionContext& context) {
         std::optional<NamedBinding> target_binding =
             scope_manager_.FindBindingFor(*target, ScopeManager::All);
         if (!target_binding->IsType()) {
-          error_collector_.Add("Cannot create type alias '" +
-                                   alias->name.value +
+          error_collector_.Add("Cannot create type alias '" + alias->name.text +
                                    "' from value identifier '" + *target + "'",
                                alias->type->metadata);
         }
         scope_manager_.InsertNameIntoScope(
-            alias->name.value, NamedBinding::TypeAlias,
+            alias->name, NamedBinding::TypeAlias,
             target_binding->realized_type_id, target_binding->symbol_id,
             target_binding->idx, target_binding->parent_type_id);
       } else {
         // In the case of an alias to a more complex type we do assign a new
         // type to allow for recursive definitions i.e. alias Foo = Array[Foo].
-        type_context_.GetAliasOf(alias->name.value, *alias->type);
+        type_context_.GetAliasOf(alias->name, *alias->type);
       }
     }
   }
@@ -163,7 +162,7 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
               NamedBinding binding = return_result->binding.value();
               error_collector_.Add(
                   "Expected a variable or value, but found type '" +
-                      binding.name + "'",
+                      binding.name.text + "'",
                   ret.value->meta);
               return;
             }
@@ -218,10 +217,13 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
           [&](const ContinueStatement&) {},
           [&](AssignStatement& assign) {
             // Check this is the first assignment in this scope with that name.
-            if (scope_manager_.FindBindingFor(assign.name,
-                                              ScopeManager::Current)) {
-              LOG(WARNING) << "Identifier already declared with name: '"
-                           << assign.name << "'";
+            if (auto binding = scope_manager_.FindBindingFor(
+                    assign.name.text, ScopeManager::Current)) {
+              error_collector_.Add("Identifier already declared with name: '" +
+                                       assign.name.text + "'",
+                                   assign.name.metadata);
+              error_collector_.Add("Previously declared here",
+                                   binding->name.metadata);
               return;
             }
 
@@ -313,7 +315,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                           context.required_captures.push_back(*binding);
                           // Variables will ALWAYS have a realized TypeId.
                           binding = scope_manager_.DeclareCaptureBinding(
-                              ident.name, *binding->realized_type_id);
+                              binding->name, *binding->realized_type_id);
                         }
 
                         ident.resolved = ResolvedIdentifier{*binding};
@@ -505,7 +507,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                         *object_result->type_id)) {
               const auto& member_name = member_access.member_name;
               if (auto binding = scope_manager_.FindBindingFor(
-                      member_name, ScopeManager::Current,
+                      member_name.text, ScopeManager::Current,
                       struct_type->scope_id)) {
                 if (binding->kind == NamedBinding::Field) {
                   CHECK(binding->idx.has_value())
@@ -514,8 +516,9 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                 }
                 return ExpressionResult(*binding);
               } else {
-                error_collector_.Add("No member '" + member_name + "' on " +
-                                         struct_type->declaration.name,
+                error_collector_.Add("No member '" + member_name.text +
+                                         "' on " +
+                                         struct_type->declaration.name.text,
                                      expression->meta);
               }
             } else {
@@ -830,7 +833,7 @@ void SemanticAnalyzer::TypeCheckCallArguments(
 }
 
 std::optional<TypeId> SemanticAnalyzer::InstantiateType(
-    const std::vector<std::pair<std::string, ParsedType>>& parsed_types,
+    const std::vector<std::pair<SpannedText, ParsedType>>& parsed_types,
     const std::vector<ArgumentResult>& argument_results,
     const std::vector<TemplateArgument>& template_arguments,
     const std::vector<TemplateArgument>& self_template_arguments,
@@ -845,7 +848,7 @@ std::optional<TypeId> SemanticAnalyzer::InstantiateType(
     template_names.reserve(template_arguments.size());
     std::transform(template_arguments.begin(), template_arguments.end(),
                    std::back_inserter(template_names),
-                   [](auto& arg) { return arg.name; });
+                   [](auto& arg) { return arg.name.text; });
   }
 
   for (size_t i = 0; i < parsed_types.size(); ++i) {
@@ -880,20 +883,21 @@ std::optional<TypeId> SemanticAnalyzer::InstantiateType(
   std::vector<TypeId> argument_type_ids;
   argument_type_ids.reserve(self_template_arguments.size());
   for (size_t i = 0; i < self_template_arguments.size(); ++i) {
-    if (bindings.contains(self_template_arguments[i].name)) {
-      const auto& inferred_type = bindings[self_template_arguments[i].name];
+    if (bindings.contains(self_template_arguments[i].name.text)) {
+      const auto& inferred_type =
+          bindings[self_template_arguments[i].name.text];
       if (auto type_id = type_context_.GetTypeIdFor(inferred_type)) {
         argument_type_ids.push_back(type_id.value());
       } else {
         LOG(ERROR) << "Template argument has unknown TypeId: "
-                   << self_template_arguments[i].name;
+                   << self_template_arguments[i].name.text;
         return std::nullopt;
       }
     } else if (default_template_type_ids.contains(template_names[i])) {
       argument_type_ids.push_back(default_template_type_ids[template_names[i]]);
     } else {
       LOG(ERROR) << "Failed to infer template argument with no default: "
-                 << self_template_arguments[i].name;
+                 << self_template_arguments[i].name.text;
       return std::nullopt;
     }
   }
@@ -950,7 +954,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
       callable_type_id = InstantiateType(
           symbol->declaration.arguments, arg_results,
           std::move(template_arguments), symbol->declaration.template_arguments,
-          *callee_result.binding, "fn " + symbol->declaration.name,
+          *callee_result.binding, "fn " + symbol->declaration.name.text,
           symbol->default_template_type_ids);
     }
 
@@ -960,7 +964,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
           symbol->declaration.fields, argument_results,
           symbol->declaration.template_arguments,
           symbol->declaration.template_arguments, *callee_result.binding,
-          "struct " + symbol->declaration.name,
+          "struct " + symbol->declaration.name.text,
           /*default_template_type_ids=*/{});
     }
 

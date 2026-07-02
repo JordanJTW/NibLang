@@ -51,8 +51,9 @@ TEST_F(TypeContextTest, GetTypeIdFor_BuiltInType) {
 
 TEST_F(TypeContextTest, GetTypeIdFor_Function) {
   FunctionDeclaration fn_decl{
-      .name = "test_fn",
-      .arguments = {{"arg1", ParsedType{"i32"}}, {"arg2", ParsedType{"f32"}}},
+      .name = SpannedText{"test_fn"},
+      .arguments = {{SpannedText{"arg1"}, ParsedType{"i32"}},
+                    {SpannedText{"arg2"}, ParsedType{"f32"}}},
       .return_type = ParsedType{"bool"},
       .function_kind = FunctionKind::Free,
       .body = std::make_unique<Block>(),  // non-extern MUST have body
@@ -128,7 +129,7 @@ TEST_F(TypeContextTest, GetTypeIdFor_FunctionType_VoidReturn) {
 
 TEST_F(TypeContextTest, DeclareStructSymbol_NoTemplate) {
   StructDeclaration declaration = {
-      .name = "TestStruct",
+      .name = SpannedText{"TestStruct"},
   };
 
   auto symbol = type_registry.NewStructSymbol(declaration);
@@ -143,7 +144,7 @@ TEST_F(TypeContextTest, DeclareStructSymbol_NoTemplate) {
 
 TEST_F(TypeContextTest, DeclareStructSymbol_WithTemplate) {
   StructDeclaration declaration = {
-      .name = "TestStruct",
+      .name = SpannedText{"TestStruct"},
       .template_arguments = {{"T"}},
   };
 
@@ -158,9 +159,9 @@ TEST_F(TypeContextTest, DeclareStructSymbol_WithTemplate) {
 
 TEST_F(TypeContextTest, DefineStructType_NoTemplate) {
   StructDeclaration declaration;
-  declaration.name = "TestStruct";
-  declaration.fields = {{"field1", ParsedType{"i32"}},
-                        {"field2", ParsedType{"f32"}}};
+  declaration.name = SpannedText{"TestStruct"};
+  declaration.fields = {{SpannedText{"field1"}, ParsedType{"i32"}},
+                        {SpannedText{"field2"}, ParsedType{"f32"}}};
   declaration.is_extern = false;
 
   auto binding = type_registry.NewStructSymbol(declaration);
@@ -176,7 +177,7 @@ TEST_F(TypeContextTest, DefineStructType_NoTemplate) {
   // Check that struct type is registered
   auto struct_info =
       type_registry.GetType<StructType>(*binding.realized_type_id);
-  EXPECT_EQ(struct_info->declaration.name, "TestStruct");
+  EXPECT_EQ(struct_info->declaration.name.text, "TestStruct");
   EXPECT_THAT(struct_info->field_types,
               testing::ElementsAre(LiteralType::i32, LiteralType::f32));
 
@@ -187,7 +188,7 @@ TEST_F(TypeContextTest, DefineStructType_NoTemplate) {
   ASSERT_TRUE(field1_binding.has_value());
   EXPECT_EQ(field1_binding->kind, NamedBinding::Field);
   EXPECT_EQ(field1_binding->idx, 0);
-  EXPECT_EQ(field1_binding->name, "field1");
+  EXPECT_EQ(field1_binding->name.text, "field1");
   EXPECT_EQ(field1_binding->realized_type_id, LiteralType::i32);
 
   auto field2_binding = scope_manager.FindBindingFor(
@@ -197,15 +198,15 @@ TEST_F(TypeContextTest, DefineStructType_NoTemplate) {
   ASSERT_TRUE(field2_binding.has_value());
   EXPECT_EQ(field2_binding->kind, NamedBinding::Field);
   EXPECT_EQ(field2_binding->idx, 1);
-  EXPECT_EQ(field2_binding->name, "field2");
+  EXPECT_EQ(field2_binding->name.text, "field2");
   EXPECT_EQ(field2_binding->realized_type_id, LiteralType::f32);
 }
 
 TEST_F(TypeContextTest, TemplateStruct_GetTemplateOf) {
   StructDeclaration declaration;
-  declaration.name = "TestStruct";
+  declaration.name = SpannedText{"TestStruct"};
   declaration.template_arguments = {{"T"}};
-  declaration.fields = {{"field1", ParsedType{"T"}}};
+  declaration.fields = {{SpannedText{"field1"}, ParsedType{"T"}}};
   declaration.is_extern = false;
 
   auto binding = type_registry.NewStructSymbol(declaration);
@@ -218,7 +219,7 @@ TEST_F(TypeContextTest, TemplateStruct_GetTemplateOf) {
 
   // Check that struct type is registered
   auto struct_info = type_registry.GetType<StructType>(*type_id);
-  EXPECT_EQ(struct_info->declaration.name, "TestStruct");
+  EXPECT_EQ(struct_info->declaration.name.text, "TestStruct");
   EXPECT_THAT(struct_info->field_types,
               testing::ElementsAre(LiteralType::Bool));
 
@@ -229,14 +230,14 @@ TEST_F(TypeContextTest, TemplateStruct_GetTemplateOf) {
   ASSERT_TRUE(field1_binding.has_value());
   EXPECT_EQ(field1_binding->kind, NamedBinding::Field);
   EXPECT_EQ(field1_binding->idx, 0);
-  EXPECT_EQ(field1_binding->name, "field1");
+  EXPECT_EQ(field1_binding->name.text, "field1");
   EXPECT_EQ(field1_binding->realized_type_id, LiteralType::Bool);
 }
 
 TEST_F(TypeContextTest, TemplateFunction_GetTemplateOf) {
   FunctionDeclaration declaration;
-  declaration.name = "TestFunction";
-  declaration.arguments = {{"arg1", ParsedType{"Type"}}};
+  declaration.name = SpannedText{"TestFunction"};
+  declaration.arguments = {{SpannedText{"arg1"}, ParsedType{"Type"}}};
   declaration.return_type = ParsedType{"Return"};
   declaration.function_kind = FunctionKind::Free;
   declaration.template_arguments = {{"Type"}, {"Return"}};
@@ -260,16 +261,16 @@ TEST_F(TypeContextTest, TemplateFunction_GetTemplateOf) {
 
 TEST_F(TypeContextTest, StructDeclaration_WithMethod) {
   FunctionDeclaration method_decl = {
-      .name = "test_method",
-      .arguments = {{"self", ParsedType{"TestStruct"}},
-                    {"arg", ParsedType{"i32"}}},
+      .name = SpannedText{"test_method"},
+      .arguments = {{SpannedText{"self"}, ParsedType{"TestStruct"}},
+                    {SpannedText{"arg"}, ParsedType{"i32"}}},
       .return_type = ParsedType{"Void"},
       .function_kind = FunctionKind::Method,
       .body = std::make_unique<Block>(),
   };
 
   StructDeclaration struct_decl;
-  struct_decl.name = "TestStruct";
+  struct_decl.name = SpannedText{"TestStruct"};
   struct_decl.methods.emplace_back("test_method", std::move(method_decl));
   struct_decl.is_extern = false;
 
@@ -292,13 +293,13 @@ TEST_F(TypeContextTest, StructDeclaration_WithMethod) {
 
   ASSERT_TRUE(method_binding.has_value());
   EXPECT_EQ(method_binding->kind, NamedBinding::Function);
-  EXPECT_EQ(method_binding->name, "test_method");
+  EXPECT_EQ(method_binding->name.text, "test_method");
   EXPECT_TRUE(method_binding->realized_type_id.has_value());
 }
 
 TEST_F(TypeContextTest, DefineFunction_ExternMethod) {
   StructDeclaration struct_decl;
-  struct_decl.name = "String";
+  struct_decl.name = SpannedText{"String"};
   struct_decl.is_extern = true;
 
   auto struct_binding = type_registry.NewStructSymbol(struct_decl);
@@ -313,13 +314,14 @@ TEST_F(TypeContextTest, DefineFunction_ExternMethod) {
                                 /*template_arguments=*/{});
 
   FunctionDeclaration method_decl{
-      .name = "length",
-      .arguments = {{"self", ParsedType{"String"}}},
+      .name = SpannedText{"length"},
+      .arguments = {{SpannedText{"self"}, ParsedType{"String"}}},
       .return_type = ParsedType{"i32"},
       .function_kind = FunctionKind::Method,
   };
 
-  auto method_symbol_id = type_registry.NewFunctionSymbol(method_decl);
+  auto method_symbol_id =
+      type_registry.NewFunctionSymbol(method_decl, &struct_decl);
   auto method_binding = type_context.DefineFunction(
       method_symbol_id, *struct_binding.realized_type_id);
   ASSERT_TRUE(method_binding.has_value());
@@ -342,7 +344,7 @@ TEST_F(TypeContextTest, IsTypeSubsetOf) {
   ASSERT_TRUE(union_id.has_value());
 
   StructDeclaration test_struct_decl;
-  test_struct_decl.name = "TestStruct";
+  test_struct_decl.name = SpannedText{"TestStruct"};
   test_struct_decl.is_extern = true;
 
   NamedBinding struct_binding = type_registry.NewStructSymbol(test_struct_decl);
@@ -394,8 +396,8 @@ TEST_F(TypeContextTest, GetNameFromTypeId) {
 
   // Function type
   FunctionDeclaration fn_decl{
-      .name = "test_fn",
-      .arguments = {{"arg1", ParsedType{"i32"}}},
+      .name = SpannedText{"test_fn"},
+      .arguments = {{SpannedText{"arg1"}, ParsedType{"i32"}}},
       .return_type = ParsedType{"bool"},
       .function_kind = FunctionKind::Free,
       .body = std::make_unique<Block>(),
@@ -410,11 +412,11 @@ TEST_F(TypeContextTest, GetNameFromTypeId) {
 
   // Variadic function
   FunctionDeclaration variadic_fn{
-      .name = "log",
-      .arguments = {{"arg1", ParsedType{"i32"}}},
+      .name = SpannedText("log"),
+      .arguments = {{SpannedText{"arg1"}, ParsedType{"i32"}}},
       .return_type = ParsedType{"bool"},
       .function_kind = FunctionKind::Extern,
-      .is_variadic = true,
+      .variadic_span = Metadata{.column_range = {13, 16}, .line_range = {0, 0}},
       .body = std::make_unique<Block>(),
   };
   auto variadic_symbol_id = type_registry.NewFunctionSymbol(variadic_fn);
@@ -427,7 +429,7 @@ TEST_F(TypeContextTest, GetNameFromTypeId) {
 
   // Struct type
   StructDeclaration struct_decl;
-  struct_decl.name = "TestStruct";
+  struct_decl.name = SpannedText("TestStruct", Metadata{});
   struct_decl.is_extern = false;
   auto struct_binding = type_registry.NewStructSymbol(struct_decl);
   ASSERT_TRUE(struct_binding.realized_type_id.has_value());

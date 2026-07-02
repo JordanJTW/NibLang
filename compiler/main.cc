@@ -86,7 +86,7 @@ std::optional<File> CollectImportsFor(std::string_view path,
   std::vector<std::string> import_paths;
   for (const auto& statement : root_block.statements) {
     if (const auto* import = std::get_if<ImportStatement>(&statement->as)) {
-      import_paths.push_back(import->path);
+      import_paths.push_back(import->path.text);
     }
   }
 
@@ -120,6 +120,7 @@ std::vector<File> CalculateImportsFor(std::string_view path,
   dfs(std::string(path));
   return result;
 }
+
 enum class OutputMode { Ast, DumpImage, Image };
 
 struct Options {
@@ -246,7 +247,7 @@ int main(int argc, char* argv[]) {
 
   for (const auto& [id, symbol] : type_registry.symbol_table()) {
     if (const auto* fn_symbol = std::get_if<FunctionSymbol>(&symbol)) {
-      if (fn_symbol->declaration.name == "main") {
+      if (fn_symbol->declaration.name.text == "main") {
         process_symbol(*fn_symbol);
         break;
       }

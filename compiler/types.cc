@@ -6,6 +6,8 @@
 
 #include <ostream>
 
+#include "compiler/logging.h"
+
 namespace {
 
 template <class... Ts>
@@ -43,6 +45,12 @@ std::ostream& operator<<(std::ostream& os, NamedBinding::Kind kind) {
 
 }  // namespace
 
+// static
+SpannedText SpannedText::FromToken(Token token) {
+  CHECK_EQ(token.kind, TokenKind::kIdent);
+  return SpannedText{token.value, token.meta};
+}
+
 bool FunctionSymbol::IsExtern() const {
   if (parent_declaration.has_value())
     return parent_declaration.value()->is_extern && !declaration.body;
@@ -52,13 +60,13 @@ bool FunctionSymbol::IsExtern() const {
 
 std::string FunctionSymbol::GetName() const {
   if (parent_declaration.has_value())
-    return parent_declaration.value()->name + "_" + declaration.name;
+    return parent_declaration.value()->name.text + "_" + declaration.name.text;
 
-  return declaration.name;
+  return declaration.name.text;
 }
 
 std::ostream& operator<<(std::ostream& os, const NamedBinding& symbol) {
-  os << "{name=" << symbol.name << ", kind=" << symbol.kind << ", type_id="
+  os << "{name=" << symbol.name.text << ", kind=" << symbol.kind << ", type_id="
      << (symbol.realized_type_id ? std::to_string(*symbol.realized_type_id)
                                  : "?")
      << ", symbol_id="

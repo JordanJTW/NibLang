@@ -98,12 +98,12 @@ StmtBuilder expr(std::unique_ptr<Expression> e) {
   return StmtBuilder(std::make_unique<Statement>(Statement{std::move(e)}));
 }
 
-StmtBuilder let(std::string name, ExprBuilder init) {
+StmtBuilder let(SpannedText name, ExprBuilder init) {
   return StmtBuilder(std::make_unique<Statement>(Statement{
       AssignStatement{std::move(name), std::nullopt, std::move(init.node)}}));
 }
 
-StmtBuilder let(std::string name, ParsedType type, ExprBuilder init) {
+StmtBuilder let(SpannedText name, ParsedType type, ExprBuilder init) {
   return StmtBuilder(std::make_unique<Statement>(Statement{AssignStatement{
       std::move(name), std::move(type), std::move(init.node)}}));
 }

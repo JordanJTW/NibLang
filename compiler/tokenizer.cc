@@ -301,8 +301,8 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
 // static
 Metadata Metadata::fromTokens(const Token& start, const Token& end) {
   return Metadata{
-      TextRange{start.meta.column_range.start, end.meta.column_range.end},
-      TextRange{start.meta.line_range.start, end.meta.line_range.end}};
+      TextRange{start.meta.column_range.start, end.meta.column_range.start},
+      TextRange{start.meta.line_range.start, end.meta.line_range.start}};
 }
 
 std::ostream& operator<<(std::ostream& os, const TextRange& range) {

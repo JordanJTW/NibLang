@@ -286,10 +286,10 @@ void Parser::ParseBlock(Block& block, BlockType type) {
 
       CONTINUE_IF_FALSE(ExpectNextToken(TokenKind::kEndExpr, "expected ';'"));
 
-      block.statements.push_back(std::make_unique<Statement>(
-          Statement{AssignStatement{variable_name->value, std::move(var_type),
-                                    std::move(value_expr)},
-                    Metadata::fromTokens(start_token, current_token_)}));
+      block.statements.push_back(std::make_unique<Statement>(Statement{
+          AssignStatement{SpannedText::FromToken(std::move(*variable_name)),
+                          std::move(var_type), std::move(value_expr)},
+          Metadata::fromTokens(start_token, current_token_)}));
       continue;
     }
 
@@ -310,10 +310,11 @@ void Parser::ParseBlock(Block& block, BlockType type) {
 
       CONTINUE_IF_FALSE(ExpectNextToken(TokenKind::kEndExpr, "expected ';'"));
 
-      block.statements.push_back(
-          std::make_unique<Statement>(Statement{TypeAliasStatement{
-              std::move(name_token.value()),
-              std::make_unique<ParsedType>(std::move(type.value()))}}));
+      block.statements.push_back(std::make_unique<Statement>(
+          Statement{TypeAliasStatement{
+                        SpannedText::FromToken(std::move(name_token.value())),
+                        std::make_unique<ParsedType>(std::move(type.value()))},
+                    Metadata::fromTokens(start_token, current_token_)}));
       continue;
     }
 
@@ -1013,8 +1014,9 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
         default_type = ParseType();
       }
 
-      template_arguments.emplace_back(template_argument_token->value,
-                                      default_type);
+      template_arguments.emplace_back(
+          SpannedText::FromToken(std::move(*template_argument_token)),
+          default_type);
 
       if (current_token_.kind == TokenKind::kComma) {
         AdvanceToken();  // consume ,
@@ -1037,7 +1039,7 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
   }
 
   StructDeclaration struct_decl;
-  struct_decl.name = struct_name.value;
+  struct_decl.name = SpannedText::FromToken(std::move(struct_name));
   struct_decl.is_extern = is_extern == ExternStruct::YES;
   struct_decl.template_arguments = std::move(template_arguments);
 
@@ -1057,6 +1059,7 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
       if (!method) {
         return std::nullopt;
       }
+
       struct_decl.methods.emplace_back(method->name, std::move(*method));
       continue;
     }
@@ -1086,7 +1089,8 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
         return std::nullopt;
       }
 
-      struct_decl.fields.emplace_back(field_name.value, type.value());
+      struct_decl.fields.emplace_back(
+          SpannedText::FromToken(std::move(field_name)), type.value());
 
       if (current_token_.kind != TokenKind::kEndExpr) {
         HandleError("expected ';'");
@@ -1108,9 +1112,10 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
 
 std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
     FunctionKind function_kind) {
-  ExpectNextToken(TokenKind::kKwFn, "expected 'fn'");
+  std::optional<Token> fn_token =
+      ExpectNextToken(TokenKind::kKwFn, "expected 'fn'");
 
-  std::string function_name;
+  SpannedText function_name;
   std::vector<TemplateArgument> template_arguments;
   if (function_kind == FunctionKind::Anonymous) {
     // Perform single-token deletion recovery to try to keep parsing happy.
@@ -1119,13 +1124,15 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
                   "Anonymous functions should not have a name");
       AdvanceToken();  // skip name
     }
+    function_name = SpannedText{
+        "__llamda." + std::to_string(anonymous_fn_counter_++), fn_token->meta};
   } else {
     Token name = current_token_;
     if (name.kind != TokenKind::kIdent) {
       HandleError("requires a function name");
       return std::nullopt;
     }
-    function_name = name.value;
+    function_name = SpannedText::FromToken(std::move(name));
     AdvanceToken();  // after function name
 
     if (current_token_.kind == TokenKind::kSquareOpen) {
@@ -1145,7 +1152,8 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
           default_type = ParseType();
         }
 
-        template_arguments.emplace_back(template_param->value, default_type);
+        template_arguments.emplace_back(
+            SpannedText::FromToken(std::move(*template_param)), default_type);
 
         if (current_token_.kind == TokenKind::kComma) {
           AdvanceToken();  // consume ,
@@ -1169,15 +1177,15 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
   }
   AdvanceToken();  // after '('
 
-  bool is_variadic = false;
-  std::vector<std::pair<std::string, ParsedType>> arguments;
+  std::optional<Metadata> variadic_span;  // The position of "..." if present
+  std::vector<std::pair<SpannedText, ParsedType>> arguments;
   Token start_of_arguments_token = current_token_;
   if (current_token_.kind != TokenKind::kCloseParen) {
     while (true) {
       // extern functions support passing raw variadic arguments to the runtime.
       // This must be the very last parameter passed to the function.
       if (current_token_.kind == TokenKind::kVariadic) {
-        is_variadic = true;
+        variadic_span = current_token_.meta;
         AdvanceToken();  // skip ...
 
         if (current_token_.kind != TokenKind::kCloseParen) {
@@ -1193,7 +1201,7 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
         break;
       }
 
-      std::string arg_name = current_token_.value;
+      Token arg_name = current_token_;
       AdvanceToken();  // after parameter name
 
       if (current_token_.kind != TokenKind::kColon) {
@@ -1209,7 +1217,8 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
         break;
       }
 
-      arguments.emplace_back(std::move(arg_name), std::move(arg_type.value()));
+      arguments.emplace_back(SpannedText::FromToken(std::move(arg_name)),
+                             std::move(arg_type.value()));
 
       if (current_token_.kind == TokenKind::kComma) {
         AdvanceToken();
@@ -1242,14 +1251,10 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
     return_type = ParsedType{"Void", missing_return_type_token.meta};
   }
 
-  FunctionDeclaration fn{function_name,
-                         std::move(arguments),
-                         std::move(return_type.value()),
-                         function_kind,
-                         std::move(template_arguments),
-                         is_variadic,
-                         Metadata::fromTokens(start_of_arguments_token,
-                                              missing_return_type_token)};
+  FunctionDeclaration fn{
+      std::move(function_name),       std::move(arguments),
+      std::move(return_type.value()), function_kind,
+      std::move(template_arguments),  std::move(variadic_span)};
 
   if (current_token_.kind == TokenKind::kEndExpr) {
     AdvanceToken();  // consume ';'

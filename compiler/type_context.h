@@ -59,7 +59,7 @@ class TypeContext {
   TypeId GetUnionOf(const std::vector<TypeId>& types);
 
   // Creates an alias of `name` pointing to `type`.
-  TypeId GetAliasOf(std::string_view name, const ParsedType& type);
+  TypeId GetAliasOf(SpannedText name, const ParsedType& type);
 
   // Realizes a template of a struct or function pointed to by `binding` into a
   // concrete TypeId using `argument_type_ids` as template arguments.

@@ -69,7 +69,7 @@ class SemanticAnalyzer {
       bool is_variadic_function = false);
 
   std::optional<TypeId> InstantiateType(
-      const std::vector<std::pair<std::string, ParsedType>>& parsed_types,
+      const std::vector<std::pair<SpannedText, ParsedType>>& parsed_types,
       const std::vector<ArgumentResult>& arugment_results,
       const std::vector<TemplateArgument>& template_arguments,
       const std::vector<TemplateArgument>& self_template_arguments,

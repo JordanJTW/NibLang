@@ -47,21 +47,21 @@ static vm_value_t native_trampoline(vm_value_t* argv,
 }
 
 const static std::string kPreamble = R"(
-extern struct Array {
-  static fn new() -> Array;
-  static fn init(...) -> Array;
-  static fn withSize(size: i32) -> Array;
+extern struct Array[T] {
+  static fn new() -> Array[T];
+  static fn init(...T) -> Array[T];
+  static fn withSize(size: i32) -> Array[T];
 
-  fn push(self: Array, value: any);
-  fn get(self: Array, idx: i32) -> any;
-  fn set(self: Array, idx: i32, value: any) -> any;
-  fn length(self: Array) -> i32;
+  fn push(self: Array[T], value: T);
+  fn get(self: Array[T], idx: i32) -> T;
+  fn set(self: Array[T], idx: i32, value: T) -> T;
+  fn length(self: Array[T]) -> i32;
 }
 
-extern struct Map {
-  static fn new() -> Map;
-  fn get(self: Map, key: any) -> any;
-  fn set(self: Map, key: any, value: any) -> Void;
+extern struct Map[K, V] {
+  static fn new() -> Map[K, V];
+  fn get(self: Map[K,V], key: K) -> V;
+  fn set(self: Map[K,V], key: K, value: V) -> Void;
 }
 
 extern struct String {
@@ -71,7 +71,7 @@ extern struct String {
   fn startsWith(s: String, prefix: String, idx: i32) -> bool;
 }
 
-extern fn check(...);
+extern fn check(...any);
 )";
 
 static constexpr std::array<std::string_view, 1> kExternalFunctionNames = {

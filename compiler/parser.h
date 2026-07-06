@@ -26,6 +26,8 @@ class Parser {
   enum class BlockType { Root, Scope };
   void ParseBlock(Block& block, BlockType type = BlockType::Scope);
 
+  std::unique_ptr<Expression> ParseBlockCondition();
+
   std::unique_ptr<Expression> ParseExpression();
   std::unique_ptr<Expression> ParseAssignment();
   std::unique_ptr<Expression> ParseLogical();
@@ -40,11 +42,18 @@ class Parser {
 
   std::unique_ptr<Expression> ParseCall(std::unique_ptr<Expression> callee);
 
+  std::optional<std::vector<TemplateArgument>> ParseTemplateDeclarationList();
+
   enum class ExternStruct { YES, NO };
   std::optional<StructDeclaration> ParseStructDeclaration(
       ExternStruct is_extern);
   std::optional<FunctionDeclaration> ParseFunctionDeclaration(
       FunctionKind function_kind);
+  struct FunctionArgumentList {
+    std::vector<std::pair<SpannedText, ParsedType>> arguments;
+    std::optional<Metadata> variadic_span;
+  };
+  std::optional<FunctionArgumentList> ParseFunctionArgumentList();
 
   std::optional<ParsedType> ParseType();
   std::optional<ParsedType> ParseUnionType();
@@ -52,10 +61,11 @@ class Parser {
   std::optional<ParsedType> ParsePrimaryType();
   std::vector<ParsedType> ParseTypeList(TokenKind end_of_list_token);
 
-  std::optional<Token> ExpectNextToken(TokenKind expected_kind,
-                                       std::string_view error_message);
+  bool ConsumeToken(TokenKind expected_kind, std::string_view error_message);
   void AdvanceToken();
-  void HandleError(std::string_view message);
+
+  bool SynchronizeOnError(std::function<bool(TokenKind)> is_target =
+                              [](TokenKind) { return false; });
 
   const std::string& text_;
   ErrorCollector& error_collector_;

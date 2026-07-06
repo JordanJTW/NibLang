@@ -94,12 +94,13 @@ Block Parser::Parse() {
     continue;                    \
   }
 
-void Parser::ParseBlock(Block& block, BlockType type) {
+void Parser::ParseBlock(Block& block, BlockType block_type) {
   while (current_token_.kind != TokenKind::kEndOfFile &&
          current_token_.kind != TokenKind::kCloseBrace) {
     Token start_token = current_token_;
 
     bool is_extern = false;
+    Metadata extern_metadata = current_token_.meta;
     if (current_token_.kind == TokenKind::kKwExtern) {
       is_extern = true;
       AdvanceToken();
@@ -129,26 +130,26 @@ void Parser::ParseBlock(Block& block, BlockType type) {
     }
 
     if (is_extern) {
-      HandleError("extern is only valid before struct/fn");
+      error_collector_.Add("extern is only valid before struct/fn",
+                           extern_metadata);
+      SynchronizeOnError();  // Sync to start of next statement
       continue;
     }
 
     if (current_token_.kind == TokenKind::kKwWhile) {
       AdvanceToken();
 
-      CONTINUE_IF_FALSE(ExpectNextToken(TokenKind::kOpenParen,
-                                        "expected '(' before while condition"));
+      auto condition_expression = ParseBlockCondition();
 
-      ASSIGN_OR_CONTINUE(condition_expr, ParseExpression());
+      if (!ConsumeToken(TokenKind::kOpenBrace,
+                        "expected '{' before while body")) {
+        SynchronizeOnError(
+            [](TokenKind kind) { return kind == TokenKind::kCloseBrace; });
+        // If we hit '}' do not consume it since there was never '{'
+        continue;
+      }
 
-      CONTINUE_IF_FALSE(ExpectNextToken(TokenKind::kCloseParen,
-                                        "expected ')' after while condition"));
-
-      WhileStatement while_stmt{std::move(condition_expr), Block{}};
-
-      CONTINUE_IF_FALSE(ExpectNextToken(TokenKind::kOpenBrace,
-                                        "expected '{' before while body"));
-
+      WhileStatement while_stmt{std::move(condition_expression), Block{}};
       ParseBlock(while_stmt.body);
 
       block.statements.push_back(std::make_unique<Statement>(
@@ -160,18 +161,16 @@ void Parser::ParseBlock(Block& block, BlockType type) {
     if (current_token_.kind == TokenKind::kKwIf) {
       AdvanceToken();
 
-      CONTINUE_IF_FALSE(ExpectNextToken(TokenKind::kOpenParen,
-                                        "expected '(' before if condition"));
+      auto condition_expression = ParseBlockCondition();
 
-      ASSIGN_OR_CONTINUE(condition, ParseExpression());
+      if (!ConsumeToken(TokenKind::kOpenBrace, "expected '{' before if body")) {
+        SynchronizeOnError(
+            [](TokenKind kind) { return kind == TokenKind::kCloseBrace; });
+        // If we hit '}' do not consume it since there was never '{'
+        continue;
+      }
 
-      CONTINUE_IF_FALSE(ExpectNextToken(TokenKind::kCloseParen,
-                                        "expected ')' after if condition"));
-
-      IfStatement if_stmt{std::move(condition), Block{}, Block{}};
-
-      CONTINUE_IF_FALSE(ExpectNextToken(TokenKind::kOpenBrace,
-                                        "expected '{' before if body"));
+      IfStatement if_stmt{std::move(condition_expression), Block{}, Block{}};
 
       ParseBlock(if_stmt.then_body);
 
@@ -179,8 +178,13 @@ void Parser::ParseBlock(Block& block, BlockType type) {
       if (current_token_.kind == TokenKind::kKwElse) {
         AdvanceToken();
 
-        CONTINUE_IF_FALSE(ExpectNextToken(TokenKind::kOpenBrace,
-                                          "expected '{' before else body"));
+        if (!ConsumeToken(TokenKind::kOpenBrace,
+                          "expected '{' before if body")) {
+          SynchronizeOnError(
+              [](TokenKind kind) { return kind == TokenKind::kCloseBrace; });
+          // If we hit '}' do not consume it since there was never '{'
+          continue;
+        }
 
         ParseBlock(if_stmt.else_body);
       }
@@ -192,10 +196,15 @@ void Parser::ParseBlock(Block& block, BlockType type) {
     }
 
     if (current_token_.kind == TokenKind::kKwReturn) {
-      AdvanceToken();
+      AdvanceToken();  // consume 'return'
+
       if (auto expr = ParseExpression()) {
-        CONTINUE_IF_FALSE(ExpectNextToken(TokenKind::kEndExpr,
-                                          "expected ';' after return value"));
+        if (!ConsumeToken(TokenKind::kEndExpr,
+                          "expected ';' after expression")) {
+          SynchronizeOnError();
+          // Intentional fall-through as an expression was parsed
+        }
+
         block.statements.push_back(std::make_unique<Statement>(
             Statement{ReturnStatement{std::move(expr)},
                       Metadata::fromTokens(start_token, current_token_)}));
@@ -204,10 +213,14 @@ void Parser::ParseBlock(Block& block, BlockType type) {
     }
 
     if (current_token_.kind == TokenKind::kKwThrow) {
-      AdvanceToken();
+      AdvanceToken();  // consume 'throw'
+
       if (auto expr = ParseExpression()) {
-        CONTINUE_IF_FALSE(ExpectNextToken(TokenKind::kEndExpr,
-                                          "expected ';' after throw value"));
+        if (!ConsumeToken(TokenKind::kEndExpr,
+                          "expected ';' after expression")) {
+          SynchronizeOnError();
+          // Intentional fall-through as an expression was parsed
+        }
         block.statements.push_back(std::make_unique<Statement>(
             Statement{ThrowStatement{std::move(expr)},
                       Metadata::fromTokens(start_token, current_token_)}));
@@ -216,9 +229,13 @@ void Parser::ParseBlock(Block& block, BlockType type) {
     }
 
     if (current_token_.kind == TokenKind::kKwBreak) {
-      AdvanceToken();
-      CONTINUE_IF_FALSE(
-          ExpectNextToken(TokenKind::kEndExpr, "expected ';' after break"));
+      AdvanceToken();  // consume 'break'
+
+      if (!ConsumeToken(TokenKind::kEndExpr, "expected ';' after break")) {
+        SynchronizeOnError();
+        // Intentional fall-through as an expression was parsed
+      }
+
       block.statements.push_back(std::make_unique<Statement>(
           Statement{BreakStatement{},
                     Metadata::fromTokens(start_token, current_token_)}));
@@ -228,8 +245,10 @@ void Parser::ParseBlock(Block& block, BlockType type) {
     if (current_token_.kind == TokenKind::kKwContinue) {
       AdvanceToken();  // consume 'continue'
 
-      CONTINUE_IF_FALSE(
-          ExpectNextToken(TokenKind::kEndExpr, "expected ';' after continue"));
+      if (!ConsumeToken(TokenKind::kEndExpr, "expected ';' after continue")) {
+        SynchronizeOnError();
+        // Intentional fall-through as an expression was parsed
+      }
 
       block.statements.push_back(std::make_unique<Statement>(
           Statement{ContinueStatement{},
@@ -240,32 +259,50 @@ void Parser::ParseBlock(Block& block, BlockType type) {
     if (current_token_.kind == TokenKind::kKwLet) {
       AdvanceToken();  // consume `let`
 
-      ASSIGN_OR_CONTINUE(
-          variable_name,
-          ExpectNextToken(TokenKind::kIdent, "expected variable name"));
+      Token variable_name = current_token_;
+      if (!ConsumeToken(TokenKind::kIdent, "expected variable name")) {
+        SynchronizeOnError();
+        continue;
+      }
 
       std::optional<ParsedType> var_type;
       // : <type> is optional, but if there is a ':' there must be a type.
       if (current_token_.kind == TokenKind::kColon) {
         AdvanceToken();  // after ':'
 
+        Metadata type_metadata = current_token_.meta;
         var_type = ParseType();
         if (!var_type.has_value()) {
-          HandleError("expected type nam after ':'");
-          continue;
+          error_collector_.Add("expected well formed type after ':'",
+                               type_metadata);
+          // Fallthrough to attempt to keep parsing as types are optional
         }
       }
 
-      CONTINUE_IF_FALSE(
-          ExpectNextToken(TokenKind::kAssign, "expected assign (=) operator"));
+      // If the variable isn't initialized this was likely a programmer error
+      // and not a typo so there's not saving this `let` statement.
+      if (!ConsumeToken(TokenKind::kAssign,
+                        "expected assign (=) operator; all variables MUST be "
+                        "initialized")) {
+        SynchronizeOnError();
+        continue;
+      }
 
-      ASSIGN_OR_CONTINUE(value_expr, ParseExpression());
+      std::unique_ptr<Expression> value_expression = ParseExpression();
+      if (!value_expression) {
+        // ParseExpression likely logged its own error inside, sync and drop out
+        SynchronizeOnError();
+        continue;
+      }
 
-      CONTINUE_IF_FALSE(ExpectNextToken(TokenKind::kEndExpr, "expected ';'"));
+      if (!ConsumeToken(TokenKind::kEndExpr, "expected ';' after expression")) {
+        SynchronizeOnError();
+        // Intentional fall-through as an expression was parsed
+      }
 
       block.statements.push_back(std::make_unique<Statement>(Statement{
-          AssignStatement{SpannedText::FromToken(std::move(*variable_name)),
-                          std::move(var_type), std::move(value_expr)},
+          AssignStatement{SpannedText::FromToken(std::move(variable_name)),
+                          std::move(var_type), std::move(value_expression)},
           Metadata::fromTokens(start_token, current_token_)}));
       continue;
     }
@@ -273,39 +310,71 @@ void Parser::ParseBlock(Block& block, BlockType type) {
     if (current_token_.kind == TokenKind::kKwAlias) {
       AdvanceToken();  // Past "alias"
 
-      ASSIGN_OR_CONTINUE(
-          name_token,
-          ExpectNextToken(TokenKind::kIdent, "expected type alias name"));
-
-      CONTINUE_IF_FALSE(ExpectNextToken(TokenKind::kAssign, "expected '='"));
-
-      std::optional<ParsedType> type = ParseType();
-      if (!type) {
-        HandleError("invalid type expression");
+      if (current_token_.kind != TokenKind::kIdent) {
+        error_collector_.Add("expected type alias name after 'alias'",
+                             current_token_.meta);
+        SynchronizeOnError();
         continue;
       }
 
-      CONTINUE_IF_FALSE(ExpectNextToken(TokenKind::kEndExpr, "expected ';'"));
+      Token name_token = current_token_;
+      AdvanceToken();  // consume name
+
+      if (!ConsumeToken(TokenKind::kAssign,
+                        "expected '=' after type alias name")) {
+        if (!SynchronizeOnError(
+                [](TokenKind kind) { return kind == TokenKind::kAssign; })) {
+          continue;
+        }
+
+        AdvanceToken();  // consume =
+        // Intentional fall-through to try to continue parsing
+      }
+
+      std::optional<ParsedType> type = ParseType();
+      if (!type.has_value()) {
+        error_collector_.Add("expected valid type after '='",
+                             current_token_.meta);
+        SynchronizeOnError();
+        continue;
+      }
+
+      if (!ConsumeToken(TokenKind::kEndExpr,
+                        "expected ';' to terminate type alias statement")) {
+        if (SynchronizeOnError(
+                [](TokenKind kind) { return kind == TokenKind::kEndExpr; })) {
+          AdvanceToken();  // consume ;
+        }
+        // Intentional fall-through as the expression is fully parsed
+      }
 
       block.statements.push_back(std::make_unique<Statement>(
           Statement{TypeAliasStatement{
-                        SpannedText::FromToken(std::move(name_token.value())),
+                        SpannedText::FromToken(std::move(name_token)),
                         std::make_unique<ParsedType>(std::move(type.value()))},
                     Metadata::fromTokens(start_token, current_token_)}));
       continue;
     }
 
     if (current_token_.kind == TokenKind::kKwImport) {
+      Token import_token = current_token_;
       AdvanceToken();  // Past @import
 
-      if (type != BlockType::Root) {
-        HandleError("@imports can only appear in the root scope");
+      if (block_type != BlockType::Root) {
+        error_collector_.Add("@imports can only appear in the root scope",
+                             import_token.meta);
+        SynchronizeOnError();
         continue;
       }
 
       if (current_token_.kind != TokenKind::kString) {
-        HandleError("@import missing \"path/to/import\"");
-        continue;
+        error_collector_.Add("@import missing \"path/to/import\"",
+                             current_token_.meta);
+        if (!SynchronizeOnError(
+                [](TokenKind kind) { return kind == TokenKind::kString; })) {
+          continue;
+        }
+        // `current_token_` is a String!
       }
 
       Token import_path = current_token_;
@@ -321,19 +390,22 @@ void Parser::ParseBlock(Block& block, BlockType type) {
     }
 
     if (auto expr = ParseExpression()) {
-      if (current_token_.kind != TokenKind::kEndExpr) {
-        HandleError("expected ;");
-        continue;
-      } else {
-        block.statements.push_back(std::make_unique<Statement>(
-            Statement{std::move(expr),
-                      Metadata::fromTokens(start_token, current_token_)}));
-        AdvanceToken();  // consume ;
+      Token end_token = current_token_;
+      if (!ConsumeToken(TokenKind::kEndExpr,
+                        "expected ';' to terminate expression statement")) {
+        if (SynchronizeOnError(
+                [](TokenKind kind) { return kind == TokenKind::kEndExpr; })) {
+          end_token = current_token_;
+          AdvanceToken();  // consume the ';' we synchronized to
+        }
+        // Intentional fall-through as the expression is fully parsed
       }
+      block.statements.push_back(std::make_unique<Statement>(Statement{
+          std::move(expr), Metadata::fromTokens(start_token, end_token)}));
       continue;
     }
 
-    HandleError("unexpected token");
+    error_collector_.Add("unexpected token", current_token_.meta);
     AdvanceToken();
   }
 
@@ -363,13 +435,14 @@ std::unique_ptr<Expression> Parser::ParseValue() {
         auto res = unescape_codepoint(current_token_.value.substr(i));
 
         if (res.error_message.has_value()) {
-          HandleError(res.error_message.value());
+          error_collector_.Add(res.error_message.value(), current_token_.meta);
           return nullptr;
         }
 
         if (res.codepoint > 0x7F) {
-          HandleError(
-              "non-ASCII characters are not supported in string literals");
+          error_collector_.Add(
+              "non-ASCII characters are not supported in string literals",
+              current_token_.meta);
           return nullptr;
         }
 
@@ -382,17 +455,19 @@ std::unique_ptr<Expression> Parser::ParseValue() {
     case TokenKind::kChar: {
       auto res = unescape_codepoint(current_token_.value);
       if (res.error_message.has_value()) {
-        HandleError(res.error_message.value());
+        error_collector_.Add(res.error_message.value(), current_token_.meta);
         return nullptr;
       }
 
       if (res.codepoint > 0x7F) {
-        HandleError("non-ASCII characters are not supported in char literals");
+        error_collector_.Add(
+            "non-ASCII characters are not supported in char literals",
+            current_token_.meta);
         return nullptr;
       }
 
       if (res.bytes_consumed != current_token_.value.size()) {
-        HandleError("char literal is too long");
+        error_collector_.Add("char literal is too long", current_token_.meta);
         return nullptr;
       }
 
@@ -413,6 +488,32 @@ std::unique_ptr<Expression> Parser::ParseValue() {
       error_collector_.Add("unknown literal type", current_token_.meta);
       return nullptr;
   }
+}
+
+std::unique_ptr<Expression> Parser::ParseBlockCondition() {
+  auto is_start_of_body = [](TokenKind kind) {
+    return kind == TokenKind::kOpenBrace;
+  };
+
+  if (!ConsumeToken(TokenKind::kOpenParen,
+                    "expected '(' before while condition")) {
+    SynchronizeOnError(is_start_of_body);
+    return nullptr;
+  }
+
+  std::unique_ptr<Expression> condition_expression = ParseExpression();
+  if (!condition_expression) {
+    SynchronizeOnError(is_start_of_body);
+    return nullptr;
+  }
+
+  if (!ConsumeToken(TokenKind::kCloseParen,
+                    "expected ')' after while condition")) {
+    SynchronizeOnError(is_start_of_body);
+    // Intentional fall-through to preserve the parsed condition
+  }
+
+  return condition_expression;
 }
 
 std::unique_ptr<Expression> Parser::ParseExpression() {
@@ -621,14 +722,15 @@ std::unique_ptr<Expression> Parser::ParsePostFix() {
   while (true) {
     Token post_fix_start_token = current_token_;
 
-    bool is_optional_access = false;
+    std::optional<Metadata> optional_access_metadata;
     if (current_token_.kind == TokenKind::kQuestion) {
+      optional_access_metadata = current_token_.meta;
       AdvanceToken();  // consume '?'
-      is_optional_chain = is_optional_access = true;
+      is_optional_chain = true;
     }
 
     auto wrap_optional = [&](std::unique_ptr<Expression> expr) {
-      return is_optional_access
+      return optional_access_metadata.has_value()
                  ? std::make_unique<Expression>(
                        Expression{OptionalAccessExpression{std::move(expr)}})
                  : std::move(expr);
@@ -640,9 +742,16 @@ std::unique_ptr<Expression> Parser::ParsePostFix() {
       if (current_token_.kind == TokenKind::kKwTypeOf) {
         AdvanceToken();  // consume 'of'
 
-        if (!ExpectNextToken(TokenKind::kOpenParen,
-                             "expect template arguments")) {
-          return nullptr;
+        if (!ConsumeToken(TokenKind::kOpenParen, "expect template arguments")) {
+          if (!SynchronizeOnError([](TokenKind kind) {
+                return kind == TokenKind::kCloseParen ||
+                       kind == TokenKind::kEndExpr;
+              })) {
+            return nullptr;
+          }
+          if (current_token_.kind == TokenKind::kCloseParen)
+            AdvanceToken();
+          continue;
         }
 
         std::vector<ParsedType> template_types =
@@ -659,8 +768,15 @@ std::unique_ptr<Expression> Parser::ParsePostFix() {
       }
 
       if (current_token_.kind != TokenKind::kIdent) {
-        HandleError("expected identifier after '.'");
-        return nullptr;
+        error_collector_.Add("expected identifier after '.'",
+                             current_token_.meta);
+        if (!SynchronizeOnError([](TokenKind k) {
+              return k == TokenKind::kDot || k == TokenKind::kOpenParen ||
+                     k == TokenKind::kSquareOpen;
+            })) {
+          return nullptr;
+        }
+        continue;
       }
       Token ident = current_token_;
       AdvanceToken();  // consume identifier
@@ -683,15 +799,27 @@ std::unique_ptr<Expression> Parser::ParsePostFix() {
       AdvanceToken();  // consume '['
 
       auto index = ParseExpression();
-      if (!index)
-        return nullptr;
-
-      if (current_token_.kind != TokenKind::kSquareClose) {
-        HandleError("expected ']'");
-        return nullptr;
+      if (!index) {
+        if (!SynchronizeOnError([](TokenKind kind) {
+              return kind == TokenKind::kSquareClose;
+            })) {
+          return nullptr;
+        }
+        if (current_token_.kind == TokenKind::kSquareClose)
+          AdvanceToken();
+        continue;
       }
 
-      AdvanceToken();  // consume ']'
+      if (!ConsumeToken(TokenKind::kSquareClose,
+                        "expected ']' to close array access")) {
+        if (!SynchronizeOnError(
+                [](TokenKind k) { return k == TokenKind::kSquareClose; })) {
+          return nullptr;
+        }
+      }
+
+      if (current_token_.kind == TokenKind::kSquareClose)
+        AdvanceToken();  // consume ']'
 
       expr = std::make_unique<Expression>(Expression{
           ArrayAccessExpression{wrap_optional(std::move(expr)),
@@ -700,10 +828,11 @@ std::unique_ptr<Expression> Parser::ParsePostFix() {
       continue;
     }
 
-    if (is_optional_access) {
-      HandleError(
+    if (optional_access_metadata.has_value()) {
+      error_collector_.Add(
           "optional chaining is only supported for member access (?.), "
-          "subscript (?[]), and function call fn?()");
+          "subscript (?[]), and function call fn?()",
+          *optional_access_metadata);
       continue;
     }
 
@@ -745,15 +874,23 @@ std::unique_ptr<Expression> Parser::ParsePrimary() {
       AdvanceToken();  // consume '('
 
       auto expr = ParseExpression();
-      if (!expr)
-        return nullptr;
-
-      if (current_token_.kind != TokenKind::kCloseParen) {
-        HandleError("expected ')'");
-        return nullptr;
+      if (!expr) {
+        if (!SynchronizeOnError([](TokenKind kind) {
+              return kind == TokenKind::kCloseParen;
+            })) {
+          return nullptr;
+        }
       }
 
-      AdvanceToken();  // consume ')'
+      if (!ConsumeToken(TokenKind::kCloseParen, "expected ')'")) {
+        if (SynchronizeOnError([](TokenKind kind) {
+              return kind == TokenKind::kCloseParen;
+            })) {
+          AdvanceToken();  // consume ')' since we synchronized to anchor
+        } else {
+          return nullptr;  // synchronized to top-level statement abort
+        }
+      }
       return expr;
     }
 
@@ -768,7 +905,7 @@ std::unique_ptr<Expression> Parser::ParsePrimary() {
     }
 
     default:
-      HandleError("expected expression");
+      error_collector_.Add("expected expression", current_token_.meta);
       return nullptr;
   }
 }
@@ -780,23 +917,43 @@ std::unique_ptr<Expression> Parser::ParseCall(
 
   std::vector<std::unique_ptr<Expression>> arguments;
   if (current_token_.kind != TokenKind::kCloseParen) {
-    while (true) {
-      if (auto arg = ParseExpression())
+    while (current_token_.kind != TokenKind::kCloseParen) {
+      if (auto arg = ParseExpression()) {
         arguments.push_back(std::move(arg));
+      } else {
+        if (!SynchronizeOnError([](TokenKind kind) {
+              return kind == TokenKind::kComma ||
+                     kind == TokenKind::kCloseParen;
+            })) {
+          return nullptr;
+        }
 
-      if (current_token_.kind == TokenKind::kCloseParen)
-        break;
-
-      if (current_token_.kind != TokenKind::kComma) {
-        HandleError("expected ',' or ')'");
-        return nullptr;
+        if (current_token_.kind == TokenKind::kComma)
+          AdvanceToken();
+        continue;
       }
 
-      AdvanceToken();
+      if (current_token_.kind == TokenKind::kComma) {
+        AdvanceToken();  // consume ','
+      } else if (current_token_.kind != TokenKind::kCloseParen) {
+        error_collector_.Add("expected ',' or ')' after argument",
+                             current_token_.meta);
+
+        if (!SynchronizeOnError([](TokenKind kind) {
+              return kind == TokenKind::kComma ||
+                     kind == TokenKind::kCloseParen;
+            })) {
+          return nullptr;
+        }
+
+        if (current_token_.kind == TokenKind::kComma)
+          AdvanceToken();
+      }
     }
   }
 
-  AdvanceToken();  // consume ')'
+  CHECK(
+      ConsumeToken(TokenKind::kCloseParen, "expected ')' to close arguments"));
 
   return std::make_unique<Expression>(
       Expression{CallExpression{std::move(callee), std::move(arguments)},
@@ -837,27 +994,45 @@ std::optional<ParsedType> Parser::ParseUnionType() {
 
 std::optional<ParsedType> Parser::ParseFunctionType() {
   Token start_token = current_token_;
-  AdvanceToken();  // consume 'fn'
+  CHECK(ConsumeToken(TokenKind::kKwFn, "expected 'fn'"));
 
-  ExpectNextToken(TokenKind::kOpenParen, "expected '('");
+  if (!ConsumeToken(TokenKind::kOpenParen, "expected '('"))
+    return std::nullopt;
 
   std::vector<ParsedType> arg_types;
   if (current_token_.kind != TokenKind::kCloseParen) {
     while (true) {
       auto arg_type = ParseType();
-      if (!arg_type)
-        return std::nullopt;
+      if (!arg_type) {
+        if (!SynchronizeOnError([](TokenKind kind) {
+              return kind == TokenKind::kComma ||
+                     kind == TokenKind::kCloseParen;
+            })) {
+          return std::nullopt;
+        }
+      } else {
+        arg_types.push_back(std::move(arg_type.value()));
+      }
 
-      arg_types.push_back(std::move(arg_type.value()));
+      if (current_token_.kind == TokenKind::kComma) {
+        AdvanceToken();  // consume ','
+        continue;
+      }
 
-      if (current_token_.kind != TokenKind::kComma)
-        break;
-
-      AdvanceToken();  // consume ','
+      if (current_token_.kind != TokenKind::kCloseParen) {
+        if (!SynchronizeOnError([](TokenKind kind) {
+              return kind == TokenKind::kCloseParen ||
+                     kind == TokenKind::kSkinnyArrow;
+            })) {
+          return std::nullopt;
+        }
+      }
+      break;
     }
   }
 
-  ExpectNextToken(TokenKind::kCloseParen, "expected ')'");
+  if (current_token_.kind == TokenKind::kCloseParen)
+    AdvanceToken();  // consume ')'
 
   std::shared_ptr<ParsedType> return_type;
   if (current_token_.kind == TokenKind::kSkinnyArrow) {
@@ -888,7 +1063,7 @@ std::optional<ParsedType> Parser::ParsePrimaryType() {
     if (!inner_type)
       return std::nullopt;
 
-    ExpectNextToken(TokenKind::kCloseParen, "expected ')'");
+    ConsumeToken(TokenKind::kCloseParen, "expected ')'");
     result = std::move(inner_type.value());
   }
   // Handles function types i.e. fn(i32) -> bool.
@@ -921,7 +1096,6 @@ std::optional<ParsedType> Parser::ParsePrimaryType() {
                           Metadata::fromTokens(start_token, current_token_)};
     }
   } else {
-    HandleError("expected type");
     return std::nullopt;
   }
 
@@ -958,66 +1132,109 @@ std::vector<ParsedType> Parser::ParseTypeList(TokenKind end_of_list_token) {
   return return_types;
 }
 
-std::optional<StructDeclaration> Parser::ParseStructDeclaration(
-    ExternStruct is_extern) {
-  ExpectNextToken(TokenKind::kKwStruct, "expected 'struct'");
+std::optional<std::vector<TemplateArgument>>
+Parser::ParseTemplateDeclarationList() {
+  CHECK_EQ(current_token_.kind, TokenKind::kSquareOpen);
+  AdvanceToken();  // consume [
 
-  if (current_token_.kind != TokenKind::kIdent) {
-    HandleError("expected struct name");
-    return std::nullopt;
-  }
+  std::vector<TemplateArgument> template_parameters;
+  while (current_token_.kind != TokenKind::kSquareClose &&
+         current_token_.kind != TokenKind::kEndOfFile) {
+    Token parameter_token = current_token_;
+    if (!ConsumeToken(TokenKind::kIdent, "expected template parameter")) {
+      // Attempt to synchronize to the next parameter (or end of list)
 
-  Token struct_name = current_token_;
-  AdvanceToken();  // consume struct name
-
-  std::vector<TemplateArgument> template_arguments;
-  if (current_token_.kind == TokenKind::kSquareOpen) {
-    AdvanceToken();  // consume [
-
-    while (true) {
-      std::optional<Token> template_argument_token =
-          ExpectNextToken(TokenKind::kIdent, "expected template argument");
-
-      if (!template_argument_token)
+      if (!SynchronizeOnError([](TokenKind kind) {
+            return kind == TokenKind::kComma || kind == TokenKind::kSquareClose;
+          })) {
         return std::nullopt;
-
-      std::optional<ParsedType> default_type;
-      if (current_token_.kind == TokenKind::kAssign) {
-        AdvanceToken();  // consume =
-        // TODO: Should errors with `default_type` be handled explicitly here
-        default_type = ParseType();
       }
+      if (current_token_.kind == TokenKind::kComma)
+        AdvanceToken();
+      continue;
+    }
 
-      template_arguments.emplace_back(
-          SpannedText::FromToken(std::move(*template_argument_token)),
-          default_type);
+    std::optional<ParsedType> default_type;  // Default types are optional
+    if (current_token_.kind == TokenKind::kAssign) {
+      AdvanceToken();  // consume =
+      default_type = ParseType();
 
-      if (current_token_.kind == TokenKind::kComma) {
-        AdvanceToken();  // consume ,
-        continue;
+      if (!default_type.has_value()) {
+        error_collector_.Add(
+            "expected valid type after '=' in template parameter",
+            current_token_.meta);
+        // Intentional fall-through to continue parsing since optional
       }
+    }
 
-      if (current_token_.kind == TokenKind::kSquareClose) {
-        AdvanceToken();  // consume ]
-        break;
+    template_parameters.emplace_back(
+        SpannedText::FromToken(std::move(parameter_token)),
+        std::move(default_type));
+
+    if (current_token_.kind == TokenKind::kComma) {
+      AdvanceToken();  // consume ,
+    } else if (current_token_.kind != TokenKind::kSquareClose) {
+      error_collector_.Add("expected ',' or ']' after template parameter",
+                           current_token_.meta);
+      if (!SynchronizeOnError(
+              [](TokenKind kind) { return kind == TokenKind::kSquareClose; })) {
+        return std::nullopt;
       }
-
-      HandleError("expected ',' or ']'");
-      break;
     }
   }
 
-  if (current_token_.kind != TokenKind::kOpenBrace) {
-    HandleError("expected '{' after struct name");
-    return std::nullopt;
+  ConsumeToken(TokenKind::kSquareClose,
+               "expected ']' to close template arguments");
+  return template_parameters;
+}
+
+std::optional<StructDeclaration> Parser::ParseStructDeclaration(
+    ExternStruct is_extern) {
+  CHECK(ConsumeToken(TokenKind::kKwStruct, "expected 'struct'"));
+
+  Token name_token = current_token_;
+  if (!ConsumeToken(TokenKind::kIdent, "requires a struct name")) {
+    error_collector_.Add("requires a struct name", current_token_.meta);
+
+    // Synchronize to the start of template parameters or body
+    auto is_body_or_templates = [](TokenKind kind) {
+      return kind == TokenKind::kSquareOpen || kind == TokenKind::kOpenBrace;
+    };
+    if (!SynchronizeOnError(is_body_or_templates)) {
+      return std::nullopt;
+    }
+  }
+
+  // Optionally parse template paramters i.e. [T, U = i32]
+  std::vector<TemplateArgument> template_parameters;
+  if (current_token_.kind == TokenKind::kSquareOpen) {
+    auto result = ParseTemplateDeclarationList();
+    if (!result)
+      return std::nullopt;
+    template_parameters = std::move(result.value());
   }
 
   StructDeclaration struct_decl;
-  struct_decl.name = SpannedText::FromToken(std::move(struct_name));
+  struct_decl.name = SpannedText::FromToken(std::move(name_token));
   struct_decl.is_extern = is_extern == ExternStruct::YES;
-  struct_decl.template_arguments = std::move(template_arguments);
+  struct_decl.template_arguments = std::move(template_parameters);
 
-  AdvanceToken();  // consume '{'
+  if (!ConsumeToken(TokenKind::kOpenBrace, "expected '{' for struct body")) {
+    return std::nullopt;
+  }
+
+  // Strong synchronization points to anchor on in a struct declaration
+  auto is_strong_anchor = [](TokenKind kind) {
+    return kind == TokenKind::kKwFn || kind == TokenKind::kKwStatic ||
+           kind == TokenKind::kCloseBrace;
+  };
+
+  auto handle_member_error = [&, this]() -> bool {
+    return SynchronizeOnError([&, this](TokenKind kind) {
+      return is_strong_anchor(kind) || kind == TokenKind::kIdent;
+    });
+  };
+
   while (current_token_.kind != TokenKind::kCloseBrace &&
          current_token_.kind != TokenKind::kEndOfFile) {
     std::optional<Token> static_modifier_token;
@@ -1031,7 +1248,9 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
                                                  ? FunctionKind::StaticMethod
                                                  : FunctionKind::Method);
       if (!method) {
-        return std::nullopt;
+        if (!handle_member_error())
+          return std::nullopt;
+        continue;
       }
 
       struct_decl.methods.emplace_back(method->name, std::move(*method));
@@ -1041,207 +1260,252 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
     if (static_modifier_token) {
       error_collector_.Add("'static' is only valid on method declarations",
                            static_modifier_token->meta);
-      // Purposefully do not attempt error recovery as we are already on a new
-      // token at this point and it is only a modifier for other keywords.
+      // This line is fundamentally borked at this point so try to sync past it.
+      if (!SynchronizeOnError([&](TokenKind kind) {
+            return kind == TokenKind::kEndExpr || is_strong_anchor(kind);
+          })) {
+        return std::nullopt;
+      }
+      if (current_token_.kind == TokenKind::kEndExpr)
+        AdvanceToken();  // consume ';'
       continue;
     }
 
     if (current_token_.kind == TokenKind::kIdent) {
       Token field_name = current_token_;
-      AdvanceToken();  // consume <name>
+      AdvanceToken();  // consume name
 
-      if (current_token_.kind != TokenKind::kColon) {
-        HandleError("expected ':' after field name");
-        return std::nullopt;
+      if (!ConsumeToken(TokenKind::kColon, "expected ':' after field name")) {
+        if (!handle_member_error())
+          return std::nullopt;
+        continue;
       }
-
-      AdvanceToken();  // consume ':'
 
       std::optional<ParsedType> type = ParseType();
       if (!type.has_value()) {
-        HandleError("expected type name");
-        return std::nullopt;
+        error_collector_.Add("expected type name for field",
+                             current_token_.meta);
+        if (!handle_member_error())
+          return std::nullopt;
+        continue;
       }
 
       struct_decl.fields.emplace_back(
           SpannedText::FromToken(std::move(field_name)), type.value());
 
-      if (current_token_.kind != TokenKind::kEndExpr) {
-        HandleError("expected ';'");
-        return std::nullopt;
+      if (!ConsumeToken(TokenKind::kEndExpr,
+                        "expected ';' after field declaration")) {
+        if (!handle_member_error())
+          return std::nullopt;
       }
-      AdvanceToken();
       continue;
     }
 
-    if (current_token_.kind == TokenKind::kCloseBrace)
-      break;
-
-    HandleError("invalid struct member declaration");
-    return std::nullopt;
+    // Dead-end fallthrough fallback
+    error_collector_.Add("invalid struct member declaration",
+                         current_token_.meta);
+    if (!handle_member_error())
+      return std::nullopt;
   }
-  AdvanceToken();  // consume '}'
+
+  ConsumeToken(TokenKind::kCloseBrace, "expected '}' to close struct body");
   return struct_decl;
 }
 
 std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
     FunctionKind function_kind) {
-  std::optional<Token> fn_token =
-      ExpectNextToken(TokenKind::kKwFn, "expected 'fn'");
+  Token fn_token = current_token_;
+  CHECK(ConsumeToken(TokenKind::kKwFn, "expected 'fn'"));
 
   SpannedText function_name;
-  std::vector<TemplateArgument> template_arguments;
+  std::vector<TemplateArgument> template_parameters;
   if (function_kind == FunctionKind::Anonymous) {
-    // Perform single-token deletion recovery to try to keep parsing happy.
+    // Perform single-token deletion recovery to try to keep parsing happy...
     if (current_token_.kind == TokenKind::kIdent) {
       error_collector_.Add("Anonymous functions should not have a name",
                            current_token_.meta);
       AdvanceToken();  // skip name
     }
     function_name = SpannedText{
-        "__llamda." + std::to_string(anonymous_fn_counter_++), fn_token->meta};
+        "__llamda." + std::to_string(anonymous_fn_counter_++), fn_token.meta};
   } else {
-    Token name = current_token_;
-    if (name.kind != TokenKind::kIdent) {
-      HandleError("requires a function name");
-      return std::nullopt;
-    }
-    function_name = SpannedText::FromToken(std::move(name));
-    AdvanceToken();  // after function name
+    Token name_token = current_token_;
+    if (current_token_.kind != TokenKind::kIdent) {
+      error_collector_.Add("requires a function name", current_token_.meta);
 
+      // Synchronize to the start of the template parameters or arguments list
+      auto is_arguments = [](TokenKind kind) {
+        return kind == TokenKind::kSquareOpen || kind == TokenKind::kOpenParen;
+      };
+      if (!SynchronizeOnError(is_arguments)) {
+        return std::nullopt;
+      }
+    } else {
+      function_name = SpannedText::FromToken(std::move(name_token));
+      AdvanceToken();  // after function name
+    }
+
+    // Optionally parse template paramters i.e. [T, U = i32]
     if (current_token_.kind == TokenKind::kSquareOpen) {
-      AdvanceToken();  // consume [
-
-      while (true) {
-        std::optional<Token> template_param =
-            ExpectNextToken(TokenKind::kIdent, "expected template param");
-
-        if (!template_param)
-          return std::nullopt;
-
-        std::optional<ParsedType> default_type;
-        if (current_token_.kind == TokenKind::kAssign) {
-          AdvanceToken();  // consume =
-          // TODO: Should errors with `default_type` be handled explicitly here
-          default_type = ParseType();
-        }
-
-        template_arguments.emplace_back(
-            SpannedText::FromToken(std::move(*template_param)), default_type);
-
-        if (current_token_.kind == TokenKind::kComma) {
-          AdvanceToken();  // consume ,
-          continue;
-        }
-
-        if (current_token_.kind == TokenKind::kSquareClose) {
-          AdvanceToken();  // consume ]
-          break;
-        }
-
-        HandleError("expected ',' or ']'");
-        break;
-      }
+      auto result = ParseTemplateDeclarationList();
+      if (!result)
+        return std::nullopt;
+      template_parameters = std::move(result.value());
     }
   }
 
-  if (current_token_.kind != TokenKind::kOpenParen) {
-    HandleError("expected (");
-    return std::nullopt;
+  auto argument_list = ParseFunctionArgumentList();
+  if (!argument_list) {
+    return std::nullopt;  // Errors handled within `ParseFunctionArgumentList()`
   }
-  AdvanceToken();  // after '('
 
-  std::optional<Metadata> variadic_span;  // The position of "..." if present
-  std::vector<std::pair<SpannedText, ParsedType>> arguments;
-  Token start_of_arguments_token = current_token_;
-  if (current_token_.kind != TokenKind::kCloseParen) {
-    while (true) {
-      // extern functions support passing raw variadic arguments to the runtime.
-      // This must be the very last parameter passed to the function.
-      if (current_token_.kind == TokenKind::kVariadic) {
-        variadic_span = current_token_.meta;
-        AdvanceToken();  // skip ...
-
-        if (current_token_.kind != TokenKind::kCloseParen) {
-          error_collector_.Add("'...' must be the last argument in a function",
-                               current_token_.meta);
-          return std::nullopt;
-        }
-        break;
-      }
-
-      if (current_token_.kind != TokenKind::kIdent) {
-        HandleError("expected parameter name");
-        break;
-      }
-
-      Token arg_name = current_token_;
-      AdvanceToken();  // after parameter name
-
-      if (current_token_.kind != TokenKind::kColon) {
-        HandleError("expected ':' after parameter name");
-        break;
-      }
-
-      AdvanceToken();  // after ':'
-
-      std::optional<ParsedType> arg_type = ParseType();
-      if (!arg_type.has_value()) {
-        HandleError("expected type name");
-        break;
-      }
-
-      arguments.emplace_back(SpannedText::FromToken(std::move(arg_name)),
-                             std::move(arg_type.value()));
-
-      if (current_token_.kind == TokenKind::kComma) {
-        AdvanceToken();
-        continue;  // next parameter
-      }
-
-      if (current_token_.kind == TokenKind::kCloseParen)
-        break;  // done
-
-      HandleError("expected ',' or ')'");
-      break;
-    }
-  }
-  Token missing_return_type_token = current_token_;
-  AdvanceToken();  // after ')'
-
+  // Used as the location where a return type _could_ be
+  Metadata return_type_metadate = current_token_.meta;
   std::optional<ParsedType> return_type;
   if (current_token_.kind == TokenKind::kSkinnyArrow) {
     AdvanceToken();  // consume '->'
-
     return_type = ParseType();
-
-    // Failed to parse the return type so the function parse is invalid
-    if (!return_type.has_value())
-      return std::nullopt;
-
+  } else if (current_token_.kind == TokenKind::kIdent) {
+    // The next token SHOULD be a '{' so if an ident is found instead it is a
+    // pretty good guess that the user is intending to supply a return type.
+    error_collector_.Add("expected '->' before return type specifier",
+                         current_token_.meta);
+    return_type = ParseType();
   } else {
     // Using the debug metadata for the last parentheses in the expression
     // ensures that errors with deduced "Void" point to the absence of a return.
-    return_type = ParsedType{"Void", missing_return_type_token.meta};
+    return_type = ParsedType{"Void", return_type_metadate};
+  }
+
+  if (!return_type.has_value()) {
+    error_collector_.Add("parsed invalid return type", current_token_.meta);
+
+    auto is_body_or_end = [](TokenKind kind) {
+      return kind == TokenKind::kOpenBrace || kind == TokenKind::kEndExpr;
+    };
+    if (!SynchronizeOnError(is_body_or_end))
+      return std::nullopt;
   }
 
   FunctionDeclaration fn{
-      std::move(function_name),       std::move(arguments),
+      std::move(function_name),       std::move(argument_list->arguments),
       std::move(return_type.value()), function_kind,
-      std::move(template_arguments),  std::move(variadic_span)};
+      std::move(template_parameters), std::move(argument_list->variadic_span)};
 
   if (current_token_.kind == TokenKind::kEndExpr) {
-    AdvanceToken();  // consume ';'
-    return std::move(fn);
+    AdvanceToken();
+    return fn;
   }
 
-  if (!ExpectNextToken(TokenKind::kOpenBrace, "expected function body"))
+  // Avoid parsing the function body at all if there is no open brace. Any
+  // statements that appear will count towards the outer scope -- not ideal but
+  // better than proactively assuming a body and leaving things even more
+  // unbalanced...
+  if (!ConsumeToken(TokenKind::kOpenBrace,
+                    "expected ';' (for extern function) or function body {}")) {
     return std::nullopt;
+  }
 
   Block body;
-  ParseBlock(body);
+  ParseBlock(body);  // ParseBlock() consumes '}'
   fn.body = std::make_unique<Block>(std::move(body));
   return std::move(fn);
+}
+
+std::optional<Parser::FunctionArgumentList>
+Parser::ParseFunctionArgumentList() {
+  if (!ConsumeToken(TokenKind::kOpenParen,
+                    "expected '(' before function arguments")) {
+    if (!SynchronizeOnError([](TokenKind kind) {
+          return kind == TokenKind::kOpenBrace ||
+                 kind == TokenKind::kSkinnyArrow;
+        })) {
+      return std::nullopt;
+    }
+    // We are still in the context of the function and can parse the return
+    // type and/or the function body so return an empty arugment list.
+    return Parser::FunctionArgumentList{};
+  }
+
+  std::vector<std::pair<SpannedText, ParsedType>> arguments;
+  std::optional<Metadata> variadic_span;  // The position of "..." if present
+
+  Token start_of_arguments_token = current_token_;
+  while (current_token_.kind != TokenKind::kCloseParen) {
+    // extern functions support passing raw variadic arguments to the runtime.
+    // This must be the very last parameter passed to the function.
+    if (current_token_.kind == TokenKind::kVariadic) {
+      variadic_span = current_token_.meta;
+      AdvanceToken();  // skip ...
+
+      Token expected_type_token = current_token_;
+      std::optional<ParsedType> type = ParseType();
+      if (!type) {
+        error_collector_.Add("variadic requires a type to be specified",
+                             expected_type_token.meta);
+      }
+
+      if (current_token_.kind != TokenKind::kCloseParen) {
+        error_collector_.Add("'...' must be the last argument in a function",
+                             current_token_.meta);
+        if (!SynchronizeOnError([](TokenKind kind) {
+              return kind == TokenKind::kCloseParen;
+            })) {
+          return std::nullopt;
+        }
+      }
+      break;  // variadic MUST be the last argument
+    }
+
+#define HANDLE_ERROR_IN_ARGUMENT()                                          \
+  if (!SynchronizeOnError([](TokenKind kind) {                              \
+        return kind == TokenKind::kComma || kind == TokenKind::kCloseParen; \
+      })) {                                                                 \
+    return std::nullopt;                                                    \
+  }                                                                         \
+  if (current_token_.kind == TokenKind::kComma)                             \
+    AdvanceToken();                                                         \
+  continue
+
+    Token arg_name = current_token_;
+    if (!ConsumeToken(TokenKind::kIdent, "expected argument name")) {
+      HANDLE_ERROR_IN_ARGUMENT();
+    }
+
+    if (!ConsumeToken(TokenKind::kColon, "expected ':' after argument name")) {
+      HANDLE_ERROR_IN_ARGUMENT();
+    }
+
+    std::optional<ParsedType> arg_type = ParseType();
+    if (!arg_type.has_value()) {
+      error_collector_.Add("expected valid type name for argument",
+                           current_token_.meta);
+      HANDLE_ERROR_IN_ARGUMENT();
+    }
+
+    arguments.emplace_back(SpannedText::FromToken(std::move(arg_name)),
+                           std::move(arg_type.value()));
+
+    if (current_token_.kind == TokenKind::kComma) {
+      AdvanceToken();  // consume ','
+    } else if (current_token_.kind != TokenKind::kCloseParen) {
+      error_collector_.Add("expected ',' or ')' after argument",
+                           current_token_.meta);
+
+      if (!SynchronizeOnError([](TokenKind kind) {
+            return kind == TokenKind::kComma || kind == TokenKind::kCloseParen;
+          })) {
+        return std::nullopt;
+      }
+
+      if (current_token_.kind == TokenKind::kComma) {
+        AdvanceToken();
+      }
+    }
+  }
+
+  ConsumeToken(TokenKind::kCloseParen, "expected ')' to close argument list");
+  return FunctionArgumentList{std::move(arguments), std::move(variadic_span)};
 }
 
 void Parser::AdvanceToken() {
@@ -1269,36 +1533,42 @@ void Parser::AdvanceToken() {
   }
 }
 
-std::optional<Token> Parser::ExpectNextToken(TokenKind expected_kind,
-                                             std::string_view error_message) {
+bool Parser::ConsumeToken(TokenKind expected_kind,
+                          std::string_view error_message) {
   if (current_token_.kind != expected_kind) {
-    HandleError(error_message);
-    return std::nullopt;
+    error_collector_.Add(error_message, current_token_.meta);
+    return false;
   }
 
-  Token expected_token = current_token_;
   AdvanceToken();
-  return expected_token;
+  return true;
 }
 
-void Parser::HandleError(std::string_view message) {
-  error_collector_.Add(message, current_token_.meta);
+bool Parser::SynchronizeOnError(std::function<bool(TokenKind)> is_target) {
+  // A token may simply have been missing in which case we may already be sync'd
+  if (is_target(current_token_.kind))
+    return true;
+
+  AdvanceToken();  // Always advance to prevent infinite loops
 
   auto is_start_of_statement = [](TokenKind kind) {
     return kind == TokenKind::kKwLet || kind == TokenKind::kKwStruct ||
            kind == TokenKind::kKwExtern || kind == TokenKind::kKwWhile ||
            kind == TokenKind::kKwReturn || kind == TokenKind::kKwBreak ||
            kind == TokenKind::kKwFn || kind == TokenKind::kKwContinue ||
-           kind == TokenKind::kKwThrow || kind == TokenKind::kKwImport;
+           kind == TokenKind::kKwThrow || kind == TokenKind::kKwImport ||
+           kind == TokenKind::kKwAlias;
   };
 
-  while (!is_start_of_statement(current_token_.kind) &&
-         current_token_.kind != TokenKind::kComma &&
-         current_token_.kind != TokenKind::kEndExpr &&
-         current_token_.kind != TokenKind::kEndOfFile)
-    AdvanceToken();
+  while (current_token_.kind != TokenKind::kEndOfFile) {
+    if (is_target(current_token_.kind))
+      return true;
 
-  // Sync past ';' as that does not start a statement
-  if (current_token_.kind == TokenKind::kEndExpr)
+    if (is_start_of_statement(current_token_.kind))
+      return false;
+
     AdvanceToken();
+  }
+
+  return false;
 }

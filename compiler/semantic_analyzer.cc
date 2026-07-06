@@ -641,6 +641,11 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
               return std::nullopt;
             }
 
+            if (type_context_.UnwrapOptional(*as_type)) {
+              error_collector_.Add("Casts must be to non-nilable types",
+                                   cast.as_type.metadata);
+            }
+
             if (!original_result->has_type_id()) {
               error_collector_.Add("Can not cast unrealized expression",
                                    cast.expr->meta);

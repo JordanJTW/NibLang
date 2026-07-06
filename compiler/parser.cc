@@ -582,11 +582,6 @@ std::unique_ptr<Expression> Parser::ParseInFix() {
       if (!type)
         return nullptr;
 
-      if (type->type.index() == 4 /* ParsedOptionalType */) {
-        HandleError("Casts must be to non-nilable types");
-        return nullptr;
-      }
-
       expr = std::make_unique<Expression>(Expression{
           TypeCastExpression{std::move(expr), std::move(type.value()),
                              should_allow_as_nil ? TypeCastStrategy::OPTIONAL

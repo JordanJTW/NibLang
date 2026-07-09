@@ -71,7 +71,7 @@ NamedBinding TypeRegistry::NewStructSymbol(StructDeclaration& declaration) {
 
   std::optional<TypeId> type_id = std::nullopt;
   // If the `struct` is already realized at declaration (concrete) then assign
-  // its TypeId so that conrete struct/function declarations will fully resolve.
+  // its TypeId so that concrete struct/function declarations will fully resolve
   if (!declaration.IsTemplate()) {
     type_id = NewTypeId();
   }
@@ -97,7 +97,7 @@ SymbolId TypeRegistry::NewFunctionSymbol(
 
 TypeId TypeRegistry::NewStructType(StructType type,
                                    std::optional<TypeId> self_id) {
-  TypeId type_id = self_id.value_or(next_type_id_++);
+  TypeId type_id = self_id.has_value() ? *self_id : NewTypeId();
   type_table_.emplace(type_id, std::move(type));
   return type_id;
 }
@@ -108,7 +108,7 @@ TypeId TypeRegistry::NewFunctionType(FunctionType type) {
     return it->second;
   }
 
-  TypeId type_id = next_type_id_++;
+  TypeId type_id = NewTypeId();
   interned_fn_type_[type] = type_id;
   type_table_[type_id] = type;
   return type_id;
@@ -126,7 +126,7 @@ TypeId TypeRegistry::NewOptionalType(TypeId type) {
     return it->second;
   }
 
-  TypeId type_id = next_type_id_++;
+  TypeId type_id = NewTypeId();
   interned_optional_type_[type] = type_id;
   type_table_[type_id] = OptionalType{type};
   return type_id;
@@ -138,7 +138,7 @@ TypeId TypeRegistry::NewUnionType(UnionType type) {
     return it->second;
   }
 
-  TypeId type_id = next_type_id_++;
+  TypeId type_id = NewTypeId();
   interned_union_type_[type] = type_id;
   type_table_[type_id] = type;
   return type_id;

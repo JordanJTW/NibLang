@@ -316,13 +316,15 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                         return ExpressionResult(*binding);
                       }
 
-                      // Fallback seatch to ALL scopes for functions/structs.
+                      // Fallback search to ALL scopes for functions/structs.
                       binding = scope_manager_.FindBindingFor(
                           ident.name, ScopeManager::All);
                       if (binding) {
                         switch (binding->kind) {
                           case NamedBinding::Function:
-                          case NamedBinding::Struct: {
+                          case NamedBinding::Struct:
+                          case NamedBinding::TypeAlias:
+                          case NamedBinding::Template: {
                             ident.resolved = ResolvedIdentifier{*binding};
                             return ExpressionResult(*binding);
                           }

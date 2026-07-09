@@ -39,6 +39,8 @@ if(ENABLE_COVERAGE)
   endif()
 endif()
 
+add_compile_options(-fno-exceptions)
+
 # Fetch the latest gtest (main) and enable testing for the project
 include(FetchContent)
 fetchcontent_declare(

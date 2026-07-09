@@ -4,7 +4,7 @@
 
 extern struct Array[T] {
   static fn new() -> Array[T];
-  static fn init(...) -> Array[T];
+  static fn init(...T) -> Array[T];
   static fn withSize(size: i32) -> Array[T];
 
   fn push(self: Array[T], value: T);

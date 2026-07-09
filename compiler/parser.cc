@@ -1390,7 +1390,7 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
   FunctionDeclaration fn{
       std::move(function_name),       std::move(argument_list->arguments),
       std::move(return_type.value()), function_kind,
-      std::move(template_parameters), std::move(argument_list->variadic_span)};
+      std::move(template_parameters), std::move(argument_list->variadic_type)};
 
   if (current_token_.kind == TokenKind::kEndExpr) {
     AdvanceToken();
@@ -1428,19 +1428,21 @@ Parser::ParseFunctionArgumentList() {
   }
 
   std::vector<std::pair<SpannedText, ParsedType>> arguments;
-  std::optional<Metadata> variadic_span;  // The position of "..." if present
+  std::optional<VariadicType> variadic_type;
 
   Token start_of_arguments_token = current_token_;
   while (current_token_.kind != TokenKind::kCloseParen) {
     // extern functions support passing raw variadic arguments to the runtime.
     // This must be the very last parameter passed to the function.
     if (current_token_.kind == TokenKind::kVariadic) {
-      variadic_span = current_token_.meta;
+      Token variadic_token = current_token_;
       AdvanceToken();  // skip ...
 
       Token expected_type_token = current_token_;
-      std::optional<ParsedType> type = ParseType();
-      if (!type) {
+      if (std::optional<ParsedType> type = ParseType()) {
+        variadic_type = VariadicType{std::move(type.value()),
+                                     std::move(variadic_token.meta)};
+      } else {
         error_collector_.Add("variadic requires a type to be specified",
                              expected_type_token.meta);
       }
@@ -1505,7 +1507,7 @@ Parser::ParseFunctionArgumentList() {
   }
 
   ConsumeToken(TokenKind::kCloseParen, "expected ')' to close argument list");
-  return FunctionArgumentList{std::move(arguments), std::move(variadic_span)};
+  return FunctionArgumentList{std::move(arguments), std::move(variadic_type)};
 }
 
 void Parser::AdvanceToken() {

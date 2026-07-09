@@ -51,7 +51,7 @@ class Parser {
       FunctionKind function_kind);
   struct FunctionArgumentList {
     std::vector<std::pair<SpannedText, ParsedType>> arguments;
-    std::optional<Metadata> variadic_span;
+    std::optional<VariadicType> variadic_type;
   };
   std::optional<FunctionArgumentList> ParseFunctionArgumentList();
 

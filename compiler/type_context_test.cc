@@ -70,7 +70,7 @@ TEST_F(TypeContextTest, GetTypeIdFor_Function) {
   EXPECT_EQ(fn_type->arg_types[0], LiteralType::i32);
   EXPECT_EQ(fn_type->arg_types[1], LiteralType::f32);
   EXPECT_EQ(fn_type->return_type, LiteralType::Bool);
-  EXPECT_FALSE(fn_type->is_variadic);
+  EXPECT_FALSE(fn_type->variadic_type.has_value());
 
   // Function with the same signature should resolve to the same TypeId.
   auto type_id = type_context.GetTypeIdFor(ParsedType{
@@ -109,7 +109,7 @@ TEST_F(TypeContextTest, GetTypeIdFor_FunctionType) {
   EXPECT_EQ(fn_info->arg_types[0], LiteralType::i32);
   EXPECT_EQ(fn_info->arg_types[1], LiteralType::f32);
   EXPECT_EQ(fn_info->return_type, LiteralType::Bool);
-  EXPECT_FALSE(fn_info->is_variadic);
+  EXPECT_FALSE(fn_info->variadic_type.has_value());
   // Always resolves to the same TypeId.
   auto second_call = type_context.GetTypeIdFor(ParsedType{fn_type});
   ASSERT_TRUE(second_call.has_value());

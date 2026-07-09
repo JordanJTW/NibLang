@@ -66,7 +66,7 @@ class SemanticAnalyzer {
       const std::vector<ArgumentResult>& call_arugment_results,
       const std::vector<TypeId>& expected_argument_types,
       const Metadata& debug_metadata,
-      bool is_variadic_function = false);
+      std::optional<TypeId> variadic_type);
 
   std::optional<TypeId> InstantiateType(
       const std::vector<std::pair<SpannedText, ParsedType>>& parsed_types,

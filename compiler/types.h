@@ -259,7 +259,13 @@ struct TypeAliasStatement {
   std::unique_ptr<ParsedType> type;
 };
 
-std::ostream& operator<<(std::ostream& os, const ParsedType& type);
+struct VariadicType {
+  ParsedType type;
+  Metadata variadic_span;
+};
+
+std::ostream&
+operator<<(std::ostream& os, const ParsedType& type);
 
 enum class TypeCastStrategy {
   // "as" cast throws an exception if the cast is invalid.
@@ -296,7 +302,7 @@ struct FunctionDeclaration {
   ParsedType return_type;
   FunctionKind function_kind;
   std::vector<TemplateArgument> template_arguments;
-  std::optional<Metadata> variadic_span;
+  std::optional<VariadicType> variadic_type;
 
   std::unique_ptr<Block> body;
   std::optional<ResolvedFunction> resolved;

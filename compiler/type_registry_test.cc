@@ -82,7 +82,7 @@ TEST_F(TypeRegistryTest, NewFunctionSymbol) {
       /*return_type=*/ParsedType{"bool"},
       FunctionKind::Free,
       /*template_arguments=*/{{SpannedText{"T"}}},
-      /*variadic_span=*/Metadata{{1, 2}, {3, 4}},
+      /*variadic_type=*/VariadicType{},
   };
 
   SymbolId symbol_id = type_registry.NewFunctionSymbol(declaration);
@@ -106,18 +106,18 @@ TEST_F(TypeRegistryTest, NewFunctionSymbol) {
 }
 
 TEST_F(TypeRegistryTest, NewFunctionType) {
-  FunctionType type{/*arg_types=*/{LiteralType::i32, LiteralType::Bool},
+  FunctionType type{/*arg_types=*/{LiteralType::Bool, LiteralType::i32},
                     /*return_type=*/LiteralType::Void,
-                    /*is_variadic=*/false};
+                    /*variadic_type=*/std::nullopt};
 
   TypeId type_id = type_registry.NewFunctionType(type);
   EXPECT_EQ(type_id, type_registry.NewFunctionType(type));
 
-  type.is_variadic = true;
+  type.variadic_type = LiteralType::i32;
   TypeId type_id_with_variadic = type_registry.NewFunctionType(type);
   EXPECT_NE(type_id_with_variadic, type_id);
 
-  type.is_variadic = false;
+  type.variadic_type = std::nullopt;
   EXPECT_EQ(type_id, type_registry.NewFunctionType(type));
 
   type.return_type = LiteralType::f32;
@@ -157,7 +157,7 @@ TEST_F(TypeRegistryTest, GetNameFromTypeId_BuiltIns) {
 TEST_F(TypeRegistryTest, GetNameFromTypeId_FunctionType) {
   FunctionType type{/*arg_types=*/{LiteralType::i32, LiteralType::Bool},
                     /*return_type=*/LiteralType::f32,
-                    /*is_variadic=*/false};
+                    /*variadic_type=*/std::nullopt};
 
   TypeId type_id = type_registry.NewFunctionType(std::move(type));
   EXPECT_EQ(type_registry.GetNameFromTypeId(type_id), "fn (i32, bool) -> f32");
@@ -166,11 +166,11 @@ TEST_F(TypeRegistryTest, GetNameFromTypeId_FunctionType) {
 TEST_F(TypeRegistryTest, GetNameFromTypeId_FunctionTypeWithVariadic) {
   FunctionType type{/*arg_types=*/{LiteralType::i32, LiteralType::Bool},
                     /*return_type=*/LiteralType::f32,
-                    /*is_variadic=*/true};
+                    /*variadic_type=*/LiteralType::i32};
 
   TypeId type_id = type_registry.NewFunctionType(std::move(type));
   EXPECT_EQ(type_registry.GetNameFromTypeId(type_id),
-            "fn (i32, bool, ...) -> f32");
+            "fn (i32, bool, ...i32) -> f32");
 }
 
 TEST_F(TypeRegistryTest, GetNameFromTypeId_StructType) {

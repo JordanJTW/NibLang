@@ -28,7 +28,12 @@ size_t FunctionType::Hash::operator()(const FunctionType& key) const {
   size_t hash = 0;
   ComputeHash(hash, key.arg_types.size());
   ComputeHash(hash, key.return_type);
-  ComputeHash(hash, key.is_variadic);
+  // Ensure the presence of `variadic` is accounted for otherwise
+  // (int, int) and (int, ...int) can hash to the same value.
+  ComputeHash(hash, key.variadic_type.has_value());
+
+  if (key.variadic_type)
+    ComputeHash(hash, *key.variadic_type);
 
   for (TypeId arg : key.arg_types)
     ComputeHash(hash, arg);
@@ -150,68 +155,66 @@ std::string TypeRegistry::GetNameFromTypeId(TypeId type_id) const {
   }
 
   return std::visit(
-      Overloaded{[&](const BuiltInType& type) {
-                   static const std::unordered_map<TypeId, std::string>
-                       kBuiltInTypeNames = {
-                           {LiteralType::Void, "Void"},
-                           {LiteralType::i32, "i32"},
-                           {LiteralType::f32, "f32"},
-                           {LiteralType::Codepoint, "Codepoint"},
-                           {LiteralType::Bool, "bool"},
-                           {LiteralType::Any, "any"},
-                           {LiteralType::Never, "never"},
-                           {LiteralType::Nil, "Nil"},
-                       };
-                   return kBuiltInTypeNames.at(type_id);
-                 },
-                 [&](const FunctionType type) {
-                   std::stringstream ss;
-                   ss << "fn (";
-                   for (size_t i = 0; i < type.arg_types.size(); ++i) {
-                     if (i > 0)
-                       ss << ", ";
-                     ss << GetNameFromTypeId(type.arg_types[i]);
-                   }
-                   if (type.is_variadic) {
-                     if (!type.arg_types.empty())
-                       ss << ", ";
-                     ss << "...";
-                   }
-                   ss << ") -> " << GetNameFromTypeId(type.return_type);
-                   return ss.str();
-                 },
-                 [&](const StructType type) {
-                   if (type.template_arguments.empty())
-                     return "struct " + type.declaration.name.text;
+      Overloaded{
+          [&](const BuiltInType& type) {
+            static const std::unordered_map<TypeId, std::string>
+                kBuiltInTypeNames = {
+                    {LiteralType::Void, "Void"},
+                    {LiteralType::i32, "i32"},
+                    {LiteralType::f32, "f32"},
+                    {LiteralType::Codepoint, "Codepoint"},
+                    {LiteralType::Bool, "bool"},
+                    {LiteralType::Any, "any"},
+                    {LiteralType::Never, "never"},
+                    {LiteralType::Nil, "Nil"},
+                };
+            return kBuiltInTypeNames.at(type_id);
+          },
+          [&](const FunctionType type) {
+            std::stringstream ss;
+            ss << "fn (";
+            for (size_t i = 0; i < type.arg_types.size(); ++i) {
+              if (i > 0)
+                ss << ", ";
+              ss << GetNameFromTypeId(type.arg_types[i]);
+            }
+            if (type.variadic_type) {
+              if (!type.arg_types.empty())
+                ss << ", ";
+              ss << "..." << GetNameFromTypeId(*type.variadic_type);
+            }
+            ss << ") -> " << GetNameFromTypeId(type.return_type);
+            return ss.str();
+          },
+          [&](const StructType type) {
+            if (type.template_arguments.empty())
+              return "struct " + type.declaration.name.text;
 
-                   std::stringstream ss;
-                   ss << "struct " << type.declaration.name.text << "[";
-                   for (size_t i = 0; i < type.template_arguments.size(); ++i) {
-                     if (i > 0)
-                       ss << ", ";
-                     ss << GetNameFromTypeId(type.template_arguments[i]);
-                   }
-                   ss << "]";
-                   return ss.str();
-                 },
-                 [&](const UnionType type) {
-                   std::stringstream ss;
-                   ss << "Union[";
-                   for (size_t i = 0; i < type.types.size(); ++i) {
-                     if (i > 0)
-                       ss << ", ";
-                     ss << GetNameFromTypeId(type.types[i]);
-                   }
-                   ss << "]";
-                   return ss.str();
-                 },
-                 [&](const OptionalType type) {
-                   return GetNameFromTypeId(type.wrapped_type) + "?";
-                 },
-                 [&](const AliasType type) {
-                   return "Alias[" + type.name + " => " +
-                          GetNameFromTypeId(type.target_type_id) + "]";
-                 }},
+            std::stringstream ss;
+            ss << "struct " << type.declaration.name.text << "[";
+            for (size_t i = 0; i < type.template_arguments.size(); ++i) {
+              if (i > 0)
+                ss << ", ";
+              ss << GetNameFromTypeId(type.template_arguments[i]);
+            }
+            ss << "]";
+            return ss.str();
+          },
+          [&](const UnionType type) {
+            std::stringstream ss;
+            ss << "Union[";
+            for (size_t i = 0; i < type.types.size(); ++i) {
+              if (i > 0)
+                ss << ", ";
+              ss << GetNameFromTypeId(type.types[i]);
+            }
+            ss << "]";
+            return ss.str();
+          },
+          [&](const OptionalType type) {
+            return GetNameFromTypeId(type.wrapped_type) + "?";
+          },
+          [&](const AliasType type) { return "Alias[" + type.name + "]"; }},
       it->second);
 }
 

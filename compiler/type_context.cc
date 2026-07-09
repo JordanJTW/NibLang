@@ -104,9 +104,9 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
       return std::nullopt;
     }
 
-    if (fn.variadic_span.has_value()) {
+    if (fn.variadic_type.has_value()) {
       error_collector_.Add("'...' is only allowed in extern functions",
-                           *fn.variadic_span);
+                           fn.variadic_type->variadic_span);
       return std::nullopt;
     }
   }
@@ -358,12 +358,20 @@ std::optional<TypeInstance> TypeContext::DeclareFunctionType(
   if (!return_type.has_value())
     return std::nullopt;
 
+  std::optional<TypeId> variadic_type;
+  if (fn.variadic_type.has_value()) {
+    variadic_type = GetTypeIdFor(fn.variadic_type->type);
+
+    if (!variadic_type.has_value())
+      return std::nullopt;
+  }
+
   scope_manager_.ExitScope();
 
   realized_functions_.push_back(RealizedFunction{scope_id, fn, *return_type});
 
   auto key = FunctionType{std::move(argument_types), return_type.value(),
-                          fn.variadic_span.has_value()};
+                          std::move(variadic_type)};
   TypeId type_id = type_registry_.NewFunctionType(std::move(key));
   return TypeInstance{type_id, scope_id};
 }

@@ -819,12 +819,12 @@ void SemanticAnalyzer::TypeCheckCallArguments(
     const std::vector<ArgumentResult>& call_arugment_results,
     const std::vector<TypeId>& expected_argument_types,
     const Metadata& debug_metadata,
-    bool is_variadic_function) {
+    std::optional<TypeId> variadic_type) {
   size_t supplied_argc = call_arugment_results.size();
   size_t expected_argc = expected_argument_types.size();
 
-  if ((is_variadic_function && supplied_argc < expected_argc) ||
-      (!is_variadic_function && supplied_argc != expected_argc)) {
+  if ((variadic_type && supplied_argc < expected_argc) ||
+      (!variadic_type && supplied_argc != expected_argc)) {
     error_collector_.Add("Wrong number of arguments expected " +
                              std::to_string(expected_argc) + " but got " +
                              std::to_string(supplied_argc),
@@ -832,9 +832,11 @@ void SemanticAnalyzer::TypeCheckCallArguments(
   } else {
     // If more arguments are supplied than expected, this is a variadic function
     // and any additional args do not need to be checked ("any" type).
-    for (size_t i = 0; i < expected_argument_types.size(); ++i) {
+    for (size_t i = 0; i < call_arugment_results.size(); ++i) {
       const auto& argument_result = call_arugment_results[i];
-      const auto& expected_type = expected_argument_types[i];
+      const TypeId expected_type =
+          (i < expected_argument_types.size() ? expected_argument_types[i]
+                                              : *variadic_type);
 
       // Even if an argument expression does not parse correctly, continue
       // on to the next to try to collect as many errors as possible.
@@ -1028,7 +1030,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
     }
 
     TypeCheckCallArguments(argument_results, fn_type->arg_types, debug_metadata,
-                           fn_type->is_variadic);
+                           fn_type->variadic_type);
 
     // Even if the arguments can not be properly type checked we should
     // resolve to the return type to prevent cascading errors :^).
@@ -1044,7 +1046,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
     }
 
     TypeCheckCallArguments(argument_results, struct_type->field_types,
-                           debug_metadata);
+                           debug_metadata, /*variadic_type=*/std::nullopt);
     call_expr.resolved = ResolvedCall{0, FunctionKind::Constructor};
     return ExpressionResult{*callable_type_id};
   }

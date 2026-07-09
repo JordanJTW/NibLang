@@ -20,7 +20,7 @@ struct BuiltInType {};
 struct FunctionType {
   std::vector<TypeId> arg_types;
   TypeId return_type;
-  bool is_variadic{false};
+  std::optional<TypeId> variadic_type;
 
   bool operator==(const FunctionType& other) const;
 
@@ -34,7 +34,6 @@ struct OptionalType {
 };
 
 struct StructType {
-  // TypeResolutionState resolution_state;
   const StructDeclaration& declaration;
 
   // A separate _ordered_ list of field types used for constructors.

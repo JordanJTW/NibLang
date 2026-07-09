@@ -47,7 +47,8 @@ struct FunctionSymbol {
   FunctionDeclaration& declaration;
   std::optional<StructDeclaration*> parent_declaration;
   SymbolId symbol_id;
-  ScopeId scope_id;
+  // The lexical enviroment this symbol was declared in
+  ScopeId environment_scope_id;
 
   std::unordered_map<std::string, TypeId> default_template_type_ids;
   InstanceCache instances;
@@ -58,7 +59,8 @@ struct FunctionSymbol {
 
 struct StructSymbol {
   StructDeclaration& declaration;
-  ScopeId scope_id;
+  // The environment created within the Struct declaration
+  ScopeId self_scope_id;
 
   InstanceCache instances;
 };

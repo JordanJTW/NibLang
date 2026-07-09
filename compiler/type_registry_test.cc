@@ -41,7 +41,7 @@ TEST_F(TypeRegistryTest, NewStructSymbol) {
       type_registry.GetSymbol<StructSymbol>(*binding.symbol_id);
   ASSERT_TRUE(symbol);
 
-  EXPECT_NE(symbol->scope_id, outer_scope);  // Must create a new inner scope
+  EXPECT_NE(symbol->self_scope_id, outer_scope);  // Creates a new inner scope
   // TypeIds are assigned but no instances exist until AFTER all of the structs
   // have been registered to allow for circular and out of order references.
   EXPECT_TRUE(symbol->instances.empty());
@@ -68,7 +68,7 @@ TEST_F(TypeRegistryTest, NewStructSymbolWithTemplate) {
       type_registry.GetSymbol<StructSymbol>(*binding.symbol_id);
   ASSERT_TRUE(symbol);
 
-  EXPECT_NE(symbol->scope_id, outer_scope);  // Must create a new inner scope
+  EXPECT_NE(symbol->self_scope_id, outer_scope);  // Creates a new inner scope
   EXPECT_TRUE(symbol->instances.empty());
 }
 
@@ -91,7 +91,7 @@ TEST_F(TypeRegistryTest, NewFunctionSymbol) {
   ASSERT_TRUE(symbol);
 
   // Functions are associated with the scope they are defined in
-  EXPECT_EQ(symbol->scope_id, outer_scope);
+  EXPECT_EQ(symbol->environment_scope_id, outer_scope);
   EXPECT_TRUE(symbol->instances.empty());
 
   std::optional<NamedBinding> binding =

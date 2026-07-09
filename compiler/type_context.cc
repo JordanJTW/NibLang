@@ -74,7 +74,7 @@ void TypeContext::DefineStructType(
   }
 
   for (const auto& binding :
-       scope_manager_.GetBindingsForScope(symbol.scope_id)) {
+       scope_manager_.GetBindingsForScope(symbol.self_scope_id)) {
     if (binding.kind != NamedBinding::Function)
       continue;
 
@@ -475,10 +475,7 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
     }
 
     return scope_manager_.WithScope(
-        symbol->scope_id, [&]() -> std::optional<TypeId> {
-          // TODO: Ensure scope stacking does not cause bugs since unrelated
-          //       templates would inherit this scope environment if a type is
-          //       processed later
+        symbol->self_scope_id, [&]() -> std::optional<TypeId> {
           return scope_manager_.NewScope(
               ScopeManager::TemplateScope,
               "struct " + symbol->declaration.name.text, [&]() {
@@ -519,12 +516,10 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
       parent_scope_id = struct_type->scope_id;
     }
 
-    const ScopeId lexical_scope_id = parent_scope_id.value_or(symbol->scope_id);
+    const ScopeId lexical_scope_id =
+        parent_scope_id.value_or(symbol->environment_scope_id);
     return scope_manager_.WithScope(
         lexical_scope_id, [&]() -> std::optional<TypeId> {
-          // TODO: Ensure scope stacking does not cause bugs since unrelated
-          //       templates would inherit this scope environment if a type is
-          //       processed later
           // TODO: Handle `self_id` better. Define it early to prevent cycles.
           auto instance = scope_manager_.NewScope(
               ScopeManager::TemplateScope,

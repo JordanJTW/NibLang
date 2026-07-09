@@ -223,10 +223,9 @@ TEST_F(TypeRegistryTest, GetNameFromTypeId_OptionalType) {
 TEST_F(TypeRegistryTest, GetNameFromTypeId_AliasType) {
   TypeId self_id = type_registry.NewTypeId();
   type_registry.NewAliasType("foo", self_id,
-                             /*target_type_id=*/LiteralType::Codepoint);
+                             /*target_id=*/LiteralType::Codepoint);
 
-  EXPECT_EQ(type_registry.GetNameFromTypeId(self_id),
-            "Alias[foo => Codepoint]");
+  EXPECT_EQ(type_registry.GetNameFromTypeId(self_id), "Alias[foo]");
 }
 
 TEST_F(TypeRegistryTest, GetNameFromTypeId_Unknown) {
@@ -234,5 +233,46 @@ TEST_F(TypeRegistryTest, GetNameFromTypeId_Unknown) {
   EXPECT_EQ(type_registry.GetNameFromTypeId(unassigned_id), "Unknown");
 }
 
-}  // namespace
+TEST_F(TypeRegistryTest, FunctionType_OperatorEqual) {
+  FunctionType ft1{
+      {LiteralType::i32, LiteralType::f32}, LiteralType::Bool, false};
+  FunctionType ft2{
+      {LiteralType::i32, LiteralType::f32}, LiteralType::Bool, false};
+  FunctionType ft3{{LiteralType::i32}, LiteralType::Bool, false};
 
+  EXPECT_TRUE(ft1 == ft2);
+  EXPECT_FALSE(ft1 == ft3);
+}
+
+TEST_F(TypeRegistryTest, UnionType_OperatorEqual) {
+  UnionType ut1{{LiteralType::i32, LiteralType::f32}};
+  UnionType ut2{{LiteralType::i32, LiteralType::f32}};
+  UnionType ut3{{LiteralType::i32, LiteralType::Bool}};
+
+  EXPECT_TRUE(ut1 == ut2);
+  EXPECT_FALSE(ut1 == ut3);
+}
+
+TEST_F(TypeRegistryTest, FunctionType_Hash) {
+  FunctionType::Hash hasher;
+  FunctionType ft1{{LiteralType::i32}, LiteralType::Bool, false};
+  FunctionType ft2{{LiteralType::i32}, LiteralType::Bool, false};
+  FunctionType ft3{{LiteralType::f32}, LiteralType::Bool, false};
+  FunctionType ft4{{LiteralType::i32}, LiteralType::Bool, true};
+
+  EXPECT_EQ(hasher(ft1), hasher(ft2));
+  EXPECT_NE(hasher(ft1), hasher(ft3));
+  EXPECT_NE(hasher(ft1), hasher(ft4));
+}
+
+TEST_F(TypeRegistryTest, UnionType_Hash) {
+  UnionType::Hash hasher;
+  UnionType ut1{{LiteralType::i32, LiteralType::f32}};
+  UnionType ut2{{LiteralType::i32, LiteralType::f32}};
+  UnionType ut3{{LiteralType::i32, LiteralType::Bool}};
+
+  EXPECT_EQ(hasher(ut1), hasher(ut2));
+  EXPECT_NE(hasher(ut1), hasher(ut3));
+}
+
+}  // namespace

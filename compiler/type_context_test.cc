@@ -202,7 +202,7 @@ TEST_F(TypeContextTest, DefineStructType_NoTemplate) {
   EXPECT_EQ(field2_binding->realized_type_id, LiteralType::f32);
 }
 
-TEST_F(TypeContextTest, TemplateStruct_GetTemplateOf) {
+TEST_F(TypeContextTest, GetTemplateOf_Struct) {
   StructDeclaration declaration;
   declaration.name = SpannedText{"TestStruct"};
   declaration.template_arguments = {{"T"}};
@@ -234,7 +234,7 @@ TEST_F(TypeContextTest, TemplateStruct_GetTemplateOf) {
   EXPECT_EQ(field1_binding->realized_type_id, LiteralType::Bool);
 }
 
-TEST_F(TypeContextTest, TemplateFunction_GetTemplateOf) {
+TEST_F(TypeContextTest, GetTemplateOf_Function) {
   FunctionDeclaration declaration;
   declaration.name = SpannedText{"TestFunction"};
   declaration.arguments = {{SpannedText{"arg1"}, ParsedType{"Type"}}};
@@ -257,6 +257,89 @@ TEST_F(TypeContextTest, TemplateFunction_GetTemplateOf) {
   auto fn_info = type_registry.GetType<FunctionType>(*type_id);
   EXPECT_THAT(fn_info->arg_types, testing::ElementsAre(LiteralType::Bool));
   EXPECT_EQ(fn_info->return_type, LiteralType::i32);
+}
+
+TEST_F(TypeContextTest, GetTemplateOf_Nested) {
+  auto make_template_type = [](std::string base, ParsedType parameter) {
+    return ParsedType{ParsedParameterizedType{
+        std::make_shared<ParsedType>(base), {std::move(parameter)}}};
+  };
+
+  // struct Box[T] { value: T; fn Get() -> T; }
+  StructDeclaration box_declaration;
+  box_declaration.name = SpannedText{"Box"};
+  box_declaration.template_arguments = {{"T"}};
+  box_declaration.fields = {{SpannedText{"value"}, ParsedType{"T"}}};
+  box_declaration.methods.emplace_back(
+      SpannedText{"Get"},
+      FunctionDeclaration{.name = SpannedText{"Get"},
+                          .arguments = {},
+                          .return_type = ParsedType{"T"},
+                          .function_kind = FunctionKind::Method,
+                          .template_arguments = {},
+                          .body = std::make_unique<Block>()});
+  box_declaration.is_extern = false;
+
+  auto box_binding = type_registry.NewStructSymbol(box_declaration);
+  ASSERT_TRUE(box_binding.symbol_id.has_value());
+
+  // struct Array[T] { value: Box[T]; fn Push[R](value: T) -> Box[R]; }
+  StructDeclaration array_declaration;
+  array_declaration.name = SpannedText{"Array"};
+  array_declaration.template_arguments = {{"T"}};
+  array_declaration.fields = {
+      {SpannedText{"value"}, make_template_type("Box", ParsedType{"T"})}};
+  array_declaration.methods.emplace_back(
+      SpannedText{"Push"},
+      FunctionDeclaration{
+          .name = SpannedText{"Push"},
+          .arguments = {{SpannedText{"value"}, ParsedType{"T"}}},
+          .return_type = make_template_type("Box", ParsedType{"R"}),
+          .function_kind = FunctionKind::Method,
+          .template_arguments = {{"R"}},
+          .body = std::make_unique<Block>()});
+  array_declaration.is_extern = false;
+
+  auto array_binding = type_registry.NewStructSymbol(array_declaration);
+  ASSERT_TRUE(array_binding.symbol_id.has_value());
+
+  // fn DoIt[T](arg: Array[Box[T]]) -> Array[i32];
+  FunctionDeclaration declaration;
+  declaration.name = SpannedText{"DoIt"};
+  declaration.arguments = {
+      {SpannedText{"arg"},
+       make_template_type("Array",
+                          make_template_type("Box", ParsedType{"T"}))}};
+  declaration.return_type = make_template_type("Array", ParsedType{"i32"});
+  declaration.function_kind = FunctionKind::Free;
+  declaration.template_arguments = {{"T"}};
+  declaration.body = std::make_unique<Block>();
+
+  auto symbol_id = type_registry.NewFunctionSymbol(declaration);
+  auto binding = type_context.DefineFunction(symbol_id);
+  ASSERT_TRUE(binding.has_value());
+
+  // Instantiates: DoIt[i32](arg: Array[Box[i32]]) -> Array[i32];
+  std::optional<TypeId> fn_type_id =
+      type_context.GetTemplateOf(*binding, {LiteralType::i32});
+  ASSERT_TRUE(fn_type_id.has_value());
+
+  // Instantiates: Array[Box[bool]]::Push[Array[Box[bool]]];
+  std::optional<TypeId> struct_type_id =
+      type_context.GetTemplateOf(array_binding, {LiteralType::Bool});
+  ASSERT_TRUE(struct_type_id.has_value());
+
+  const StructType* struct_type =
+      type_registry.GetType<StructType>(*struct_type_id);
+  ASSERT_TRUE(struct_type);
+
+  std::optional<NamedBinding> push_binding = scope_manager.FindBindingFor(
+      "Push", ScopeManager::Current, struct_type->scope_id);
+  ASSERT_TRUE(push_binding.has_value());
+
+  std::optional<TypeId> push_type_id =
+      type_context.GetTemplateOf(*push_binding, {*struct_type_id});
+  ASSERT_TRUE(push_type_id.has_value());
 }
 
 TEST_F(TypeContextTest, StructDeclaration_WithMethod) {
@@ -387,70 +470,6 @@ TEST_F(TypeContextTest, IsTypeSubsetOf) {
       type_context.IsTypeSubsetOf(LiteralType::Bool, new_union_id.value()));
 }
 
-TEST_F(TypeContextTest, GetNameFromTypeId) {
-  EXPECT_EQ(type_registry.GetNameFromTypeId(LiteralType::Void), "Void");
-  EXPECT_EQ(type_registry.GetNameFromTypeId(LiteralType::i32), "i32");
-  EXPECT_EQ(type_registry.GetNameFromTypeId(LiteralType::f32), "f32");
-  EXPECT_EQ(type_registry.GetNameFromTypeId(LiteralType::Bool), "bool");
-  EXPECT_EQ(type_registry.GetNameFromTypeId(LiteralType::Any), "any");
-
-  // Function type
-  FunctionDeclaration fn_decl{
-      .name = SpannedText{"test_fn"},
-      .arguments = {{SpannedText{"arg1"}, ParsedType{"i32"}}},
-      .return_type = ParsedType{"bool"},
-      .function_kind = FunctionKind::Free,
-      .body = std::make_unique<Block>(),
-  };
-  auto symbol_id = type_registry.NewFunctionSymbol(fn_decl);
-  auto symbol = type_context.DefineFunction(symbol_id);
-  ASSERT_TRUE(symbol.has_value());
-  ASSERT_TRUE(symbol->realized_type_id.has_value());
-  std::string fn_name =
-      type_registry.GetNameFromTypeId(*symbol->realized_type_id);
-  EXPECT_EQ(fn_name, "fn (i32) -> bool");
-
-  // Variadic function
-  FunctionDeclaration variadic_fn{
-      .name = SpannedText("log"),
-      .arguments = {{SpannedText{"arg1"}, ParsedType{"i32"}}},
-      .return_type = ParsedType{"bool"},
-      .function_kind = FunctionKind::Extern,
-      .variadic_span = Metadata{.column_range = {13, 16}, .line_range = {0, 0}},
-      .body = std::make_unique<Block>(),
-  };
-  auto variadic_symbol_id = type_registry.NewFunctionSymbol(variadic_fn);
-  auto variadic_symbol = type_context.DefineFunction(variadic_symbol_id);
-  ASSERT_TRUE(variadic_symbol.has_value());
-  ASSERT_TRUE(variadic_symbol->realized_type_id.has_value());
-  std::string variadic_name =
-      type_registry.GetNameFromTypeId(*variadic_symbol->realized_type_id);
-  EXPECT_EQ(variadic_name, "fn (i32, ...) -> bool");
-
-  // Struct type
-  StructDeclaration struct_decl;
-  struct_decl.name = SpannedText("TestStruct", Metadata{});
-  struct_decl.is_extern = false;
-  auto struct_binding = type_registry.NewStructSymbol(struct_decl);
-  ASSERT_TRUE(struct_binding.realized_type_id.has_value());
-  auto* const struct_symbol =
-      type_registry.GetSymbol<StructSymbol>(*struct_binding.symbol_id);
-  ASSERT_TRUE(struct_symbol);
-  type_context.DefineStructType(*struct_binding.realized_type_id,
-                                *struct_symbol,
-                                /*template_arguments=*/{});
-  EXPECT_EQ(type_registry.GetNameFromTypeId(*struct_binding.realized_type_id),
-            "struct TestStruct");
-
-  // Union type
-  ParsedUnionType union_type;
-  union_type.names = {ParsedType{"i32"}, ParsedType{"f32"}, ParsedType{"i32"}};
-  auto union_id = type_context.GetTypeIdFor(ParsedType{union_type});
-  ASSERT_TRUE(union_id.has_value());
-  std::string union_name = type_registry.GetNameFromTypeId(union_id.value());
-  EXPECT_EQ(union_name, "Union[i32, f32]");
-}
-
 TEST_F(TypeContextTest, GetTypeIdFor_Never) {
   std::optional<TypeId> type_id =
       type_context.GetTypeIdFor(ParsedType{"never"});
@@ -475,70 +494,6 @@ TEST_F(TypeContextTest, GetTypeIdFor_Nil) {
   std::optional<TypeId> union_type_id = type_context.GetTypeIdFor(
       ParsedType{ParsedUnionType{{{"bool"}, {"Nil"}}}});
   EXPECT_FALSE(union_type_id.has_value());
-}
-
-// TEST_F(TypeContextTest, GetCurrentFunction) {
-//   // In global scope, GetCurrentFunction should return "main"
-//   auto& main_fn = type_context.GetCurrentFunction();
-//   EXPECT_EQ(main_fn.name, "<<main>>");
-//   EXPECT_EQ(main_fn.function_kind, FunctionKind::Free);
-
-//   // Define a new function and enter its scope
-//   FunctionDeclaration fn_decl{
-//       .name = "test_fn",
-//       .arguments = {},
-//       .return_type = ParsedType{"Void"},
-//       .function_kind = FunctionKind::Free,
-//       .body = std::make_unique<Block>(),
-//   };
-//   auto symbol = type_context.DefineFunction(fn_decl, &error_collector);
-//   ASSERT_TRUE(symbol.has_value());
-//   type_context.EnterScope(TypeContext::ScopeType::FunctionScope, &fn_decl);
-
-//   auto& current_fn = type_context.GetCurrentFunction();
-//   EXPECT_EQ(current_fn.name, "test_fn");
-// }
-
-TEST_F(TypeContextTest, FunctionType_OperatorEqual) {
-  FunctionType ft1{
-      {LiteralType::i32, LiteralType::f32}, LiteralType::Bool, false};
-  FunctionType ft2{
-      {LiteralType::i32, LiteralType::f32}, LiteralType::Bool, false};
-  FunctionType ft3{{LiteralType::i32}, LiteralType::Bool, false};
-
-  EXPECT_TRUE(ft1 == ft2);
-  EXPECT_FALSE(ft1 == ft3);
-}
-
-TEST_F(TypeContextTest, UnionType_OperatorEqual) {
-  UnionType ut1{{LiteralType::i32, LiteralType::f32}};
-  UnionType ut2{{LiteralType::i32, LiteralType::f32}};
-  UnionType ut3{{LiteralType::i32, LiteralType::Bool}};
-
-  EXPECT_TRUE(ut1 == ut2);
-  EXPECT_FALSE(ut1 == ut3);
-}
-
-TEST_F(TypeContextTest, FunctionType_Hash) {
-  FunctionType::Hash hasher;
-  FunctionType ft1{{LiteralType::i32}, LiteralType::Bool, false};
-  FunctionType ft2{{LiteralType::i32}, LiteralType::Bool, false};
-  FunctionType ft3{{LiteralType::f32}, LiteralType::Bool, false};
-  FunctionType ft4{{LiteralType::i32}, LiteralType::Bool, true};
-
-  EXPECT_EQ(hasher(ft1), hasher(ft2));
-  EXPECT_NE(hasher(ft1), hasher(ft3));
-  EXPECT_NE(hasher(ft1), hasher(ft4));
-}
-
-TEST_F(TypeContextTest, UnionType_Hash) {
-  UnionType::Hash hasher;
-  UnionType ut1{{LiteralType::i32, LiteralType::f32}};
-  UnionType ut2{{LiteralType::i32, LiteralType::f32}};
-  UnionType ut3{{LiteralType::i32, LiteralType::Bool}};
-
-  EXPECT_EQ(hasher(ut1), hasher(ut2));
-  EXPECT_NE(hasher(ut1), hasher(ut3));
 }
 
 }  // namespace

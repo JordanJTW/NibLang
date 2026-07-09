@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>

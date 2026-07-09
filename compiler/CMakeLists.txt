@@ -19,7 +19,7 @@ target_link_libraries(printer PRIVATE type_context types)
 
 add_library(parser parser.cc)
 target_include_directories(parser PRIVATE ${PROJECT_SOURCE_DIR})
-target_link_libraries(parser PRIVATE error_collector tokenizer types)
+target_link_libraries(parser PRIVATE error_collector logging tokenizer types)
 
 add_library(program_builder program_builder.cc)
 target_include_directories(program_builder PRIVATE ${PROJECT_SOURCE_DIR})
@@ -49,6 +49,7 @@ target_link_libraries(type_resolver PRIVATE error_collector logging types type_c
 
 add_library(types types.cc)
 target_include_directories(types PRIVATE ${PROJECT_SOURCE_DIR})
+target_link_libraries(types PRIVATE logging)
 
 add_executable(compiler main.cc)
 target_include_directories(compiler PRIVATE ${PROJECT_SOURCE_DIR})

@@ -10,7 +10,8 @@ using LiteralType = TypeRegistry::LiteralType;
 
 class TypeRegistryTest : public ::testing::Test {
  protected:
-  ScopeManager scope_manager;
+  ErrorCollector error_collector;
+  ScopeManager scope_manager{error_collector};
   TypeRegistry type_registry{scope_manager};
 };
 

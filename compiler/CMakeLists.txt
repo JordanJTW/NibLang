@@ -26,7 +26,7 @@ target_include_directories(program_builder PRIVATE ${PROJECT_SOURCE_DIR})
 
 add_library(scope_manager scope_manager.cc)
 target_include_directories(scope_manager PRIVATE ${PROJECT_SOURCE_DIR})
-target_link_libraries(scope_manager PRIVATE logging types)
+target_link_libraries(scope_manager PRIVATE error_collector logging types)
 
 add_library(semantic_analyzer semantic_analyzer.cc)
 target_include_directories(semantic_analyzer PRIVATE ${PROJECT_SOURCE_DIR})
@@ -60,6 +60,11 @@ add_executable(golden_tests golden_tests.cc)
 target_link_libraries(golden_tests PRIVATE gmock_main bytecode_generator parser program_builder type_context vm)
 target_include_directories(golden_tests PRIVATE ${PROJECT_SOURCE_DIR})
 gtest_discover_tests(golden_tests)
+
+add_executable(parser_test parser_test.cc)
+target_link_libraries(parser_test PRIVATE gmock_main error_collector logging parser)
+target_include_directories(parser_test PRIVATE ${PROJECT_SOURCE_DIR})
+gtest_discover_tests(parser_test)
 
 add_executable(scope_manager_test scope_manager_test.cc)
 target_link_libraries(scope_manager_test PRIVATE gmock_main scope_manager types)

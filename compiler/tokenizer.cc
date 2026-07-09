@@ -89,7 +89,8 @@ std::optional<TokenKind> get_double_char_token(std::string_view value) {
 
 }  // namespace
 
-Tokenizer::Tokenizer(std::string data) : data_(data) {}
+Tokenizer::Tokenizer(std::string data, size_t file_id)
+    : data_(data), file_id_(file_id) {}
 
 Token Tokenizer::next() {
   while (offset_ < data_.size() && std::isspace(data_[offset_])) {
@@ -103,9 +104,10 @@ Token Tokenizer::next() {
   auto make_token = [&](TokenKind kind,
                         std::optional<std::string> value = std::nullopt) {
     size_t length = offset_ - start_idx;
-    return Token{
-        kind, value.has_value() ? *value : data_.substr(start_idx, length),
-        Metadata{TextRange{start_idx, offset_}, TextRange{line_, line_ + 1}}};
+    return Token{kind,
+                 value.has_value() ? *value : data_.substr(start_idx, length),
+                 Metadata{TextRange{start_idx, offset_},
+                          TextRange{line_, line_ + 1}, file_id_}};
   };
 
   if (offset_ >= data_.size())
@@ -302,7 +304,8 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
 Metadata Metadata::fromTokens(const Token& start, const Token& end) {
   return Metadata{
       TextRange{start.meta.column_range.start, end.meta.column_range.start},
-      TextRange{start.meta.line_range.start, end.meta.line_range.start}};
+      TextRange{start.meta.line_range.start, end.meta.line_range.start},
+      start.meta.file_id};
 }
 
 std::ostream& operator<<(std::ostream& os, const TextRange& range) {
@@ -310,7 +313,8 @@ std::ostream& operator<<(std::ostream& os, const TextRange& range) {
 }
 
 std::ostream& operator<<(std::ostream& os, const Metadata& meta) {
-  return os << "Column: " << meta.column_range << " Line: " << meta.line_range;
+  return os << "Column: " << meta.column_range << " Line: " << meta.line_range
+            << " File: " << meta.file_id;
 }
 
 std::ostream& operator<<(std::ostream& os, const Token& token) {

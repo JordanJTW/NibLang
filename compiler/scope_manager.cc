@@ -4,9 +4,11 @@
 
 #include "compiler/scope_manager.h"
 
+#include "compiler/error_collector.h"
 #include "compiler/logging.h"
 
-ScopeManager::ScopeManager() {
+ScopeManager::ScopeManager(ErrorCollector& error_collector)
+    : error_collector_(error_collector) {
   EnterScope(ScopeType::RootScope, "<<root>>");
 }
 
@@ -95,6 +97,14 @@ NamedBinding ScopeManager::InsertNameIntoScope(
                           .symbol_id = std::move(symbol_id),
                           .idx = std::move(idx),
                           .parent_type_id = std::move(parent_type_id)};
+  if (auto existing_binding = FindBindingFor(name.text, ScopeToCheck::Current)) {
+    error_collector_
+        .Add("Binding for '" + name.text + "' conflicts with existing binding",
+             name.metadata)
+        .WithNote("original binding for: '" + existing_binding->name.text + "'",
+                  existing_binding->name.metadata);
+    return *existing_binding;
+  }
   auto& scope = scopes_[active_scope_id_];
   size_t binding_idx = scope.bindings_for_scope.size();
   scope.binding_lookup[name.text] = binding_idx;

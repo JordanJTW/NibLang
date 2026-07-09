@@ -60,7 +60,7 @@ class ParserWrapper {
  public:
   ParserWrapper(std::string_view source_text)
       : source_text_(source_text.data()),
-        parser_(source_text_, error_collector) {}
+        parser_(source_text_, error_collector, /*file_id=*/0) {}
 
   Block Parse() { return parser_.Parse(); }
 

@@ -80,6 +80,7 @@ struct Token;
 struct Metadata {
   TextRange column_range;
   TextRange line_range;
+  size_t file_id;
 
   static Metadata fromTokens(const Token& start, const Token& end);
 };
@@ -92,12 +93,13 @@ struct Token {
 
 class Tokenizer {
  public:
-  explicit Tokenizer(std::string data);
+  explicit Tokenizer(std::string data, size_t file_id);
 
   Token next();
 
  private:
   const std::string data_;
+  size_t file_id_;
   size_t offset_{0};
 
   size_t line_{1};

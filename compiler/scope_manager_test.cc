@@ -30,7 +30,8 @@ namespace {
 
 class ScopeManagerTest : public ::testing::Test {
  protected:
-  ScopeManager scope_manager;
+  ErrorCollector error_collector;
+  ScopeManager scope_manager{error_collector};
 };
 
 TEST_F(ScopeManagerTest, DeclareAndFindRootVariable) {

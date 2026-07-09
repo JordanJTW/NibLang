@@ -50,7 +50,7 @@ MATCHER_P(IsType, expected_name, "") {
 class TypeResolverTest : public ::testing::Test {
  protected:
   ErrorCollector error_collector;
-  ScopeManager scope_manager;
+  ScopeManager scope_manager{error_collector};
   TypeRegistry type_registry{scope_manager};
   TypeContext type_context{scope_manager, type_registry, error_collector};
   TypeResolver type_resolver{type_context, error_collector};

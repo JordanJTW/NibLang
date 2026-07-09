@@ -15,7 +15,6 @@
 #include "compiler/bytecode_generator.h"
 #include "compiler/error_collector.h"
 #include "compiler/gtest_helpers.h"
-#include "compiler/mock_error_collector.h"
 #include "compiler/parser.h"
 #include "compiler/program_builder.h"
 #include "compiler/semantic_analyzer.h"
@@ -87,15 +86,24 @@ class GoldenTest : public ::testing::Test {
   std::vector<uint8_t> BuildProgram(std::string program_text) {
     std::string full_program_text =
         kPreamble + "\nfn main() {\n" + program_text + "\n}";
-    Block root_block = Parser{full_program_text, error_collector_}.Parse();
+
+    std::vector<File> files;
+    files.push_back({
+        .resolved_path = ":text:",
+        .import_paths = {},
+        .root_block =
+            Parser{full_program_text, error_collector_, /*file_id=*/0}.Parse(),
+        .file_contents = full_program_text,
+        .file_id = 0,
+    });
 
     SemanticAnalyzer::FunctionContext context = {{}, TypeRegistry::Any};
     SemanticAnalyzer{type_context_, scope_manager_, error_collector_,
                      type_registry_}
-        .Check(root_block, context);
+        .Check(files[0].root_block, context);
 
     if (error_collector_.HasErrors()) {
-      error_collector_.PrintAllErrors(":text:", full_program_text);
+      error_collector_.PrintAllErrors(files);
       return {};
     }
 
@@ -141,15 +149,13 @@ class GoldenTest : public ::testing::Test {
   }
 
   MockNativeFunc native_check_fn_;
-  ScopeManager scope_manager_;
+  ErrorCollector error_collector_;
+  ScopeManager scope_manager_{error_collector_};
   TypeRegistry type_registry_{scope_manager_};
-  MockErrorCollector error_collector_;
   TypeContext type_context_{scope_manager_, type_registry_, error_collector_};
 };
 
 TEST_F(GoldenTest, AssignStatment) {
-  error_collector_.DelegateToFake();
-
   auto program = BuildProgram(R"(
     let x = "hello";
     let y = 109;
@@ -172,8 +178,6 @@ TEST_F(GoldenTest, AssignStatment) {
 }
 
 TEST_F(GoldenTest, OptionalChainField) {
-  error_collector_.DelegateToFake();
-
   auto program = BuildProgram(R"(
     struct Inner {
       message: String;
@@ -214,8 +218,6 @@ TEST_F(GoldenTest, OptionalChainField) {
 }
 
 TEST_F(GoldenTest, OptionalChainFieldDeep) {
-  error_collector_.DelegateToFake();
-
   auto program = BuildProgram(R"(
     struct Foo {
       bar: Foo?;
@@ -250,9 +252,7 @@ TEST_F(GoldenTest, OptionalChainFieldDeep) {
   RunProgram(program);
 }
 
-TEST_F(GoldenTest, DISABLED_ArrayChain) {
-  error_collector_.DelegateToFake();
-
+TEST_F(GoldenTest, ArrayChain) {
   auto program = BuildProgram(R"(
     let x = Array.init(Array.init(Array.withSize(2)));
 
@@ -272,8 +272,6 @@ TEST_F(GoldenTest, DISABLED_ArrayChain) {
 }
 
 TEST_F(GoldenTest, BasicFunction) {
-  error_collector_.DelegateToFake();
-
   auto program = BuildProgram(R"(
     fn foo(value: String) {
       check("foo");
@@ -297,8 +295,6 @@ TEST_F(GoldenTest, BasicFunction) {
 }
 
 TEST_F(GoldenTest, DISABLED_Closure) {
-  error_collector_.DelegateToFake();
-
   auto program = BuildProgram(R"(
     fn foo(value: String) {
       check("foo");
@@ -323,8 +319,6 @@ TEST_F(GoldenTest, DISABLED_Closure) {
 }
 
 TEST_F(GoldenTest, Captures) {
-  error_collector_.DelegateToFake();
-
   auto program = BuildProgram(R"(
     fn call_closure(arg: fn(i32), x: i32) {
       arg(x);
@@ -353,8 +347,6 @@ TEST_F(GoldenTest, Captures) {
 }
 
 TEST_F(GoldenTest, DISABLED_ClosureMethod) {
-  error_collector_.DelegateToFake();
-
   auto program = BuildProgram(R"(
     struct Test {
       value: String;
@@ -385,8 +377,6 @@ TEST_F(GoldenTest, DISABLED_ClosureMethod) {
 }
 
 TEST_F(GoldenTest, TemplateStruct) {
-  error_collector_.DelegateToFake();
-
   auto program = BuildProgram(R"(
     struct Test[T] {
       value: T;

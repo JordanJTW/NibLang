@@ -15,8 +15,10 @@
 
 class Parser {
  public:
-  explicit Parser(const std::string& text, ErrorCollector& error_collector)
-      : text_(text), error_collector_(error_collector), tokenizer_(text_) {
+  explicit Parser(const std::string& text,
+                  ErrorCollector& error_collector,
+                  size_t file_id)
+      : error_collector_(error_collector), tokenizer_(text, file_id) {
     AdvanceToken();
   }
 
@@ -61,13 +63,12 @@ class Parser {
   std::optional<ParsedType> ParsePrimaryType();
   std::vector<ParsedType> ParseTypeList(TokenKind end_of_list_token);
 
-  bool ConsumeToken(TokenKind expected_kind, std::string_view error_message);
+  bool ConsumeToken(TokenKind expected_kind, std::string error_message);
   void AdvanceToken();
 
   bool SynchronizeOnError(std::function<bool(TokenKind)> is_target =
                               [](TokenKind) { return false; });
 
-  const std::string& text_;
   ErrorCollector& error_collector_;
   Tokenizer tokenizer_;
 

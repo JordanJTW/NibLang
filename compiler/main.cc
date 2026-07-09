@@ -24,20 +24,13 @@
 #include "compiler/assembler.h"
 #include "compiler/bytecode_generator.h"
 #include "compiler/error_collector.h"
+#include "compiler/file.h"
 #include "compiler/parser.h"
 #include "compiler/printer.h"
 #include "compiler/program_builder.h"
 #include "compiler/semantic_analyzer.h"
 #include "compiler/type_context.h"
 #include "compiler/types.h"
-
-struct File {
-  std::string resolved_path;
-  std::vector<std::string> import_paths;
-  Block root_block;
-  std::string file_contents;
-  std::unique_ptr<ErrorCollector> error_collector;
-};
 
 std::string OpenFileWithFallback(std::ifstream& file,
                                  std::string_view path,
@@ -74,7 +67,9 @@ std::string OpenFileWithFallback(std::ifstream& file,
 }
 
 std::optional<File> CollectImportsFor(std::string_view path,
-                                      std::string_view search_path) {
+                                      std::string_view search_path,
+                                      ErrorCollector& error_collector,
+                                      size_t file_id) {
   std::ifstream file_to_compile;
   std::string resolved_path =
       OpenFileWithFallback(file_to_compile, path, search_path);
@@ -82,8 +77,7 @@ std::optional<File> CollectImportsFor(std::string_view path,
   std::string file_contents{std::istreambuf_iterator<char>(file_to_compile),
                             std::istreambuf_iterator<char>()};
 
-  auto error_collector = std::make_unique<ErrorCollector>();
-  Block root_block = Parser{file_contents, *error_collector}.Parse();
+  Block root_block = Parser{file_contents, error_collector, file_id}.Parse();
 
   std::vector<std::string> import_paths;
   for (const auto& statement : root_block.statements) {
@@ -93,14 +87,15 @@ std::optional<File> CollectImportsFor(std::string_view path,
   }
 
   return File{std::move(resolved_path), std::move(import_paths),
-              std::move(root_block), std::move(file_contents),
-              std::move(error_collector)};
+              std::move(root_block), std::move(file_contents), file_id};
 }
 
 std::vector<File> CalculateImportsFor(std::string_view path,
-                                      std::string_view search_path) {
+                                      std::string_view search_path,
+                                      ErrorCollector& error_collector) {
   std::vector<File> result;
   std::unordered_set<std::string> visited;
+  size_t file_id = 0;
 
   std::function<void(const std::string&)> dfs =
       [&](const std::string& current_path) {
@@ -109,7 +104,8 @@ std::vector<File> CalculateImportsFor(std::string_view path,
 
         visited.insert(current_path);
 
-        auto file_opt = CollectImportsFor(current_path, search_path);
+        auto file_opt = CollectImportsFor(current_path, search_path,
+                                          error_collector, file_id++);
         if (!file_opt)
           return;
 
@@ -188,26 +184,24 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  std::vector<File> files =
-      CalculateImportsFor(opts.input_path, env_search_path);
+  ErrorCollector error_collector;
 
-  ScopeManager scope_manager;
+  std::vector<File> files =
+      CalculateImportsFor(opts.input_path, env_search_path, error_collector);
+
+  ScopeManager scope_manager(error_collector);
   TypeRegistry type_registry{scope_manager};
 
-  bool any_errors = false;
   for (File& file : files) {
-    ErrorCollector& error_collector = *file.error_collector;
     TypeContext type_context(scope_manager, type_registry, error_collector);
     SemanticAnalyzer analyzer(type_context, scope_manager, error_collector,
                               type_registry);
     SemanticAnalyzer::FunctionContext context = {{}, TypeRegistry::Any};
     analyzer.Check(file.root_block, context);
+  }
 
-    if (error_collector.HasErrors()) {
-      std::cerr << "Errors in file: " << file.resolved_path << "\n";
-      error_collector.PrintAllErrors(file.resolved_path, file.file_contents);
-      any_errors = true;
-    }
+  if (error_collector.HasErrors()) {
+    error_collector.PrintAllErrors(files);
   }
 
   if (opts.mode == OutputMode::Ast) {
@@ -217,7 +211,7 @@ int main(int argc, char* argv[]) {
     return 0;
   }
 
-  if (any_errors)
+  if (error_collector.HasErrors())
     return 1;
 
   ConstantPool constant_pool;

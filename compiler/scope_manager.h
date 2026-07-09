@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "compiler/error_collector.h"
 #include "compiler/types.h"
 
 // Maintains information related to lexical scoping within the AST.
@@ -21,7 +22,7 @@ class ScopeManager {
     TemplateScope,
   };
 
-  explicit ScopeManager();
+  explicit ScopeManager(ErrorCollector& error_collector);
   ~ScopeManager() = default;
 
   // Creates a new scope of `type` with `name` under the currently active scope.
@@ -112,6 +113,7 @@ class ScopeManager {
 
   void PrintScopeTree(std::ostream&, ScopeId, size_t) const;
 
+  ErrorCollector& error_collector_;
   std::vector<Scope> scopes_;
   ScopeId active_scope_id_{0};
   ScopeId function_scope_id_{0};

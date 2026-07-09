@@ -10,12 +10,15 @@
 #include <string>
 #include <utility>
 
+#include "compiler/logging.h"
+
 namespace {
 
 void print_error(std::string_view path,
                  std::string_view contents,
                  Metadata metadata,
-                 std::string_view message) {
+                 std::string_view message,
+                 std::string_view prefix) {
   size_t line_start = contents.rfind('\n', metadata.column_range.start);
   if (line_start == std::string_view::npos)
     line_start = 0;
@@ -29,11 +32,11 @@ void print_error(std::string_view path,
   std::string_view line = contents.substr(line_start, line_end - line_start);
   size_t relative_offset = metadata.column_range.start - line_start;
 
-  std::string kErrorPrefix =
-      "Error: " + std::string(path) + ":" +
+  std::string kPrefix =
+      std::string(prefix) + ": " + std::string(path) + ":" +
       std::to_string(metadata.line_range.start) + ":" +
       std::to_string(metadata.column_range.start - line_start + 1) + ":";
-  std::cerr << kErrorPrefix << std::endl
+  std::cerr << kPrefix << std::endl
             << line << std::endl
             << std::setw(relative_offset) << " "
             << "^ " << message << std::endl;
@@ -41,17 +44,36 @@ void print_error(std::string_view path,
 
 }  // namespace
 
-void ErrorCollector::Add(std::string_view message, Metadata meta) {
-  errors.push_back({message.data(), std::move(meta)});
+ErrorBuilder ErrorCollector::Add(std::string message, Metadata span) {
+  return ErrorBuilder(*this, std::move(message), span);
 }
 
-void ErrorCollector::PrintAllErrors(std::string_view path,
-                                    std::string_view contents) const {
+void ErrorCollector::PrintAllErrors(const std::vector<File>& files) const {
+  std::vector<const File*> ordered_files(files.size(), nullptr);
+  for (const File& file : files)
+    ordered_files[file.file_id] = &file;
+
   for (const auto& error : errors) {
-    print_error(path, contents, error.meta, error.message);
+    const File* file = ordered_files[error.message.span.file_id];
+    print_error(file->resolved_path, file->file_contents, error.message.span,
+                error.message.text, "Error");
+
+    for (const auto& message : error.notes) {
+      const File* file = ordered_files[message.span.file_id];
+      print_error(file->resolved_path, file->file_contents, message.span,
+                  message.text, "Note");
+    }
   }
 }
 
 bool ErrorCollector::HasErrors() const {
   return !errors.empty();
+}
+
+void ErrorCollector::Commit(Error error) {
+  errors.push_back(std::move(error));
+}
+
+ErrorBuilder::~ErrorBuilder() {
+  error_collector_.Commit(std::move(error_));
 }

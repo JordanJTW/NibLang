@@ -216,17 +216,6 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
           [&](const BreakStatement&) {},
           [&](const ContinueStatement&) {},
           [&](AssignStatement& assign) {
-            // Check this is the first assignment in this scope with that name.
-            if (auto binding = scope_manager_.FindBindingFor(
-                    assign.name.text, ScopeManager::Current)) {
-              error_collector_.Add("Identifier already declared with name: '" +
-                                       assign.name.text + "'",
-                                   assign.name.metadata);
-              error_collector_.Add("Previously declared here",
-                                   binding->name.metadata);
-              return;
-            }
-
             // Ensure assignment expression's type matches the declared type (if
             // given, otherwise the variable's type is deduced from the value).
             std::optional<TypeId> parsed_type_id;
@@ -267,9 +256,9 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
             }
 
             // Register the variable's type within the current scope.
-            NamedBinding symbol = scope_manager_.DeclareVariableBinding(
+            NamedBinding binding = scope_manager_.DeclareVariableBinding(
                 assign.name, parsed_type_id.value());
-            assign.resolved = ResolvedIdentifier{symbol};
+            assign.resolved = ResolvedIdentifier{binding};
           },
           [&](StructDeclaration& struct_decl) {
             // Function bodies are checked only when a FunctionType is realized

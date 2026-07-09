@@ -1535,10 +1535,9 @@ void Parser::AdvanceToken() {
   }
 }
 
-bool Parser::ConsumeToken(TokenKind expected_kind,
-                          std::string_view error_message) {
+bool Parser::ConsumeToken(TokenKind expected_kind, std::string error_message) {
   if (current_token_.kind != expected_kind) {
-    error_collector_.Add(error_message, current_token_.meta);
+    error_collector_.Add(std::move(error_message), current_token_.meta);
     return false;
   }
 

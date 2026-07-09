@@ -64,7 +64,10 @@ NamedBinding TypeRegistry::NewStructSymbol(StructDeclaration& declaration) {
         StructSymbol symbol = {declaration, scope_manager_.GetActiveScopeId()};
 
         for (auto& [name, fn] : declaration.methods) {
-          NewFunctionSymbol(fn, &declaration);
+          SymbolId method_id = NewFunctionSymbol(fn, &declaration);
+          scope_manager_.InsertNameIntoScope(fn.name, NamedBinding::Function,
+                                             /*type_id=*/std::nullopt,
+                                             method_id);
         }
         return symbol;
       });
@@ -89,9 +92,6 @@ SymbolId TypeRegistry::NewFunctionSymbol(
   FunctionSymbol symbol{declaration, std::move(parent_declaration), symbol_id,
                         scope_manager_.GetActiveScopeId()};
   symbol_table_.emplace(symbol_id, std::move(symbol));
-
-  scope_manager_.InsertNameIntoScope(declaration.name, NamedBinding::Function,
-                                     /*type_id=*/std::nullopt, symbol_id);
   return symbol_id;
 }
 

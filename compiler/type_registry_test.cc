@@ -93,16 +93,7 @@ TEST_F(TypeRegistryTest, NewFunctionSymbol) {
   // Functions are associated with the scope they are defined in
   EXPECT_EQ(symbol->environment_scope_id, outer_scope);
   EXPECT_TRUE(symbol->instances.empty());
-
-  std::optional<NamedBinding> binding =
-      scope_manager.FindBindingFor(declaration.name.text, ScopeManager::All);
-  ASSERT_TRUE(binding);
-
-  EXPECT_EQ(binding->name.text, "name");
-  EXPECT_EQ(binding->kind, NamedBinding::Function);
-  EXPECT_FALSE(binding->realized_type_id.has_value());
-  EXPECT_FALSE(binding->parent_type_id.has_value());
-  EXPECT_TRUE(binding->symbol_id.has_value());
+  EXPECT_EQ(symbol->symbol_id, symbol_id);
 }
 
 TEST_F(TypeRegistryTest, NewFunctionType) {

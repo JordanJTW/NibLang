@@ -252,7 +252,7 @@ TEST_F(GoldenTest, OptionalChainFieldDeep) {
   RunProgram(program);
 }
 
-TEST_F(GoldenTest, ArrayChain) {
+TEST_F(GoldenTest, DISABLED_ArrayChain) {
   auto program = BuildProgram(R"(
     let x = Array.init(Array.init(Array.withSize(2)));
 

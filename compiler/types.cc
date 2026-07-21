@@ -17,32 +17,6 @@ struct Overloaded : Ts... {
 template <class... Ts>
 Overloaded(Ts...) -> Overloaded<Ts...>;
 
-std::ostream& operator<<(std::ostream& os, NamedBinding::Kind kind) {
-  switch (kind) {
-    case NamedBinding::Function:
-      return os << "Function";
-    case NamedBinding::Struct:
-      return os << "Struct";
-    case NamedBinding::Field:
-      return os << "Field";
-    case NamedBinding::Argument:
-      return os << "Argument";
-    case NamedBinding::Variable:
-      return os << "Variable";
-    case NamedBinding::Capture:
-      return os << "Capture";
-    case NamedBinding::Narrowed:
-      return os << "Narrowed";
-    case NamedBinding::Template:
-      return os << "Template";
-    case NamedBinding::TypeAlias:
-      return os << "TypeAlias";
-  }
-
-  __builtin_unreachable();  // All Symbol::Kind MUST be handled above.
-  return os;
-}
-
 }  // namespace
 
 // static
@@ -117,5 +91,31 @@ std::ostream& operator<<(std::ostream& os, const ParsedType& type) {
                    os << "]";
                  }},
       type.type);
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, NamedBinding::Kind kind) {
+  switch (kind) {
+    case NamedBinding::Function:
+      return os << "Function";
+    case NamedBinding::Struct:
+      return os << "Struct";
+    case NamedBinding::Field:
+      return os << "Field";
+    case NamedBinding::Argument:
+      return os << "Argument";
+    case NamedBinding::Variable:
+      return os << "Variable";
+    case NamedBinding::Capture:
+      return os << "Capture";
+    case NamedBinding::Narrowed:
+      return os << "Narrowed";
+    case NamedBinding::Template:
+      return os << "Template";
+    case NamedBinding::TypeAlias:
+      return os << "TypeAlias";
+  }
+
+  __builtin_unreachable();  // All Symbol::Kind MUST be handled above.
   return os;
 }

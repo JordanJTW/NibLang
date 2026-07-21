@@ -108,6 +108,7 @@ struct NamedBinding {
 };
 
 std::ostream& operator<<(std::ostream& os, const NamedBinding& symbol);
+std::ostream& operator<<(std::ostream& os, NamedBinding::Kind kind);
 
 struct Expression;
 struct Statement;
@@ -264,8 +265,7 @@ struct VariadicType {
   Metadata variadic_span;
 };
 
-std::ostream&
-operator<<(std::ostream& os, const ParsedType& type);
+std::ostream& operator<<(std::ostream& os, const ParsedType& type);
 
 enum class TypeCastStrategy {
   // "as" cast throws an exception if the cast is invalid.

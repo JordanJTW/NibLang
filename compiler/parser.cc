@@ -783,7 +783,8 @@ std::unique_ptr<Expression> Parser::ParsePostFix() {
       AdvanceToken();  // consume identifier
 
       expr = std::make_unique<Expression>(Expression{
-          MemberAccessExpression{wrap_optional(std::move(expr)), ident.value},
+          MemberAccessExpression{wrap_optional(std::move(expr)),
+                                 SpannedText::FromToken(ident)},
           Metadata::fromTokens(post_fix_start_token, current_token_)});
       continue;
     }

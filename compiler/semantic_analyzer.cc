@@ -499,57 +499,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             }
             return rhs;
           },
-          [&](MemberAccessExpression& member_access)
-              -> SemanticAnalyzer::Result {
-            Result object_result =
-                CheckExpression(member_access.object, context);
-            if (!object_result)
-              return std::nullopt;
-
-            if (!object_result->has_type_id()) {
-              error_collector_.Add(
-                  "Cannot access members on an uninstantiated template "
-                  "blueprint",
-                  member_access.object->meta);
-              return std::nullopt;
-            }
-
-            if (const auto* const struct_type =
-                    type_registry_.GetType<StructType>(
-                        *object_result->type_id)) {
-              const auto& member_name = member_access.member_name;
-              if (auto binding = scope_manager_.FindBindingFor(
-                      member_name.text, ScopeManager::Current,
-                      struct_type->scope_id)) {
-                if (binding->kind == NamedBinding::Field) {
-                  CHECK(binding->idx.has_value())
-                      << "Member symbol must have an index for member access";
-                  member_access.resolved = ResolvedAccess{binding->idx.value()};
-                }
-                return ExpressionResult(*binding);
-              } else {
-                error_collector_.Add("No member '" + member_name.text +
-                                         "' on " +
-                                         struct_type->declaration.name.text,
-                                     expression->meta);
-              }
-            } else {
-              if (auto unwrapped_type_id =
-                      type_context_.UnwrapOptional(*object_result->type_id)) {
-                error_collector_.Add(
-                    "Attempting member access on Optional type: " +
-                        type_registry_.GetNameFromTypeId(
-                            *object_result->type_id),
-                    member_access.object->meta);
-              } else {
-                error_collector_.Add("Type " +
-                                         type_registry_.GetNameFromTypeId(
-                                             *object_result->type_id) +
-                                         " does not support member access",
-                                     member_access.object->meta);
-              }
-            }
-            return std::nullopt;
+          [&](MemberAccessExpression& member_access) {
+            return HandleMemberAccess(member_access, context);
           },
           [&](ArrayAccessExpression& array_access) -> SemanticAnalyzer::Result {
             Result object = CheckExpression(array_access.array, context);
@@ -796,7 +747,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
 
             if (auto type_id =
                     type_context_.GetTemplateOf(*result->binding, type_ids)) {
-              return *type_id;
+              return ExpressionResult{*type_id, *result->binding};
             }
 
             return std::nullopt;
@@ -952,5 +903,80 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
   error_collector_.Add("type is not callable: " +
                            type_registry_.GetNameFromTypeId(*callable_type_id),
                        debug_metadata);
+  return std::nullopt;
+}
+
+SemanticAnalyzer::Result SemanticAnalyzer::HandleMemberAccess(
+    MemberAccessExpression& member_access,
+    FunctionContext& context) {
+  Result object_result = CheckExpression(member_access.object, context);
+  if (!object_result)
+    return std::nullopt;
+
+  const auto& member_name = member_access.member_name;
+
+  if (object_result->has_type_id()) {
+    TypeId type_id = *object_result->type_id;
+
+    // Member access is only supported on structs
+    const auto* const struct_type = type_registry_.GetType<StructType>(type_id);
+    if (!struct_type) {
+      error_collector_.Add("type `" +
+                               type_registry_.GetNameFromTypeId(type_id) +
+                               "` does not support member access",
+                           member_access.object->meta);
+      return std::nullopt;
+    }
+
+    if (auto binding = scope_manager_.FindBindingFor(
+            member_name.text, ScopeManager::Current, struct_type->scope_id)) {
+      if (binding->kind == NamedBinding::Field) {
+        CHECK(binding->idx.has_value())
+            << "member symbol must have an index for member access";
+        member_access.resolved = ResolvedAccess{binding->idx.value()};
+      }
+      return ExpressionResult(*binding);
+    }
+
+    error_collector_
+        .Add("no member '" + member_name.text + "' found on type " +
+                 type_registry_.GetNameFromTypeId(type_id),
+             member_name.metadata)
+        .WithNote("declared here", struct_type->declaration.name.metadata);
+    return std::nullopt;
+  }
+
+  if (object_result->binding && object_result->binding->symbol_id) {
+    SymbolId symbol_id = *object_result->binding->symbol_id;
+
+    if (object_result->binding->kind != NamedBinding::Struct) {
+      std::stringstream ss;
+      ss << "binding of kind " << object_result->binding->kind
+         << " does not support member access";
+      error_collector_.Add(ss.str(), member_access.object->meta);
+      return std::nullopt;
+    }
+
+    const auto* const struct_symbol =
+        type_registry_.GetSymbol<StructSymbol>(symbol_id);
+    CHECK(struct_symbol) << "StructSymbol not registered for id: " << symbol_id;
+
+    if (auto binding = scope_manager_.FindBindingFor(
+            member_name.text, ScopeManager::Current,
+            struct_symbol->self_scope_id)) {
+      CHECK_EQ(binding->kind, NamedBinding::Function)
+          << "only static methods are currently supported";
+      return ExpressionResult(*binding);
+    }
+
+    error_collector_
+        .Add("no member '" + member_name.text + "' found on struct " +
+                 struct_symbol->declaration.name.text,
+             member_access.object->meta)
+        .WithNote("declared here", struct_symbol->declaration.name.metadata);
+    return std::nullopt;
+  }
+
+  NOTREACHED() << "unhandled condition in MemberAccessExpression";
   return std::nullopt;
 }

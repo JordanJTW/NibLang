@@ -57,6 +57,8 @@ class SemanticAnalyzer {
   void CheckStatement(std::unique_ptr<Statement>& statement,
                       FunctionContext& context);
 
+  Result HandleMemberAccess(MemberAccessExpression&, FunctionContext&);
+
   struct ArgumentResult {
     SemanticAnalyzer::Result result;
     std::optional<Metadata> metadata;

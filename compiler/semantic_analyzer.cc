@@ -834,8 +834,6 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
   std::optional<TypeId> callable_type_id = callee_result.type_id;
 
   if (!callable_type_id) {
-    LOG(INFO) << "Call but no TypeId but Binding: " << *callee_result.binding;
-
     CHECK(callee_result.binding && callee_result.binding->symbol_id)
         << "SymbolId is required for templates";
 

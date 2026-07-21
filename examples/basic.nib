@@ -1,0 +1,34 @@
+// Copyright (c) 2026, Jordan Werthman <jordanwerthman@gmail.com>
+//
+// SPDX-License-Identifier: BSD-2-Clause
+
+// Trimmed down String (instead of std/types.nib) for smaller AST to debug.
+extern struct String {
+  fn length(self: String) -> i32;
+}
+
+fn add(x: i32, y: i32) -> i32 {
+  return x + y;
+}
+
+fn createDog() -> Dog {
+  return Dog();
+}
+
+struct Dog {
+  fn bark(self: Dog) -> i32 {
+    let x: i32 = 0;
+    while (x < "who let the dogs".length()) {
+      x = x + 1;
+    }
+    return x;
+  } 
+}
+
+fn main() -> i32 {
+  let x = 3 + add(4, 2);
+  let y: i32 = 1 + x + "hello world".length();
+
+  let dog: Dog = createDog();
+  return dog.bark();
+}

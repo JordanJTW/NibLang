@@ -1,0 +1,19 @@
+// Copyright (c) 2026, Jordan Werthman <jordanwerthman@gmail.com>
+//
+// SPDX-License-Identifier: BSD-2-Clause
+
+@import "std/sort.nib"
+@import "std/types.nib"
+
+fn main() -> any {
+  let sortable = Array.init(10, 66, 369, 109, 3087, 2, 4, 21, 42);
+  sort(sortable, fn(v1: i32, v2: i32) -> i32 { return v1 - v2; });
+
+  let sortable2 = sortable.map(fn (x: i32) -> String { return String.valueOf(x); });
+  sort(sortable2, fn(v1: String, v2: String) -> i32 { return v1.length() - v2.length(); });
+
+  let sortable3 = Array.init("Cupcake", "Apple", "Lava Cake", "Donut", "Eclaire", "KitKat", "BonBon");
+  sort(sortable3, fn(v1: String, v2: String) -> i32 {  return (v1.charAt(0) - v2.charAt(0)) as i32; });
+
+  return Array.init.of(any)(sortable, sortable3);
+}

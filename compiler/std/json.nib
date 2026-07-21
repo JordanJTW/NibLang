@@ -206,7 +206,7 @@ fn parse_number(input: String, parser: Parser) -> i32 | f32 {
 fn parse_object(input: String, parser: Parser) -> Map[String, JsonValue] {
   parser.idx = parser.idx + 1;
   skip_whitespace(input, parser);
-  let obj = Map.of(String, JsonValue).new();
+  let obj = Map.new.of(String, JsonValue)();
 
   if (parser.idx >= input.length()) {
     throw "unterminated obj";
@@ -243,7 +243,7 @@ fn parse_array(input: String, parser: Parser) -> Array[JsonValue] {
 
   skip_whitespace(input, parser);
 
-  let array = Array.of(JsonValue).new();
+  let array = Array.new.of(JsonValue)();
 
   if (parser.idx < input.length() &&
       input.charAt(parser.idx) == ']') {

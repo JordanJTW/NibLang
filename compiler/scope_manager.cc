@@ -21,7 +21,7 @@ ScopeId ScopeManager::EnterScope(ScopeType type, std::string_view name) {
   scopes_[active_scope_id_].children.push_back(scope_id);
   active_scope_id_ = scope_id;
 
-  if (type == ScopeType::FunctionScope)
+  if (type == ScopeType::FunctionInstanceScope)
     function_scope_id_ = scope_id;
 
   return scope_id;
@@ -36,11 +36,12 @@ void ScopeManager::SetActiveScopeId(ScopeId scope_id) {
   function_scope_id_ = 0;
 
   ScopeId id = active_scope_id_;
-  while (id != 0 && scopes_[id].scope_type != ScopeType::FunctionScope) {
+  while (id != 0 &&
+         scopes_[id].scope_type != ScopeType::FunctionInstanceScope) {
     id = scopes_[id].parent_scope_id;
   }
 
-  if (scopes_[id].scope_type == ScopeType::FunctionScope)
+  if (scopes_[id].scope_type == ScopeType::FunctionInstanceScope)
     function_scope_id_ = id;
 }
 
@@ -59,7 +60,7 @@ std::optional<NamedBinding> ScopeManager::FindBindingFor(
       return current_scope.bindings_for_scope[found->second];
     }
 
-    if (current_scope.scope_type == ScopeType::FunctionScope) {
+    if (current_scope.scope_type == ScopeType::FunctionInstanceScope) {
       if (scope_to_check == ScopeToCheck::Function)
         break;
 
@@ -236,8 +237,10 @@ std::ostream& operator<<(std::ostream& os, ScopeManager::ScopeType type) {
   switch (type) {
     CASE_NAME(BlockScope);
     CASE_NAME(RootScope);
-    CASE_NAME(StructScope);
-    CASE_NAME(FunctionScope);
+    CASE_NAME(StructSymbolScope);
+    CASE_NAME(StructInstanceScope);
+    CASE_NAME(FunctionSymbolScope);
+    CASE_NAME(FunctionInstanceScope);
     CASE_NAME(TemplateScope);
   }
   NOTREACHED() << "all ScopeTypes MUST be handled in switch()";

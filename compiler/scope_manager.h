@@ -16,8 +16,10 @@ class ScopeManager {
  public:
   enum ScopeType {
     RootScope,
-    StructScope,
-    FunctionScope,
+    StructSymbolScope,
+    StructInstanceScope,
+    FunctionSymbolScope,
+    FunctionInstanceScope,
     BlockScope,
     TemplateScope,
   };

@@ -59,7 +59,7 @@ TEST_F(ScopeManagerTest, CorrectBindingKinds) {
 TEST_F(ScopeManagerTest, ClimbScopeTreeToFindSymbol) {
   scope_manager.DeclareVariableBinding(SpannedText{"global_var"}, TypeId{100});
 
-  scope_manager.EnterScope(ScopeManager::FunctionScope, "my_func");
+  scope_manager.EnterScope(ScopeManager::FunctionInstanceScope, "my_func");
   scope_manager.EnterScope(ScopeManager::BlockScope, "local_block");
 
   auto binding = scope_manager.FindBindingFor("global_var", ScopeManager::All);
@@ -96,7 +96,7 @@ TEST_F(ScopeManagerTest, ScopeToCheckCurrentStrictness) {
 TEST_F(ScopeManagerTest, ScopeToCheckFunctionBoundary) {
   scope_manager.DeclareVariableBinding(SpannedText{"global_type"}, TypeId{42});
 
-  scope_manager.EnterScope(ScopeManager::FunctionScope, "foo");
+  scope_manager.EnterScope(ScopeManager::FunctionInstanceScope, "foo");
   scope_manager.DeclareVariableBinding(SpannedText{"func_local"}, TypeId{1});
 
   scope_manager.EnterScope(ScopeManager::BlockScope, "nested_block");
@@ -113,8 +113,8 @@ TEST_F(ScopeManagerTest, NonLinearLookupViaOverrideScopeId) {
   auto global_binding = scope_manager.DeclareVariableBinding(
       SpannedText{"module_a_const"}, TypeId{99});
 
-  ScopeId branch_id =
-      scope_manager.EnterScope(ScopeManager::FunctionScope, "module_b_func");
+  ScopeId branch_id = scope_manager.EnterScope(
+      ScopeManager::FunctionInstanceScope, "module_b_func");
   scope_manager.DeclareVariableBinding(SpannedText{"local_b_var"}, TypeId{2});
 
   EXPECT_TRUE(scope_manager.FindBindingFor("local_b_var", ScopeManager::All)
@@ -195,7 +195,8 @@ TEST_F(ScopeManagerTest, FindBindingFor_Shadowing) {
 TEST_F(ScopeManagerTest, FindBindingFor_ScopeChecks) {
   scope_manager.DeclareVariableBinding(SpannedText{"v1"}, LiteralType::i32);
 
-  scope_manager.EnterScope(ScopeManager::ScopeType::FunctionScope, "fn");
+  scope_manager.EnterScope(ScopeManager::ScopeType::FunctionInstanceScope,
+                           "fn");
   scope_manager.DeclareVariableBinding(SpannedText{"v2"}, LiteralType::Bool);
 
   scope_manager.EnterScope(ScopeManager::ScopeType::BlockScope, "block");

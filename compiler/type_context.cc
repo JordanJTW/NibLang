@@ -46,8 +46,9 @@ void TypeContext::DefineStructType(
     const std::vector<TypeId> template_arguemnts) {
   StructType struct_type(symbol.declaration);
   struct_type.template_arguments = template_arguemnts;
-  struct_type.scope_id = scope_manager_.EnterScope(
-      ScopeManager::StructScope, "struct " + symbol.declaration.name.text);
+  struct_type.scope_id =
+      scope_manager_.EnterScope(ScopeManager::StructInstanceScope,
+                                "struct " + symbol.declaration.name.text);
 
   // Cache the instance early in case a member/method is refers to self.
   symbol.instances[template_arguemnts] =
@@ -334,8 +335,8 @@ bool TypeContext::IsTypeNilable(TypeId type_id) const {
 std::optional<TypeInstance> TypeContext::DeclareFunctionType(
     FunctionDeclaration& fn,
     std::optional<TypeId> self_id) {
-  ScopeId scope_id = scope_manager_.EnterScope(ScopeManager::FunctionScope,
-                                               "fn " + fn.name.text);
+  ScopeId scope_id = scope_manager_.EnterScope(
+      ScopeManager::FunctionInstanceScope, "fn " + fn.name.text);
 
   std::vector<TypeId> argument_types;
   for (const auto& [name, type] : fn.arguments) {

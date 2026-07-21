@@ -62,7 +62,8 @@ TypeRegistry::TypeRegistry(ScopeManager& scope_manager)
 
 NamedBinding TypeRegistry::NewStructSymbol(StructDeclaration& declaration) {
   StructSymbol symbol = scope_manager_.NewScope(
-      ScopeManager::StructScope, "struct " + declaration.name.text, [&]() {
+      ScopeManager::StructSymbolScope, "struct " + declaration.name.text,
+      [&]() {
         StructSymbol symbol = {declaration, scope_manager_.GetActiveScopeId()};
 
         for (auto& [name, fn] : declaration.methods) {

@@ -50,6 +50,12 @@ fetchcontent_declare(
 fetchcontent_makeavailable(googletest)
 enable_testing()
 
+fetchcontent_declare(
+  json 
+  URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz
+  DOWNLOAD_EXTRACT_TIMESTAMP true)
+FetchContent_MakeAvailable(json)
+
 add_subdirectory(compiler)
 add_subdirectory(src)
 add_subdirectory(test)

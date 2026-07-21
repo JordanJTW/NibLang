@@ -27,6 +27,7 @@ target_include_directories(program_builder PRIVATE ${PROJECT_SOURCE_DIR})
 add_library(scope_manager scope_manager.cc)
 target_include_directories(scope_manager PRIVATE ${PROJECT_SOURCE_DIR})
 target_link_libraries(scope_manager PRIVATE error_collector logging types)
+target_link_libraries(scope_manager PRIVATE nlohmann_json::nlohmann_json)
 
 add_library(semantic_analyzer semantic_analyzer.cc)
 target_include_directories(semantic_analyzer PRIVATE ${PROJECT_SOURCE_DIR})
@@ -42,6 +43,7 @@ target_link_libraries(type_context PRIVATE error_collector logging scope_manager
 add_library(type_registry type_registry.cc)
 target_include_directories(type_registry PRIVATE ${PROJECT_SOURCE_DIR})
 target_link_libraries(type_registry PRIVATE error_collector logging scope_manager tokenizer)
+target_link_libraries(type_registry PRIVATE nlohmann_json::nlohmann_json)
 
 add_library(type_resolver type_resolver.cc)
 target_include_directories(type_resolver PRIVATE ${PROJECT_SOURCE_DIR})

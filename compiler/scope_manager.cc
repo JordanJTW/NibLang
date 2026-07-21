@@ -4,6 +4,8 @@
 
 #include "compiler/scope_manager.h"
 
+#include <nlohmann/json.hpp>
+
 #include "compiler/error_collector.h"
 #include "compiler/logging.h"
 
@@ -146,6 +148,49 @@ NamedBinding ScopeManager::DeclareTemplateBinding(SpannedText name,
                                                   TypeId type_id) {
   return InsertNameIntoScope(std::move(name), NamedBinding::Template, type_id,
                              /*symbol_id=*/std::nullopt);
+}
+
+std::string ScopeManager::ToJson(ScopeId scope_id) const {
+  std::function<nlohmann::json(ScopeId)> to_json = [&](ScopeId scope_id) {
+    const auto& scope = scopes_[scope_id];
+    nlohmann::json dict;
+
+    dict["id"] = scope_id;
+    dict["name"] = scope.name;
+    dict["type"] = scope.scope_type;
+    dict["parent_id"] = scope.parent_scope_id;
+
+    if (!scope.bindings_for_scope.empty()) {
+      for (const auto& [name, idx] : scope.binding_lookup) {
+        const auto& binding = scope.bindings_for_scope[idx];
+
+        nlohmann::json b;
+        b["name"] = binding.name.text;
+        b["kind"] = binding.kind;
+        if (binding.realized_type_id)
+          b["type_id"] = *binding.realized_type_id;
+        if (binding.symbol_id)
+          b["symbol_id"] = *binding.symbol_id;
+
+        dict["bindings"][name] = std::move(b);
+      }
+    }
+
+    if (scope.children.empty())
+      return dict;
+
+    dict["children"] = nlohmann::json::array();
+    for (size_t child_id : scope.children) {
+      // Avoid infinite recursion if a child links back to itself or root
+      if (child_id == scope_id || child_id == 0)
+        continue;
+
+      dict["children"].push_back(to_json(child_id));
+    }
+    return dict;
+  };
+
+  return to_json(scope_id).dump(2);
 }
 
 void ScopeManager::PrintScopeTree(std::ostream& os,

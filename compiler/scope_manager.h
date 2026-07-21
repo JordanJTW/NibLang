@@ -94,6 +94,8 @@ class ScopeManager {
     return result;
   }
 
+  std::string ToJson(ScopeId scope_id) const;
+
  private:
   friend std::ostream& operator<<(std::ostream&, const ScopeManager&);
 

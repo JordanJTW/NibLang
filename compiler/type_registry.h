@@ -132,6 +132,8 @@ class TypeRegistry {
   const auto& symbol_table() const { return symbol_table_; }
   const auto& type_table() const { return type_table_; }
 
+  std::string ToJson() const;
+
  private:
   friend std::ostream& operator<<(std::ostream&, const TypeRegistry&);
 

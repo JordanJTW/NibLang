@@ -126,6 +126,7 @@ struct Options {
   OutputMode mode = OutputMode::Image;
   std::string input_path;
   std::string output_path;
+  std::string debug_path;
 };
 
 Options ParseArgs(int argc, char* argv[]) {
@@ -140,6 +141,8 @@ Options ParseArgs(int argc, char* argv[]) {
       opts.mode = OutputMode::DumpImage;
     } else if (arg == "--output" && i + 1 < argc) {
       opts.output_path = argv[++i];
+    } else if (arg == "--debug" && i + 1 < argc) {
+      opts.debug_path = argv[++i];
     } else {
       opts.input_path = arg;
     }
@@ -202,6 +205,12 @@ int main(int argc, char* argv[]) {
 
   if (error_collector.HasErrors()) {
     error_collector.PrintAllErrors(files);
+  }
+
+  if (!opts.debug_path.empty()) {
+    std::ofstream of(opts.debug_path + "/debug.json");
+    of << "{\"scopes\": " << scope_manager.ToJson(0)
+       << ", \"context\": " << type_registry.ToJson() << "}" << std::endl;
   }
 
   if (opts.mode == OutputMode::Ast) {

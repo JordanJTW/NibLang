@@ -3,6 +3,8 @@
 #include <sstream>
 #include <string>
 
+#include <nlohmann/json.hpp>
+
 #include "compiler/logging.h"
 
 namespace {
@@ -216,6 +218,37 @@ std::string TypeRegistry::GetNameFromTypeId(TypeId type_id) const {
           },
           [&](const AliasType type) { return "Alias[" + type.name + "]"; }},
       it->second);
+}
+
+std::string TypeRegistry::ToJson() const {
+  nlohmann::json dict;
+  for (const auto& [type_id, type] : type_table_) {
+    dict["type_table"][type_id] = GetNameFromTypeId(type_id);
+  }
+
+  for (const auto& [symbol_id, symbol] : symbol_table_) {
+    if (const auto* fn = std::get_if<FunctionSymbol>(&symbol)) {
+      auto to_json = [](const FunctionSymbol* symbol) -> nlohmann::json {
+        nlohmann::json dict;
+        dict["kind"] = "function";
+        dict["name"] = symbol->GetName();
+        return dict;
+      };
+
+      dict["symbol_table"][symbol_id] = to_json(fn);
+    }
+    if (const auto* st = std::get_if<StructSymbol>(&symbol)) {
+      auto to_json = [](const StructSymbol* symbol) -> nlohmann::json {
+        nlohmann::json dict;
+        dict["kind"] = "struct";
+        dict["name"] = symbol->declaration.name.text;
+        return dict;
+      };
+
+      dict["symbol_table"][symbol_id] = to_json(st);
+    }
+  }
+  return dict.dump(2);
 }
 
 std::ostream& operator<<(std::ostream& os, const TypeRegistry& registry) {

@@ -91,9 +91,15 @@ class ScopeManager {
     using Result = std::invoke_result_t<Fn>;
 
     EnterScope(type, name);
-    Result result = block();
-    ExitScope();
-    return result;
+    if constexpr (std::is_void_v<Result>) {
+      block();
+      ExitScope();
+    } else {
+      Result result = block();
+      ExitScope();
+      return result;
+    }
+
   }
 
   std::string ToJson(ScopeId scope_id) const;

@@ -29,12 +29,18 @@ class TypeContext {
                        TypeRegistry& type_registry,
                        ErrorCollector& error_collector);
 
+  // Whether a function (or struct's method) should have the body type-checked
+  // or only the signature (only the signature is needed for type deduction).
+  enum class CheckFunctionBody { YES, NO };
+
   // Performs type checking of the members/fields and creates a new StructType
   // for `self_id` from the results. `template_arguments` are stored on the new
   // StructType but are NOT used for any sort of template resolution here.
-  void DefineStructType(TypeId self_id,
-                        StructSymbol& symbol,
-                        std::vector<TypeId> template_arguments);
+  void DefineStructType(
+      TypeId self_id,
+      StructSymbol& symbol,
+      std::vector<TypeId> template_arguments,
+      CheckFunctionBody check_fn_body = CheckFunctionBody::YES);
 
   // Declares a new function symbol in the current scope. Functions are
   // structurally typed based on signature. If this functions signature has not
@@ -44,6 +50,7 @@ class TypeContext {
   // MUST be provided for method declarations.
   std::optional<NamedBinding> DefineFunction(
       SymbolId symbol_id,
+      CheckFunctionBody check_fn_body = CheckFunctionBody::YES,
       std::optional<TypeId> self_id = std::nullopt);
 
   // Returns the TypeId for a given ParsedType if it can be resolved.
@@ -66,7 +73,8 @@ class TypeContext {
   // `binding` MUST have a `symbol_id` of the template Symbol to realize.
   std::optional<TypeId> GetTemplateOf(
       NamedBinding binding,
-      const std::vector<TypeId>& argument_type_ids);
+      const std::vector<TypeId>& argument_type_ids,
+      CheckFunctionBody check_fn_body = CheckFunctionBody::YES);
 
   // Returns if TypeId if Nil or could be Nil i.e. Nil + Optional.
   bool IsTypeNilable(TypeId type_id) const;
@@ -74,8 +82,6 @@ class TypeContext {
   // Returns true if `sub_type_id` is a subset of `super_type_id` (i.e. can be
   // used in its place). This is used for function argument type checking, etc.
   bool IsTypeSubsetOf(TypeId sub_type, TypeId super_type) const;
-
-  ParsedType GetParsedTypeFromId(TypeId) const;
 
   struct RealizedFunction {
     ScopeId scope_id;
@@ -98,6 +104,7 @@ class TypeContext {
 
   std::optional<TypeInstance> DeclareFunctionType(
       FunctionDeclaration& decl,
+      CheckFunctionBody check_fn_body,
       std::optional<TypeId> self_id = std::nullopt);
 
   std::vector<RealizedFunction> realized_functions_;

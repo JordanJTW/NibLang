@@ -72,6 +72,12 @@ struct SpannedText {
   static SpannedText FromToken(Token token);
 };
 
+// Represents a Type and the span (of an expression) that yielded it
+struct SpannedType {
+  TypeId type_id;
+  Metadata metadata;
+};
+
 struct NamedBinding {
   using Idx = size_t;
 

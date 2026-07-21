@@ -33,6 +33,11 @@ struct OptionalType {
   TypeId wrapped_type;
 };
 
+using SlotId = size_t;
+struct PlaceholderType {
+  SlotId idx;
+};
+
 struct StructType {
   const StructDeclaration& declaration;
 
@@ -57,6 +62,7 @@ using Type = std::variant<AliasType,
                           BuiltInType,
                           FunctionType,
                           OptionalType,
+                          PlaceholderType,
                           StructType,
                           UnionType>;
 
@@ -102,6 +108,10 @@ class TypeRegistry {
   TypeId NewUnionType(UnionType type);
   // Creates an Optional type wrapping `type_id` and returns Optional[T]'s ID.
   TypeId NewOptionalType(TypeId type_id);
+  // Creates a PlaceholderType representing template variable at position `idx`.
+  // PlaceholderTypes are interned by their positional `idx` in a template so
+  // that we do not end up with an explosion of Types.
+  TypeId NewPlaceholderType(SlotId idx);
 
   // Creates an alias with `name` linking `self_id` to `target_id`.
   void NewAliasType(std::string_view name, TypeId self_id, TypeId target_id);
@@ -151,6 +161,8 @@ class TypeRegistry {
   using Symbol = std::variant<FunctionSymbol, StructSymbol>;
   std::unordered_map<SymbolId, Symbol> symbol_table_;
   SymbolId next_symbol_id_{0};
+
+  std::unordered_map<SlotId, TypeId> interned_placeholder_type_;
 };
 
 std::ostream& operator<<(std::ostream&, const TypeRegistry&);

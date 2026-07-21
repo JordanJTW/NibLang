@@ -147,6 +147,18 @@ TypeId TypeRegistry::NewUnionType(UnionType type) {
   return type_id;
 }
 
+TypeId TypeRegistry::NewPlaceholderType(SlotId idx) {
+  if (const auto& it = interned_placeholder_type_.find(idx);
+      it != interned_placeholder_type_.end()) {
+    return it->second;
+  }
+
+  TypeId type_id = NewTypeId();
+  type_table_[type_id] = PlaceholderType{idx};
+  interned_placeholder_type_[idx] = type_id;
+  return type_id;
+}
+
 TypeId TypeRegistry::NewTypeId() {
   return next_type_id_++;
 }
@@ -217,7 +229,10 @@ std::string TypeRegistry::GetNameFromTypeId(TypeId type_id) const {
           [&](const OptionalType type) {
             return GetNameFromTypeId(type.wrapped_type) + "?";
           },
-          [&](const AliasType type) { return "Alias[" + type.name + "]"; }},
+          [&](const AliasType type) { return "Alias[" + type.name + "]"; },
+          [&](const PlaceholderType& type) {
+            return "$" + std::to_string(type.idx);
+          }},
       it->second);
 }
 

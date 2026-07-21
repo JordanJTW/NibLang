@@ -40,10 +40,10 @@ TypeContext::TypeContext(ScopeManager& scope_manager,
       type_registry_(type_registry),
       error_collector_(error_collector) {}
 
-void TypeContext::DefineStructType(
-    TypeId self_id,
-    StructSymbol& symbol,
-    const std::vector<TypeId> template_arguemnts) {
+void TypeContext::DefineStructType(TypeId self_id,
+                                   StructSymbol& symbol,
+                                   const std::vector<TypeId> template_arguemnts,
+                                   CheckFunctionBody check_fn_body) {
   StructType struct_type(symbol.declaration);
   struct_type.template_arguments = template_arguemnts;
   struct_type.scope_id =
@@ -82,7 +82,7 @@ void TypeContext::DefineStructType(
     SymbolId symbol_id = binding.symbol_id.value();
 
     // Errors are logged from within `DefineFunction`.
-    DefineFunction(symbol_id, self_id);
+    DefineFunction(symbol_id, check_fn_body, self_id);
   }
   scope_manager_.ExitScope();
 
@@ -91,11 +91,17 @@ void TypeContext::DefineStructType(
 
 std::optional<NamedBinding> TypeContext::DefineFunction(
     SymbolId symbol_id,
+    CheckFunctionBody check_fn_body,
     std::optional<TypeId> self_id) {
   FunctionSymbol* symbol = type_registry_.GetSymbol<FunctionSymbol>(symbol_id);
   CHECK(symbol) << "DefineFunction passed an invalid `symbol_id`";
 
   FunctionDeclaration& fn = symbol->declaration;
+
+  // Static methods are just functions that are namespaced within a struct as
+  // syntactic sugar and thus have no "parent" other than at the scope level.
+  if (fn.function_kind == FunctionKind::StaticMethod)
+    self_id = std::nullopt;
 
   if (!symbol->IsExtern()) {
     if (!fn.body) {
@@ -116,7 +122,7 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
 
   std::optional<TypeInstance> instance;
   if (fn.template_arguments.empty()) {
-    if ((instance = DeclareFunctionType(fn, self_id))) {
+    if ((instance = DeclareFunctionType(fn, CheckFunctionBody::YES, self_id))) {
       std::vector<TypeId> instance_key =
           self_id ? std::vector<TypeId>{*self_id} : std::vector<TypeId>{};
       symbol->instances[std::move(instance_key)] = *instance;
@@ -144,7 +150,7 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
   auto type_id = instance ? instance->type_id : std::optional<TypeId>{};
   NamedBinding binding = scope_manager_.InsertNameIntoScope(
       fn.name, NamedBinding::Function, std::move(type_id), symbol_id,
-      /*idx=*/std::nullopt, std::move(self_id));
+      /*idx=*/std::nullopt, self_id);
   fn.resolved->function_symbol = binding;
   return binding;
 }
@@ -267,7 +273,8 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
               }
             }
 
-            return GetTemplateOf(binding.value(), std::move(argument_type_ids));
+            return GetTemplateOf(binding.value(), std::move(argument_type_ids),
+                                 CheckFunctionBody::NO);
           }},
       type.type);
 }
@@ -334,6 +341,7 @@ bool TypeContext::IsTypeNilable(TypeId type_id) const {
 
 std::optional<TypeInstance> TypeContext::DeclareFunctionType(
     FunctionDeclaration& fn,
+    CheckFunctionBody check_fn_body,
     std::optional<TypeId> self_id) {
   ScopeId scope_id = scope_manager_.EnterScope(
       ScopeManager::FunctionInstanceScope, "fn " + fn.name.text);
@@ -369,7 +377,8 @@ std::optional<TypeInstance> TypeContext::DeclareFunctionType(
 
   scope_manager_.ExitScope();
 
-  realized_functions_.push_back(RealizedFunction{scope_id, fn, *return_type});
+  if (check_fn_body == CheckFunctionBody::YES)
+    realized_functions_.push_back(RealizedFunction{scope_id, fn, *return_type});
 
   auto key = FunctionType{std::move(argument_types), return_type.value(),
                           std::move(variadic_type)};
@@ -449,7 +458,8 @@ bool TypeContext::IsTypeSubsetOf(TypeId sub_type_id,
 
 std::optional<TypeId> TypeContext::GetTemplateOf(
     NamedBinding binding,
-    const std::vector<TypeId>& argument_type_ids) {
+    const std::vector<TypeId>& argument_type_ids,
+    CheckFunctionBody check_fn_body) {
   CHECK(binding.symbol_id) << "Provided binding is missing SymbolId";
 
   std::stringstream ss;
@@ -492,7 +502,8 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
                   scope_manager_.DeclareTemplateBinding(
                       template_arguments[i].name, argument_type_ids[i]);
 
-                DefineStructType(self_id, *symbol, argument_type_ids);
+                DefineStructType(self_id, *symbol, argument_type_ids,
+                                 check_fn_body);
                 return self_id;
               });
         });
@@ -508,12 +519,12 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
     const auto& template_arguments = symbol->declaration.template_arguments;
 
     if (argument_type_ids.size() < template_arguments.size()) {
-      error_collector_.Add(
-          "Template fn " + symbol->declaration.name.text + " requires " +
-              std::to_string(template_arguments.size()) +
-              " template arguments but only " +
-              std::to_string(argument_type_ids.size()) + " were provided",
-          {});
+      error_collector_.Add("Template fn " + symbol->GetName() + " requires " +
+                               std::to_string(template_arguments.size()) +
+                               " template arguments but only " +
+                               std::to_string(argument_type_ids.size()) +
+                               " were provided",
+                           {});
       return std::nullopt;
     }
 
@@ -536,8 +547,7 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
                 for (size_t i = 0; i < template_arguments.size(); ++i)
                   scope_manager_.DeclareTemplateBinding(
                       template_arguments[i].name, argument_type_ids[i]);
-
-                return DeclareFunctionType(symbol->declaration,
+                return DeclareFunctionType(symbol->declaration, check_fn_body,
                                            binding.parent_type_id);
               });
 
@@ -554,60 +564,4 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
 
   NOTREACHED() << "Do not know how to realize binding: " << binding;
   return std::nullopt;
-}
-
-ParsedType TypeContext::GetParsedTypeFromId(TypeId type_id) const {
-  const auto& type_table = type_registry_.type_table();
-  const auto it = type_table.find(type_id);
-  CHECK(it != type_table.end()) << "Invalid TypeId: " << type_id;
-
-  return std::visit(
-      Overloaded{[&](const BuiltInType& type) {
-                   return ParsedType{type_registry_.GetNameFromTypeId(type_id)};
-                 },
-                 [&](const FunctionType& type) {
-                   std::vector<ParsedType> arguments;
-                   for (TypeId type_id : type.arg_types)
-                     arguments.push_back(GetParsedTypeFromId(type_id));
-
-                   auto return_type = GetParsedTypeFromId(type.return_type);
-
-                   return ParsedType{ParsedFunctionType{
-                       std::move(arguments),
-                       std::make_shared<ParsedType>(std::move(return_type))}};
-                 },
-                 [&](const StructType& type) {
-                   if (type.declaration.IsTemplate()) {
-                     auto base_type = ParsedType{type.declaration.name.text};
-
-                     std::vector<ParsedType> parameter_types;
-                     for (TypeId type_id : type.template_arguments)
-                       parameter_types.push_back(GetParsedTypeFromId(type_id));
-
-                     return ParsedType{ParsedParameterizedType{
-                         std::make_shared<ParsedType>(std::move(base_type)),
-                         std::move(parameter_types)}};
-                   }
-
-                   return ParsedType{type.declaration.name.text};
-                 },
-                 [&](const UnionType& type) {
-                   std::vector<ParsedType> union_types;
-                   for (TypeId type_id : type.types)
-                     union_types.push_back(GetParsedTypeFromId(type_id));
-
-                   return ParsedType{ParsedUnionType{std::move(union_types)}};
-                 },
-                 [&](const OptionalType& type) {
-                   auto wrapped_type = GetParsedTypeFromId(type.wrapped_type);
-
-                   return ParsedType{ParsedOptionalType{
-                       std::make_shared<ParsedType>(std::move(wrapped_type))}};
-                 },
-                 [&](const AliasType& type) {
-                   // AliasType's do not map 1:1 back to a ParsedType but it is
-                   // safe to simply unwrap them and return the target TypeId.
-                   return GetParsedTypeFromId(type.target_type_id);
-                 }},
-      it->second);
 }

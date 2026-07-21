@@ -406,7 +406,8 @@ TEST_F(TypeContextTest, DefineFunction_ExternMethod) {
   auto method_symbol_id =
       type_registry.NewFunctionSymbol(method_decl, &struct_decl);
   auto method_binding = type_context.DefineFunction(
-      method_symbol_id, *struct_binding.realized_type_id);
+      method_symbol_id, TypeContext::CheckFunctionBody::YES,
+      *struct_binding.realized_type_id);
   ASSERT_TRUE(method_binding.has_value());
   EXPECT_EQ(method_binding->kind, NamedBinding::Function);
   EXPECT_EQ(method_binding->symbol_id, method_symbol_id);

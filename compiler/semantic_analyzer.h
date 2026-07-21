@@ -63,19 +63,10 @@ class SemanticAnalyzer {
   };
 
   void TypeCheckCallArguments(
-      const std::vector<ArgumentResult>& call_arugment_results,
+      const std::vector<std::optional<SpannedType>>& call_arugment_results,
       const std::vector<TypeId>& expected_argument_types,
       const Metadata& debug_metadata,
       std::optional<TypeId> variadic_type);
-
-  std::optional<TypeId> InstantiateType(
-      const std::vector<std::pair<SpannedText, ParsedType>>& parsed_types,
-      const std::vector<ArgumentResult>& arugment_results,
-      const std::vector<TemplateArgument>& template_arguments,
-      const std::vector<TemplateArgument>& self_template_arguments,
-      NamedBinding binding,
-      std::string_view symbol_name,
-      std::unordered_map<std::string, TypeId> default_template_type_ids);
 
   Result TypeCheckCallExpr(CallExpression& call_expr,
                            ExpressionResult callee_result,

@@ -105,8 +105,10 @@ void SemanticAnalyzer::Check(Block& block, FunctionContext& context) {
     auto* symbol = type_registry_.GetSymbol<StructSymbol>(*self.symbol_id);
     CHECK(symbol);  // DeclareStructSymbol MUST create a StructSymbol
 
-    type_context_.DefineStructType(*self.realized_type_id, *symbol,
-                                   /*template_arguments=*/{});
+    scope_manager_.WithScope(symbol->self_scope_id, [&]() {
+      type_context_.DefineStructType(*self.realized_type_id, *symbol,
+                                     /*template_arguments=*/{});
+    });
   }
   for (auto& statement : block.statements) {
     if (auto* declaration = std::get_if<FunctionDeclaration>(&statement->as)) {
@@ -766,7 +768,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
               return std::nullopt;
 
             if (!result->binding.has_value() ||
-                (result->binding->kind != NamedBinding::Struct)) {
+                (result->binding->kind != NamedBinding::Struct &&
+                 result->binding->kind != NamedBinding::Function)) {
               error_collector_.Add(".of() used on non-templated type",
                                    template_expr.generic_target->meta);
               return std::nullopt;
@@ -807,7 +810,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
 }
 
 void SemanticAnalyzer::TypeCheckCallArguments(
-    const std::vector<ArgumentResult>& call_arugment_results,
+    const std::vector<std::optional<SpannedType>>& call_arugment_results,
     const std::vector<TypeId>& expected_argument_types,
     const Metadata& debug_metadata,
     std::optional<TypeId> variadic_type) {
@@ -831,100 +834,19 @@ void SemanticAnalyzer::TypeCheckCallArguments(
 
       // Even if an argument expression does not parse correctly, continue
       // on to the next to try to collect as many errors as possible.
-      if (!argument_result.result.has_value() ||
-          !argument_result.result->has_type_id())
+      if (!argument_result.has_value())
         continue;
 
-      if (argument_result.result->binding->symbol_id.has_value()) {
-        error_collector_.Add("types can not be passed as function arguments",
-                             debug_metadata);
-      }
-
-      if (!type_context_.IsTypeSubsetOf(*argument_result.result->type_id,
-                                        expected_type) &&
-          argument_result.metadata.has_value()) {
+      if (!type_context_.IsTypeSubsetOf(argument_result->type_id,
+                                        expected_type)) {
         error_collector_.Add(
             "Argument type mismatch. Expected " +
                 type_registry_.GetNameFromTypeId(expected_type) + " but got " +
-                type_registry_.GetNameFromTypeId(
-                    *argument_result.result->type_id),
-            argument_result.metadata.value());
+                type_registry_.GetNameFromTypeId(argument_result->type_id),
+            argument_result->metadata);
       }
     }
   }
-}
-
-std::optional<TypeId> SemanticAnalyzer::InstantiateType(
-    const std::vector<std::pair<SpannedText, ParsedType>>& parsed_types,
-    const std::vector<ArgumentResult>& argument_results,
-    const std::vector<TemplateArgument>& template_arguments,
-    const std::vector<TemplateArgument>& self_template_arguments,
-    NamedBinding binding,
-    std::string_view symbol_name,
-    std::unordered_map<std::string, TypeId> default_template_type_ids) {
-  TypeResolver::Bindings bindings;
-  TypeResolver resolver(type_context_, error_collector_);
-
-  std::vector<std::string> template_names;
-  {
-    template_names.reserve(template_arguments.size());
-    std::transform(template_arguments.begin(), template_arguments.end(),
-                   std::back_inserter(template_names),
-                   [](auto& arg) { return arg.name.text; });
-  }
-
-  for (size_t i = 0; i < parsed_types.size(); ++i) {
-    const auto& [name, pattern_type] = parsed_types[i];
-
-    if (i >= argument_results.size() ||
-        !argument_results[i].result.has_value()) {
-      error_collector_.Add("Missing argument", pattern_type.metadata);
-      return std::nullopt;
-    }
-
-    if (!argument_results[i].metadata)
-      continue;
-
-    auto type_id = argument_results[i].result->type_id;
-    if (!type_id) {
-      error_collector_.Add("Encountered unrealized argument",
-                           *argument_results[i].metadata);
-      return std::nullopt;
-    }
-
-    auto concrete_type = type_context_.GetParsedTypeFromId(*type_id);
-
-    if (!resolver.Resolve(pattern_type, concrete_type, template_names,
-                          bindings)) {
-      LOG(WARNING) << "Failed to resolve bindings for: " << symbol_name
-                   << " concrete: " << concrete_type
-                   << " pattern: " << pattern_type;
-    }
-  }
-
-  std::vector<TypeId> argument_type_ids;
-  argument_type_ids.reserve(self_template_arguments.size());
-  for (size_t i = 0; i < self_template_arguments.size(); ++i) {
-    if (bindings.contains(self_template_arguments[i].name.text)) {
-      const auto& inferred_type =
-          bindings[self_template_arguments[i].name.text];
-      if (auto type_id = type_context_.GetTypeIdFor(inferred_type)) {
-        argument_type_ids.push_back(type_id.value());
-      } else {
-        LOG(ERROR) << "Template argument has unknown TypeId: "
-                   << self_template_arguments[i].name.text;
-        return std::nullopt;
-      }
-    } else if (default_template_type_ids.contains(template_names[i])) {
-      argument_type_ids.push_back(default_template_type_ids[template_names[i]]);
-    } else {
-      LOG(ERROR) << "Failed to infer template argument with no default: "
-                 << self_template_arguments[i].name.text;
-      return std::nullopt;
-    }
-  }
-
-  return type_context_.GetTemplateOf(binding, argument_type_ids);
 }
 
 SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
@@ -933,66 +855,51 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
     FunctionContext& context,
     Metadata debug_metadata) {
   // Ensure all arguments are type-checked regardless of the target.
-  std::vector<ArgumentResult> argument_results;
+  std::vector<std::optional<SpannedType>> argument_results;
   argument_results.reserve(call_expr.arguments.size());
-  std::transform(call_expr.arguments.begin(), call_expr.arguments.end(),
-                 std::back_inserter(argument_results),
-                 [this, &context](std::unique_ptr<Expression>& expr) {
-                   return ArgumentResult{CheckExpression(expr, context),
-                                         expr->meta};
-                 });
+  std::transform(
+      call_expr.arguments.begin(), call_expr.arguments.end(),
+      std::back_inserter(argument_results),
+      [&](std::unique_ptr<Expression>& expr) -> std::optional<SpannedType> {
+        if (auto result = CheckExpression(expr, context)) {
+          if (result->has_type_id())
+            return SpannedType{*result->type_id, expr->meta};
+
+          if (result->binding && result->binding->symbol_id) {
+            error_collector_.Add(
+                "types can not be passed as function arguments", expr->meta);
+          }
+        }
+        return std::nullopt;
+      });
+
+  // Account for the implicit "self" argument for method calls
+  if (callee_result.binding && callee_result.binding->parent_type_id) {
+    argument_results.insert(
+        argument_results.begin(),
+        SpannedType{*callee_result.binding->parent_type_id, /*metadata=*/{}});
+  }
 
   std::optional<TypeId> callable_type_id = callee_result.type_id;
 
   if (!callable_type_id) {
+    LOG(INFO) << "Call but no TypeId but Binding: " << *callee_result.binding;
+
     CHECK(callee_result.binding && callee_result.binding->symbol_id)
         << "SymbolId is required for templates";
 
-    if (const auto* symbol = type_registry_.GetSymbol<FunctionSymbol>(
-            *callee_result.binding->symbol_id)) {
-      std::vector<ArgumentResult> arg_results = argument_results;
-      // Account for the implicit "self" argument for method calls
-      if (symbol->declaration.function_kind == FunctionKind::Method) {
-        arg_results.insert(arg_results.begin(), ArgumentResult{callee_result});
-      }
+    TypeResolver resolver(type_registry_, type_context_, error_collector_);
 
-      std::vector<TemplateArgument> template_arguments =
-          symbol->declaration.template_arguments;
+    std::vector<TypeId> deduced_bindings;
+    if (resolver.Resolve(*callee_result.binding, argument_results,
+                         deduced_bindings, call_expr.callee->meta)) {
+      // // If there were no template variables to deduce then this Symbol is
+      // // likely a method on a templated struct -- do not realize it here.
+      // if (deduced_bindings.empty())
+      //   return std::nullopt;
 
-      // If this function has a parent i.e. is a method, then we must take in to
-      // account the parent's template arguments as well for template resolution
-      if (callee_result.binding->parent_type_id) {
-        const auto* parent_type = type_registry_.GetType<StructType>(
-            *callee_result.binding->parent_type_id);
-        CHECK(parent_type) << "TypeId("
-                           << *callee_result.binding->parent_type_id
-                           << ") does not resolve to a StructType";
-        template_arguments.insert(
-            template_arguments.end(),
-            parent_type->declaration.template_arguments.begin(),
-            parent_type->declaration.template_arguments.end());
-      }
-
-      callable_type_id = InstantiateType(
-          symbol->declaration.arguments, arg_results,
-          std::move(template_arguments), symbol->declaration.template_arguments,
-          *callee_result.binding, "fn " + symbol->declaration.name.text,
-          symbol->default_template_type_ids);
-    }
-
-    else if (const auto* symbol = type_registry_.GetSymbol<StructSymbol>(
-                 *callee_result.binding->symbol_id)) {
-      callable_type_id = InstantiateType(
-          symbol->declaration.fields, argument_results,
-          symbol->declaration.template_arguments,
-          symbol->declaration.template_arguments, *callee_result.binding,
-          "struct " + symbol->declaration.name.text,
-          /*default_template_type_ids=*/{});
-    }
-
-    else {
-      LOG(ERROR) << "non-template symbol attempting to be instantiated";
-      return std::nullopt;
+      callable_type_id =
+          type_context_.GetTemplateOf(*callee_result.binding, deduced_bindings);
     }
   }
 
@@ -1006,13 +913,6 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
         callee_result.binding->kind == NamedBinding::Function) {
       const FunctionSymbol& symbol = *type_registry_.GetSymbol<FunctionSymbol>(
           *callee_result.binding->symbol_id);
-
-      // Account for the implicit "self" argument for method calls
-      if (symbol.declaration.function_kind == FunctionKind::Method) {
-        argument_results.insert(
-            argument_results.begin(),
-            ArgumentResult{ExpressionResult(*callee_result.type_id)});
-      }
       call_expr.resolved = ResolvedCall{*callee_result.binding->symbol_id,
                                         symbol.declaration.function_kind};
     } else {

@@ -33,18 +33,43 @@ class SemanticAnalyzer {
     TypeId else_branch_type;
   };
 
-  struct ExpressionResult {
-    ExpressionResult(TypeId id) : type_id(id) {}
-    ExpressionResult(NamedBinding binding)
-        : type_id(binding.realized_type_id), binding(std::move(binding)) {}
-    ExpressionResult(TypeId id, std::optional<NamedBinding> binding)
-        : type_id(id), binding(std::move(binding)) {}
 
+  struct ExpressionResult {
+    explicit ExpressionResult(TypeId type_id)
+        : type_id(type_id) {}
+
+    static ExpressionResult of_binding(NamedBinding binding) {
+      ExpressionResult res;
+      res.type_id = binding.realized_type_id;
+      res.binding = std::move(binding);
+      return res;
+    }
+
+    static ExpressionResult with_type_override(
+        TypeId type_id,
+        std::optional<NamedBinding> binding) {
+      if (!binding)
+        return ExpressionResult(type_id);
+
+      ExpressionResult result = ExpressionResult::of_binding(*binding);
+      result.type_id = type_id;
+      return result;
+    }
+
+    // Is this an instance? i.e. "hello world", 2 + 2, foo
+    // If no binding is given then assume a temporary value with only a TypeId.
+    bool is_value() const { return binding ? binding->IsValue() : true; }
+    // Is this a type? i.e. String, i32, Point. Types MUST have a binding.
+    bool is_type_ref() const { return binding ? binding->IsTypeRef() : false; }
     bool has_type_id() const { return type_id.has_value(); }
 
     std::optional<TypeId> type_id;
     std::optional<NamedBinding> binding;
+    bool should_curry_method_self = false;
     std::vector<ScopeNarrowingInfo> narrowing_info = {};
+
+   private:
+    ExpressionResult() = default;
   };
 
   using Result = std::optional<SemanticAnalyzer::ExpressionResult>;
@@ -75,8 +100,13 @@ class SemanticAnalyzer {
                            FunctionContext& context,
                            Metadata debug_metdata);
 
+  Result RequireConcreteValue(std::unique_ptr<Expression>& expression,
+                              FunctionContext& context);
+
   TypeContext& type_context_;
   ScopeManager& scope_manager_;
   ErrorCollector& error_collector_;
   TypeRegistry& type_registry_;
 };
+
+std::ostream& operator<<(std::ostream& os, SemanticAnalyzer::Result result);

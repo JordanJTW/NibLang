@@ -182,7 +182,7 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
             // resolved structurally to allow for flexible callbacks, etc.
             if (auto binding = scope_manager_.FindBindingFor(
                     type_name, ScopeManager::All)) {
-              if (binding->IsType()) {
+              if (binding->IsTypeRef()) {
                 // Add an error when trying to get a TypeId of a base template.
                 if (!binding->realized_type_id.has_value()) {
                   error_collector_.Add("invalid use of template-name '" +

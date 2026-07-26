@@ -96,9 +96,17 @@ struct NamedBinding {
   std::optional<TypeId> realized_type_id;
   std::optional<SymbolId> symbol_id;
 
-  inline bool IsRealized() { return realized_type_id.has_value(); }
-  inline bool IsType() {
+  inline bool IsTypeRef() const {
     return kind == Struct || kind == Template || kind == TypeAlias;
+  }
+  inline bool IsVariable() const {
+    // A variable by any other name is just as sweet...
+    return kind == Field || kind == Argument || kind == Variable ||
+           kind == Capture || kind == Narrowed;
+  }
+  inline bool IsValue() const {
+    // Functions are effectively just variables refering to a code block.
+    return kind == Function || IsVariable();
   }
 
   // Used for function table resolution, struct field ordering, etc.

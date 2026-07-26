@@ -78,7 +78,7 @@ void SemanticAnalyzer::Check(Block& block, FunctionContext& context) {
       if (auto* target = std::get_if<std::string>(&alias->type->type)) {
         std::optional<NamedBinding> target_binding =
             scope_manager_.FindBindingFor(*target, ScopeManager::All);
-        if (!target_binding->IsType()) {
+        if (!target_binding->IsTypeRef()) {
           error_collector_.Add("Cannot create type alias '" + alias->name.text +
                                    "' from value identifier '" + *target + "'",
                                alias->type->metadata);
@@ -149,40 +149,32 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
   std::visit(
       Overloaded{
           [&](std::unique_ptr<Expression>& expr) {
-            CheckExpression(expr, context);
+            RequireConcreteValue(expr, context);
           },
           [&](FunctionDeclaration& fn) {
             // Function bodies are checked only when a FunctionType is realized
           },
           [&](ReturnStatement& ret) {
-            Result return_result = CheckExpression(ret.value, context);
+            Result result = RequireConcreteValue(ret.value, context);
 
-            if (!return_result.has_value())
+            if (!result.has_value())
               return;
 
-            if (return_result->binding && return_result->binding->IsType()) {
-              NamedBinding binding = return_result->binding.value();
-              error_collector_.Add(
-                  "Expected a variable or value, but found type '" +
-                      binding.name.text + "'",
-                  ret.value->meta);
-              return;
-            }
-
-            if (!type_context_.IsTypeSubsetOf(*return_result->type_id,
+            if (!type_context_.IsTypeSubsetOf(*result->type_id,
                                               context.return_type_id)) {
               error_collector_.Add(
                   "Returning " +
-                      type_registry_.GetNameFromTypeId(
-                          *return_result->type_id) +
+                      type_registry_.GetNameFromTypeId(*result->type_id) +
                       " from function with return type " +
                       type_registry_.GetNameFromTypeId(context.return_type_id),
                   statement->meta);
             }
           },
-          [&](ThrowStatement& thr) { CheckExpression(thr.value, context); },
+          [&](ThrowStatement& thr) {
+            RequireConcreteValue(thr.value, context);
+          },
           [&](IfStatement& if_stmt) {
-            Result result = CheckExpression(if_stmt.condition, context);
+            Result result = RequireConcreteValue(if_stmt.condition, context);
 
             const auto narrowing_info = result
                                             ? result->narrowing_info
@@ -208,7 +200,7 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
             }
           },
           [&](WhileStatement& while_stmt) {
-            CheckExpression(while_stmt.condition, context);
+            RequireConcreteValue(while_stmt.condition, context);
             {
               AutoScope _{scope_manager_, ScopeManager::BlockScope, "while"};
               Check(while_stmt.body, context);
@@ -225,36 +217,23 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
               parsed_type_id = type_context_.GetTypeIdFor(*assign.type);
             }
 
-            Result value_result = CheckExpression(assign.value, context);
-            if (!value_result.has_value())
+            Result result = RequireConcreteValue(assign.value, context);
+            if (!result.has_value())
               return;
-
-            if (!value_result->has_type_id()) {
-              error_collector_.Add(
-                  "Unable to assign from invalid RHS expression",
-                  assign.value->meta);
-              return;
-            }
-
-            if (value_result->binding && value_result->binding->symbol_id) {
-              error_collector_.Add("expected value", assign.value->meta);
-              return;
-            }
 
             if (parsed_type_id.has_value()) {
-              if (!type_context_.IsTypeSubsetOf(*value_result->type_id,
+              if (!type_context_.IsTypeSubsetOf(*result->type_id,
                                                 *parsed_type_id)) {
                 error_collector_.Add(
                     "Assigning " +
-                        type_registry_.GetNameFromTypeId(
-                            *value_result->type_id) +
+                        type_registry_.GetNameFromTypeId(*result->type_id) +
                         " to " +
                         type_registry_.GetNameFromTypeId(*parsed_type_id),
                     statement->meta);
                 return;
               }
             } else {
-              parsed_type_id = value_result->type_id;
+              parsed_type_id = result->type_id;
             }
 
             // Register the variable's type within the current scope.
@@ -298,7 +277,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                           ident.name, ScopeManager::Function);
                       if (binding) {
                         ident.resolved = ResolvedIdentifier{*binding};
-                        return ExpressionResult(*binding);
+                        return ExpressionResult::of_binding(*binding);
                       }
 
                       // Fallback search to the parent function scope.
@@ -315,7 +294,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                         }
 
                         ident.resolved = ResolvedIdentifier{*binding};
-                        return ExpressionResult(*binding);
+                        return ExpressionResult::of_binding(*binding);
                       }
 
                       // Fallback search to ALL scopes for functions/structs.
@@ -328,7 +307,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                           case NamedBinding::TypeAlias:
                           case NamedBinding::Template: {
                             ident.resolved = ResolvedIdentifier{*binding};
-                            return ExpressionResult(*binding);
+                            return ExpressionResult::of_binding(*binding);
                           }
 
                           case NamedBinding::Argument:
@@ -366,19 +345,11 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                 primary.value);
           },
           [&](BinaryExpression& binary) -> SemanticAnalyzer::Result {
-            Result lhs = CheckExpression(binary.lhs, context);
-            Result rhs = CheckExpression(binary.rhs, context);
+            Result lhs = RequireConcreteValue(binary.lhs, context);
+            Result rhs = RequireConcreteValue(binary.rhs, context);
 
-            if (!lhs.has_value() || !rhs.has_value())
+            if (!lhs || !rhs)
               return std::nullopt;
-
-            if (!lhs->has_type_id() || !rhs->has_type_id()) {
-              error_collector_.Add(
-                  "Template types cannot be used in binary expressions without "
-                  "instantiation",
-                  expression->meta);
-              return std::nullopt;
-            }
 
             if (lhs->type_id != rhs->type_id &&
                 !((rhs->type_id == LiteralType::Nil &&
@@ -467,31 +438,25 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             return type_check_result;
           },
           [&](AssignmentExpression& assign) -> SemanticAnalyzer::Result {
-            Result lhs = CheckExpression(assign.lhs, context);
-            Result rhs = CheckExpression(assign.rhs, context);
+            Result lhs = RequireConcreteValue(assign.lhs, context);
+            Result rhs = RequireConcreteValue(assign.rhs, context);
 
             if (!lhs.has_value() || !rhs.has_value())
               return std::nullopt;
 
-            if (!rhs->has_type_id()) {
-              error_collector_.Add(
-                  "Unable to assign from invalid RHS expression",
-                  assign.rhs->meta);
-              return std::nullopt;
-            }
-
             if (!lhs->binding.has_value() ||
                 !(lhs->binding->kind == NamedBinding::Kind::Variable ||
-                  lhs->binding->kind == NamedBinding::Kind::Field) ||
-                !lhs->has_type_id()) {
-              error_collector_.Add("Unable to assign to invalid LHS expression",
-                                   assign.rhs->meta);
+                  lhs->binding->kind == NamedBinding::Kind::Field)) {
+              error_collector_
+                  .Add("can not assign to '" + lhs->binding->name.text,
+                       assign.lhs->meta)
+                  .WithNote("declared here", lhs->binding->name.metadata);
               return std::nullopt;
             }
 
             if (!type_context_.IsTypeSubsetOf(*rhs->type_id, *lhs->type_id)) {
               error_collector_.Add(
-                  "Mismatched assignment: " +
+                  "mismatched assignment: " +
                       type_registry_.GetNameFromTypeId(*lhs->type_id) +
                       " vs. " + type_registry_.GetNameFromTypeId(*rhs->type_id),
                   expression->meta);
@@ -503,16 +468,15 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             return HandleMemberAccess(member_access, context);
           },
           [&](ArrayAccessExpression& array_access) -> SemanticAnalyzer::Result {
-            Result object = CheckExpression(array_access.array, context);
-            Result index = CheckExpression(array_access.index, context);
+            Result object = RequireConcreteValue(array_access.array, context);
+            Result index = RequireConcreteValue(array_access.index, context);
 
-            if (!object.has_value() || !object->has_type_id() ||
-                !index.has_value() || !index->has_type_id())
+            if (!object || !index)
               return std::nullopt;
 
             if (index->type_id != LiteralType::i32) {
               error_collector_.Add(
-                  "Index must be i32 but instead type is: " +
+                  "index must be i32 but instead type is: " +
                       type_registry_.GetNameFromTypeId(*index->type_id),
                   array_access.index->meta);
               // Continue parsing to collect more errors.
@@ -522,11 +486,10 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             return ExpressionResult{LiteralType::Any};
           },
           [&](LogicExpression& logic) -> SemanticAnalyzer::Result {
-            Result lhs = CheckExpression(logic.lhs, context);
-            Result rhs = CheckExpression(logic.rhs, context);
+            Result lhs = RequireConcreteValue(logic.lhs, context);
+            Result rhs = RequireConcreteValue(logic.rhs, context);
 
-            if (!lhs.has_value() || !lhs->has_type_id() || !rhs.has_value() ||
-                !rhs->has_type_id())
+            if (!lhs || !rhs)
               return std::nullopt;
 
             if (lhs->type_id != rhs->type_id) {
@@ -564,124 +527,104 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             return std::nullopt;
           },
           [&](PrefixUnaryExpression& prefix) -> SemanticAnalyzer::Result {
-            Result operand = CheckExpression(prefix.operand, context);
+            Result operand = RequireConcreteValue(prefix.operand, context);
             // TODO: Check that `op` is valid for `operand`.
             return operand;
           },
           [&](PostfixUnaryExpression& postfix) -> SemanticAnalyzer::Result {
-            Result operand = CheckExpression(postfix.operand, context);
+            Result operand = RequireConcreteValue(postfix.operand, context);
             // TODO: Check that `op` is valid for `operand`.
             return operand;
           },
           [&](TypeCastExpression& cast) -> SemanticAnalyzer::Result {
-            Result original_result = CheckExpression(cast.expr, context);
-            if (!original_result.has_value())
+            Result result = RequireConcreteValue(cast.expr, context);
+            if (!result.has_value())
               return std::nullopt;
 
             std::optional<TypeId> as_type =
                 type_context_.GetTypeIdFor(cast.as_type);
             if (!as_type) {
-              error_collector_.Add("Unknown 'as' type", cast.as_type.metadata);
+              error_collector_.Add("unknown 'as' type", cast.as_type.metadata);
               return std::nullopt;
             }
 
             if (type_context_.UnwrapOptional(*as_type)) {
-              error_collector_.Add("Casts must be to non-nilable types",
+              error_collector_.Add("casts must be to non-nilable types",
                                    cast.as_type.metadata);
+              return std::nullopt;
             }
 
-            if (!original_result->has_type_id()) {
-              error_collector_.Add("Can not cast unrealized expression",
-                                   cast.expr->meta);
-            }
-
-            bool is_valid_cast = type_context_.IsTypeSubsetOf(
-                as_type.value(), *original_result->type_id);
+            bool is_valid_cast =
+                type_context_.IsTypeSubsetOf(as_type.value(), *result->type_id);
 
             // Allow explicit casts between i32 <=> Codepoint.
-            is_valid_cast |=
-                (as_type.value() == LiteralType::Codepoint &&
-                 original_result->type_id == LiteralType::i32) ||
-                (original_result->type_id == LiteralType::Codepoint &&
-                 as_type.value() == LiteralType::i32);
+            is_valid_cast |= (as_type.value() == LiteralType::Codepoint &&
+                              result->type_id == LiteralType::i32) ||
+                             (result->type_id == LiteralType::Codepoint &&
+                              as_type.value() == LiteralType::i32);
 
             // Allow explicit casts from i32 to f32. This is lossy for large
             // integers but common (most languages implicitly allow this cast).
             // Since Codepoints can be cast to i32 allow to f32 for consistency.
-            is_valid_cast |=
-                (as_type.value() == LiteralType::f32 &&
-                 original_result->type_id == LiteralType::i32) ||
-                (as_type.value() == LiteralType::f32 &&
-                 original_result->type_id == LiteralType::Codepoint);
+            is_valid_cast |= (as_type.value() == LiteralType::f32 &&
+                              result->type_id == LiteralType::i32) ||
+                             (as_type.value() == LiteralType::f32 &&
+                              result->type_id == LiteralType::Codepoint);
 
             if (!is_valid_cast) {
               error_collector_.Add(
                   "Invalid type cast from " +
-                      type_registry_.GetNameFromTypeId(
-                          *original_result->type_id) +
+                      type_registry_.GetNameFromTypeId(*result->type_id) +
                       " to " + type_registry_.GetNameFromTypeId(*as_type),
                   cast.as_type.metadata);
               return std::nullopt;
             }
 
-            TypeId result_type_id = as_type.value();
+            TypeId new_type_id = as_type.value();
             if (cast.strategy == TypeCastStrategy::OPTIONAL) {
-              result_type_id = type_context_.GetOptionalOf(as_type.value());
+              new_type_id = type_context_.GetOptionalOf(as_type.value());
             }
 
-            return ExpressionResult(result_type_id, original_result->binding);
+            return ExpressionResult::with_type_override(new_type_id,
+                                                        result->binding);
           },
           [&](OptionalChainExpression& optional_chain) -> Result {
             // OptionalChainExpression is a "pseudo-AST node" which represents
             // the END of a chain of ?. accesses (i.e. where to jump to in case
             // of Nil) and resolves to the final type wrapped as an Optional.
-            Result result = CheckExpression(optional_chain.root, context);
+            Result result = RequireConcreteValue(optional_chain.root, context);
             if (!result.has_value())
               return std::nullopt;
-
-            CHECK(result->has_type_id())
-                << "Only realized results can participate in an optional chain";
 
             TypeId result_type_id = *result->type_id;
             if (!type_context_.UnwrapOptional(result_type_id)) {
               result_type_id = type_context_.GetOptionalOf(result_type_id);
             }
 
-            ExpressionResult new_result(result_type_id, result->binding);
+            ExpressionResult new_result = ExpressionResult::with_type_override(
+                result_type_id, result->binding);
             new_result.narrowing_info = std::move(result->narrowing_info);
             return new_result;
           },
           [&](NilCoalescingExpression& coalescing) -> Result {
-            Result lhs = CheckExpression(coalescing.lhs, context);
-            Result rhs = CheckExpression(coalescing.rhs, context);
+            Result lhs = RequireConcreteValue(coalescing.lhs, context);
+            Result rhs = RequireConcreteValue(coalescing.rhs, context);
 
-            if (!lhs.has_value() || !rhs.has_value())
+            if (!lhs || !rhs)
               return std::nullopt;
-
-            if (!lhs->has_type_id()) {
-              error_collector_.Add("does not resolve to a Type",
-                                   coalescing.lhs->meta);
-              return std::nullopt;
-            }
-
-            if (!rhs->has_type_id()) {
-              error_collector_.Add("does not resolve to a Type",
-                                   coalescing.lhs->meta);
-              return std::nullopt;
-            }
 
             if (type_context_.IsTypeNilable(*rhs->type_id)) {
-              error_collector_.Add(
-                  "RHS should NEVER be Nilable (i.e. Nil | Optional)",
-                  coalescing.rhs->meta);
+              error_collector_.Add("right-hand side of ?? cannot be nilable",
+                                   coalescing.rhs->meta);
               // Continue parsing to catch more errors...
             }
 
             std::optional<TypeId> lhs_type_id =
                 type_context_.UnwrapOptional(*lhs->type_id);
             if (!lhs_type_id) {
-              error_collector_.Add("LHS is not optional; ?? is a no-op",
-                                   coalescing.lhs->meta);
+              error_collector_.Add(
+                  "left-hand side of ?? is not optional; operator is a no-op",
+                  coalescing.lhs->meta);
               return std::nullopt;
             }
 
@@ -689,26 +632,20 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                 type_context_.GetUnionOf({*lhs_type_id, *rhs->type_id})};
           },
           [&](OptionalAccessExpression& optional_access) -> Result {
-            Result result = CheckExpression(optional_access.target, context);
+            Result result =
+                RequireConcreteValue(optional_access.target, context);
 
-            if (!result.has_value())
+            if (!result)
               return std::nullopt;
 
-            if (!result->has_type_id()) {
-              error_collector_.Add("does not resolve to a Type",
-                                   optional_access.target->meta);
-              return std::nullopt;
+            TypeId type_id = *result->type_id;
+            if (auto unwrapped = type_context_.UnwrapOptional(type_id)) {
+              return ExpressionResult{unwrapped.value()};
             }
 
-            if (auto unwrapped =
-                    type_context_.UnwrapOptional(*result->type_id)) {
-              return ExpressionResult{unwrapped.value(), result->binding};
-            }
-
-            error_collector_.Add(
-                "Unable to unwrap non-optional type: " +
-                    type_registry_.GetNameFromTypeId(*result->type_id),
-                optional_access.target->meta);
+            error_collector_.Add("Unable to unwrap non-optional type: " +
+                                     type_registry_.GetNameFromTypeId(type_id),
+                                 optional_access.target->meta);
             return std::nullopt;
           },
           [&](TemplateInstantiationExpression& template_expr) -> Result {
@@ -723,6 +660,14 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                  result->binding->kind != NamedBinding::Function)) {
               error_collector_.Add(".of() used on non-templated type",
                                    template_expr.generic_target->meta);
+              return std::nullopt;
+            }
+
+            if (result->has_type_id()) {
+              error_collector_
+                  .Add("'" + result->binding->name.text + "' is not a template",
+                       template_expr.generic_target->meta)
+                  .WithNote("declared here", result->binding->name.metadata);
               return std::nullopt;
             }
 
@@ -747,7 +692,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
 
             if (auto type_id =
                     type_context_.GetTemplateOf(*result->binding, type_ids)) {
-              return ExpressionResult{*type_id, *result->binding};
+              return ExpressionResult::with_type_override(*type_id,
+                                                          *result->binding);
             }
 
             return std::nullopt;
@@ -774,28 +720,30 @@ void SemanticAnalyzer::TypeCheckCallArguments(
                              std::to_string(expected_argc) + " but got " +
                              std::to_string(supplied_argc),
                          debug_metadata);
-  } else {
-    // If more arguments are supplied than expected, this is a variadic function
-    // and any additional args do not need to be checked ("any" type).
-    for (size_t i = 0; i < call_arugment_results.size(); ++i) {
-      const auto& argument_result = call_arugment_results[i];
-      const TypeId expected_type =
-          (i < expected_argument_types.size() ? expected_argument_types[i]
-                                              : *variadic_type);
+    return;
+  }
+  // If more arguments are supplied than expected, this is a variadic function
+  // and any additional args do not need to be checked ("any" type).
+  for (size_t i = 0; i < call_arugment_results.size(); ++i) {
+    const auto& argument_result = call_arugment_results[i];
+    const TypeId expected_type =
+        (i < expected_argument_types.size() ? expected_argument_types[i]
+                                            : *variadic_type);
 
-      // Even if an argument expression does not parse correctly, continue
-      // on to the next to try to collect as many errors as possible.
-      if (!argument_result.has_value())
-        continue;
+    // Even if an argument expression does not parse correctly, continue on to
+    // the next to try to collect as many errors as possible.
+    if (!argument_result.has_value())
+      continue;
 
-      if (!type_context_.IsTypeSubsetOf(argument_result->type_id,
-                                        expected_type)) {
-        error_collector_.Add(
-            "Argument type mismatch. Expected " +
-                type_registry_.GetNameFromTypeId(expected_type) + " but got " +
-                type_registry_.GetNameFromTypeId(argument_result->type_id),
-            argument_result->metadata);
-      }
+    if (!type_context_.IsTypeSubsetOf(argument_result->type_id,
+                                      expected_type)) {
+      std::string expected_name =
+          type_registry_.GetNameFromTypeId(expected_type);
+      std::string actual_name =
+          type_registry_.GetNameFromTypeId(argument_result->type_id);
+      error_collector_.Add(
+          "expected `" + expected_name + "` but got `" + actual_name + "`",
+          argument_result->metadata);
     }
   }
 }
@@ -812,15 +760,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
       call_expr.arguments.begin(), call_expr.arguments.end(),
       std::back_inserter(argument_results),
       [&](std::unique_ptr<Expression>& expr) -> std::optional<SpannedType> {
-        if (auto result = CheckExpression(expr, context)) {
-          if (result->has_type_id())
-            return SpannedType{*result->type_id, expr->meta};
-
-          if (result->binding && result->binding->symbol_id) {
-            error_collector_.Add(
-                "types can not be passed as function arguments", expr->meta);
-          }
-        }
+        if (auto result = RequireConcreteValue(expr, context))
+          return SpannedType{*result->type_id, expr->meta};
         return std::nullopt;
       });
 
@@ -913,7 +854,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::HandleMemberAccess(
 
   const auto& member_name = member_access.member_name;
 
-  if (object_result->has_type_id()) {
+  if (object_result->is_value() && object_result->has_type_id()) {
     TypeId type_id = *object_result->type_id;
 
     // Member access is only supported on structs
@@ -933,18 +874,19 @@ SemanticAnalyzer::Result SemanticAnalyzer::HandleMemberAccess(
             << "member symbol must have an index for member access";
         member_access.resolved = ResolvedAccess{binding->idx.value()};
       }
-      return ExpressionResult(*binding);
+      return ExpressionResult::of_binding(*binding);
     }
 
     error_collector_
-        .Add("no member '" + member_name.text + "' found on type " +
-                 type_registry_.GetNameFromTypeId(type_id),
+        .Add("no member '" + member_name.text + "' found on instance of `" +
+                 type_registry_.GetNameFromTypeId(type_id) + "`",
              member_name.metadata)
         .WithNote("declared here", struct_type->declaration.name.metadata);
     return std::nullopt;
   }
 
-  if (object_result->binding && object_result->binding->symbol_id) {
+  if (object_result->is_type_ref() && object_result->binding &&
+      object_result->binding->symbol_id) {
     SymbolId symbol_id = *object_result->binding->symbol_id;
 
     if (object_result->binding->kind != NamedBinding::Struct) {
@@ -964,12 +906,12 @@ SemanticAnalyzer::Result SemanticAnalyzer::HandleMemberAccess(
             struct_symbol->self_scope_id)) {
       CHECK_EQ(binding->kind, NamedBinding::Function)
           << "only static methods are currently supported";
-      return ExpressionResult(*binding);
+      return ExpressionResult::of_binding(*binding);
     }
 
     error_collector_
-        .Add("no member '" + member_name.text + "' found on struct " +
-                 struct_symbol->declaration.name.text,
+        .Add("no member '" + member_name.text + "' found on type `" +
+                 struct_symbol->declaration.name.text + "`",
              member_access.object->meta)
         .WithNote("declared here", struct_symbol->declaration.name.metadata);
     return std::nullopt;
@@ -977,4 +919,68 @@ SemanticAnalyzer::Result SemanticAnalyzer::HandleMemberAccess(
 
   NOTREACHED() << "unhandled condition in MemberAccessExpression";
   return std::nullopt;
+}
+
+SemanticAnalyzer::Result SemanticAnalyzer::RequireConcreteValue(
+    std::unique_ptr<Expression>& expression,
+    FunctionContext& context) {
+  Result result = CheckExpression(expression, context);
+
+  if (!result)
+    return std::nullopt;
+
+  // Ensure it is an instance i.e. 123, x, fn foo().
+  if (!result->is_value()) {
+    if (result->binding.has_value()) {
+      error_collector_
+          .Add("expected value, but found '" + result->binding->name.text + "'",
+               expression->meta)
+          .WithNote("declared here", result->binding->name.metadata);
+      return std::nullopt;
+    }
+
+    std::string type_name =
+        (result->has_type_id()
+             ? "'" + type_registry_.GetNameFromTypeId(*result->type_id) + "'"
+             : "type");
+
+    error_collector_.Add("expected value, but found " + type_name,
+                         expression->meta);
+    return std::nullopt;
+  }
+
+  // Ensure that the instance is fully instantiated (handles fn foo[T]() refs).
+  if (!result->has_type_id()) {
+    CHECK(result->binding.has_value()) << "MUST set TypeId and/or Binding";
+    error_collector_
+        .Add(result->binding->name.text +
+                 " must be instantiated with template arguments "
+                 "before it can be used as a value",
+             expression->meta)
+        .WithNote("declared here", result->binding->name.metadata);
+    return std::nullopt;
+  }
+
+  return result;
+}
+
+std::ostream& operator<<(std::ostream& os, SemanticAnalyzer::Result result) {
+  if (!result.has_value())
+    return os << "_";
+
+  os << "{ kind: ";
+  if (result->is_value()) {
+    os << "Value";
+  } else if (result->is_type_ref()) {
+    os << "TypeRef";
+  }
+  os << ", type_id: "
+     << (result->type_id.has_value() ? std::to_string(*result->type_id) : "_");
+  os << ", symbol_id: ";
+  if (result->binding) {
+    os << *result->binding;
+  } else {
+    os << "_";
+  }
+  return os << " }";
 }

@@ -83,14 +83,15 @@ struct NamedBinding {
 
   SpannedText name;
   enum Kind {
-    Function,
+    Function,  // free functions, static methods, and bound methods
+    Method,    // unbound (symbol level) method definitions
     Struct,
     Field,
     Argument,
     Variable,
     Capture,
     Narrowed,
-    Template,
+    Template,  // template variable i.e. T
     TypeAlias,
   } kind;
   std::optional<TypeId> realized_type_id;
@@ -105,7 +106,7 @@ struct NamedBinding {
            kind == Capture || kind == Narrowed;
   }
   inline bool IsValue() const {
-    // Functions are effectively just variables refering to a code block.
+    // Functions are effectively just variables refering to a code block
     return kind == Function || IsVariable();
   }
 
@@ -205,7 +206,19 @@ struct CallExpression {
 using MemberIdx = size_t;
 
 struct ResolvedAccess {
-  MemberIdx index;
+  struct Field {
+    MemberIdx index;
+  };
+
+  struct Method {
+    SymbolId symbol_id;
+  };
+
+  struct Function {
+    SymbolId symbol_id;
+  };
+
+  std::variant<Field, Method, Function> type;
 };
 
 struct MemberAccessExpression {

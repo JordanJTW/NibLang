@@ -39,6 +39,7 @@ ByteCodeGenerator::FunctionObject ByteCodeGenerator::Build(
     std::vector<SymbolId>& called_symbols) && {
   size_t argument_count = 0;
 
+  CHECK(!symbol.instances.empty()) << "Building uninstantiated function";
   const auto& [key, instance] = *symbol.instances.begin();
 
   // Process captures first to reflect their position in an OP_BIND.
@@ -269,20 +270,36 @@ void ByteCodeGenerator::EmitExpression(
             }
           },
           [&](const MemberAccessExpression& member_access) {
-            EmitExpression(member_access.object, optional_chain_ctx);
+            CHECK(member_access.resolved)
+                << "Unresolved MemberAccessExpression";
 
-            if (access_mode == AccessMode::LOAD ||
-                access_mode == AccessMode::STORE) {
-              CHECK(member_access.resolved)
-                  << "Unresolved field access: "
-                  << member_access.member_name.text
-                  << " at line: " << expr->meta.line_range.start;
+            if (const auto* fn = std::get_if<ResolvedAccess::Function>(
+                    &member_access.resolved->type)) {
+              bytecode_.PatchBind(fn->symbol_id, /*argc=*/0);
+              called_symbols_.push_back(fn->symbol_id);
+            } else if (const auto* method = std::get_if<ResolvedAccess::Method>(
+                           &member_access.resolved->type)) {
+              EmitExpression(member_access.object, optional_chain_ctx);
 
-              MemberIdx idx = member_access.resolved->index;
-              bytecode_.PushInt32(idx);
+              if (access_mode == AccessMode::OBJECT_ONLY)
+                return;
+
+              // Bind to `self` when referencing a method
+              bytecode_.PatchBind(method->symbol_id, /*argc=*/1);
+              called_symbols_.push_back(method->symbol_id);
+            } else if (const auto* field = std::get_if<ResolvedAccess::Field>(
+                           &member_access.resolved->type)) {
+              EmitExpression(member_access.object, optional_chain_ctx);
+
+              if (access_mode == AccessMode::LOAD ||
+                  access_mode == AccessMode::STORE) {
+                bytecode_.PushInt32(field->index);
+              }
+              if (access_mode == AccessMode::LOAD)
+                bytecode_.Call(VM_BUILTIN_ARRAY_GET, 2);
+            } else {
+              NOTREACHED() << "MemberAccessExpression resolved to unknown type";
             }
-            if (access_mode == AccessMode::LOAD)
-              bytecode_.Call(VM_BUILTIN_ARRAY_GET, 2);
           },
           [&](const ArrayAccessExpression& array_access) {
             EmitExpression(array_access.array, optional_chain_ctx);

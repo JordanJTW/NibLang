@@ -76,7 +76,7 @@ void TypeContext::DefineStructType(TypeId self_id,
 
   for (const auto& binding :
        scope_manager_.GetBindingsForScope(symbol.self_scope_id)) {
-    if (binding.kind != NamedBinding::Function)
+    if (binding.kind != NamedBinding::Method)  // ignore fields/`static` methods
       continue;
 
     SymbolId symbol_id = binding.symbol_id.value();
@@ -97,11 +97,6 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
   CHECK(symbol) << "DefineFunction passed an invalid `symbol_id`";
 
   FunctionDeclaration& fn = symbol->declaration;
-
-  // Static methods are just functions that are namespaced within a struct as
-  // syntactic sugar and thus have no "parent" other than at the scope level.
-  if (fn.function_kind == FunctionKind::StaticMethod)
-    self_id = std::nullopt;
 
   if (!symbol->IsExtern()) {
     if (!fn.body) {
@@ -346,6 +341,11 @@ std::optional<TypeInstance> TypeContext::DeclareFunctionType(
   ScopeId scope_id = scope_manager_.EnterScope(
       ScopeManager::FunctionInstanceScope, "fn " + fn.name.text);
 
+  if (self_id) {
+    // Inject an implicit `self` for accessing methods/fields within the method.
+    scope_manager_.DeclareArgumentBinding({"self", fn.name.metadata}, *self_id);
+  }
+
   std::vector<TypeId> argument_types;
   for (const auto& [name, type] : fn.arguments) {
     if (auto type_id = GetTypeIdFor(type); type_id.has_value()) {
@@ -354,11 +354,6 @@ std::optional<TypeInstance> TypeContext::DeclareFunctionType(
     } else {
       return std::nullopt;
     }
-  }
-
-  if (fn.function_kind == FunctionKind::Method &&
-      (argument_types.size() == 0 || argument_types[0] != self_id)) {
-    error_collector_.Add("Methods must begin with a `self` argument", {});
   }
 
   std::optional<TypeId> return_type = GetTypeIdFor(fn.return_type);

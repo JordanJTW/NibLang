@@ -98,6 +98,8 @@ std::ostream& operator<<(std::ostream& os, NamedBinding::Kind kind) {
   switch (kind) {
     case NamedBinding::Function:
       return os << "Function";
+    case NamedBinding::Method:
+      return os << "Method";
     case NamedBinding::Struct:
       return os << "Struct";
     case NamedBinding::Field:

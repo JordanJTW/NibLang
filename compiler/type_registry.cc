@@ -64,15 +64,7 @@ NamedBinding TypeRegistry::NewStructSymbol(StructDeclaration& declaration) {
   StructSymbol symbol = scope_manager_.NewScope(
       ScopeManager::StructSymbolScope, "struct " + declaration.name.text,
       [&]() {
-        StructSymbol symbol = {declaration, scope_manager_.GetActiveScopeId()};
-
-        for (auto& [name, fn] : declaration.methods) {
-          SymbolId method_id = NewFunctionSymbol(fn, &declaration);
-          scope_manager_.InsertNameIntoScope(fn.name, NamedBinding::Function,
-                                             /*type_id=*/std::nullopt,
-                                             method_id);
-        }
-        return symbol;
+        return StructSymbol{declaration, scope_manager_.GetActiveScopeId()};
       });
 
   std::optional<TypeId> type_id = std::nullopt;

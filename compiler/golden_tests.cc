@@ -47,27 +47,27 @@ static vm_value_t native_trampoline(vm_value_t* argv,
 
 const static std::string kPreamble = R"(
 extern struct Array[T] {
-  static fn new() -> Array[T];
-  static fn init(...T) -> Array[T];
-  static fn withSize(size: i32) -> Array[T];
+  static fn new[T]() -> Array[T];
+  static fn init[T](...T) -> Array[T];
+  static fn withSize[T](size: i32) -> Array[T];
 
-  fn push(self: Array[T], value: T);
-  fn get(self: Array[T], idx: i32) -> T;
-  fn set(self: Array[T], idx: i32, value: T) -> T;
-  fn length(self: Array[T]) -> i32;
+  fn push(value: T);
+  fn get(idx: i32) -> T;
+  fn set(idx: i32, value: T) -> T;
+  fn length() -> i32;
 }
 
 extern struct Map[K, V] {
-  static fn new() -> Map[K, V];
-  fn get(self: Map[K,V], key: K) -> V;
-  fn set(self: Map[K,V], key: K, value: V) -> Void;
+  static fn new[K, V]() -> Map[K, V];
+  fn get(key: K) -> V;
+  fn set(key: K, value: V) -> Void;
 }
 
 extern struct String {
-  fn length(s: String) -> i32;
-  fn charAt(s: String, idx: i32) -> Codepoint;
-  fn substr(s: String, start: i32, end: i32) -> String;
-  fn startsWith(s: String, prefix: String, idx: i32) -> bool;
+  fn length() -> i32;
+  fn charAt(idx: i32) -> Codepoint;
+  fn substr(start: i32, end: i32) -> String;
+  fn startsWith(prefix: String, idx: i32) -> bool;
 }
 
 extern fn check(...any);
@@ -294,24 +294,36 @@ TEST_F(GoldenTest, BasicFunction) {
   RunProgram(program);
 }
 
-TEST_F(GoldenTest, DISABLED_Closure) {
+TEST_F(GoldenTest, FunctionAsValue) {
   auto program = BuildProgram(R"(
-    fn foo(value: String) {
-      check("foo");
-      check(value);
+    struct Foo {
+      fn length() -> i32 { return 1; }
+      static fn size() -> i32 { return 2; }
     }
 
-    let woo = foo;
-    woo("war");
+    fn call(cb: fn()->i32) -> i32 {
+      return cb();
+    }
+
+    fn bar() -> i32 {
+      return 3;
+    }
+
+    let x = Foo();
+    check(call(x.length));
+    check(call(Foo.size));
+    check(call(bar));
   )");
 
   ASSERT_FALSE(error_collector_.HasErrors());
 
   {
     testing::InSequence _;
-    EXPECT_CALL(native_check_fn_, Call(ElementsAre(StringType("foo"))))
+    EXPECT_CALL(native_check_fn_, Call(ElementsAre(Int32Type(1))))
         .WillOnce(FreeArgsAndReturnVoidType());
-    EXPECT_CALL(native_check_fn_, Call(ElementsAre(StringType("war"))))
+    EXPECT_CALL(native_check_fn_, Call(ElementsAre(Int32Type(2))))
+        .WillOnce(FreeArgsAndReturnVoidType());
+    EXPECT_CALL(native_check_fn_, Call(ElementsAre(Int32Type(3))))
         .WillOnce(FreeArgsAndReturnVoidType());
   }
 
@@ -346,42 +358,12 @@ TEST_F(GoldenTest, Captures) {
   RunProgram(program);
 }
 
-TEST_F(GoldenTest, DISABLED_ClosureMethod) {
-  auto program = BuildProgram(R"(
-    struct Test {
-      value: String;
-
-      fn foo(self: Test, value: i32) {
-        check(self.value);
-        check(value);
-      }
-    }
-
-    let test = Test("Safeway");
-    let bound = Test.foo;
-
-    bound(test, 109);
-  )");
-
-  ASSERT_FALSE(error_collector_.HasErrors());
-
-  {
-    testing::InSequence _;
-    EXPECT_CALL(native_check_fn_, Call(ElementsAre(StringType("Safeway"))))
-        .WillOnce(FreeArgsAndReturnVoidType());
-    EXPECT_CALL(native_check_fn_, Call(ElementsAre(Int32Type(109))))
-        .WillOnce(FreeArgsAndReturnVoidType());
-  }
-
-  RunProgram(program);
-}
-
 TEST_F(GoldenTest, TemplateStruct) {
   auto program = BuildProgram(R"(
     struct Test[T] {
       value: T;
 
-      fn foo(self: Test[T]) -> T {
+      fn foo() -> T {
         return self.value;
       }
     }

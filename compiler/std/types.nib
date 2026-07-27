@@ -7,12 +7,12 @@ extern struct Array[T] {
   static fn init[F](...F) -> Array[F];
   static fn withSize[F](size: i32) -> Array[F];
 
-  fn push(self: Array[T], value: T);
-  fn get(self: Array[T], idx: i32) -> T;
-  fn set(self: Array[T], idx: i32, value: T) -> T;
-  fn length(self: Array[T]) -> i32;
+  fn push(value: T);
+  fn get(idx: i32) -> T;
+  fn set(idx: i32, value: T) -> T;
+  fn length() -> i32;
 
-  fn slice(self: Array[T], start: i32, count: i32) -> Array[T] {
+  fn slice(start: i32, count: i32) -> Array[T] {
     let slice = Array.withSize.of(T)(count);
 
     let idx = 0;
@@ -23,7 +23,7 @@ extern struct Array[T] {
     return slice;
   }
 
-  fn map[N](self: Array[T], transform: fn(T) -> N) -> Array[N] {
+  fn map[N](transform: fn(T) -> N) -> Array[N] {
     let result = Array.withSize.of(N)(self.length());
 
     let idx = 0;
@@ -42,16 +42,16 @@ struct Box[T] {
 
 extern struct Map[K, V] {
   static fn new[K, V]() -> Map[K, V];
-  fn get(self: Map[K,V], key: K) -> V;
-  fn set(self: Map[K,V], key: K, value: V) -> Void;
+  fn get(key: K) -> V;
+  fn set(key: K, value: V) -> Void;
 }
 
 extern struct Promise[T] {
   static fn new[T]() -> Promise[T];
 
-  fn fulfill(self: Promise[T], value: T);
-  fn reject(self: Promise[T], error: any);
-  fn then[R1 = T, R2 = never](self: Promise[T],
+  fn fulfill(value: T);
+  fn reject(error: any);
+  fn then[R1 = T, R2 = never](
       on_fulfill: (fn(T)->R1)?,
       on_reject: (fn(any)->R2)?
   ) -> Promise[R1|R2];
@@ -91,8 +91,8 @@ extern struct Promise[T] {
 
 extern struct String {
   static fn valueOf(value: any) -> String;
-  fn length(s: String) -> i32;
-  fn charAt(s: String, idx: i32) -> Codepoint;
-  fn substr(s: String, start: i32, end: i32) -> String;
-  fn startsWith(s: String, prefix: String, idx: i32) -> bool;
+  fn length() -> i32;
+  fn charAt(idx: i32) -> Codepoint;
+  fn substr(start: i32, end: i32) -> String;
+  fn startsWith(prefix: String, idx: i32) -> bool;
 }

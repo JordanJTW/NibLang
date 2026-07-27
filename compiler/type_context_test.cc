@@ -303,6 +303,21 @@ TEST_F(TypeContextTest, GetTemplateOf_Nested) {
   auto array_binding = type_registry.NewStructSymbol(array_declaration);
   ASSERT_TRUE(array_binding.symbol_id.has_value());
 
+  ASSERT_TRUE(array_binding.symbol_id.has_value());
+  auto* symbol =
+      type_registry.GetSymbol<StructSymbol>(*array_binding.symbol_id);
+  ASSERT_TRUE(symbol);
+
+  // Ensure `Push` method symbol is populated within the Symbol's scope
+  scope_manager.WithScope(symbol->self_scope_id, [&]() {
+    for (auto& [name, fn] : array_declaration.methods) {
+      SymbolId method_id =
+          type_registry.NewFunctionSymbol(fn, &array_declaration);
+      scope_manager.InsertNameIntoScope(fn.name, NamedBinding::Method,
+                                        /*type_id=*/std::nullopt, method_id);
+    }
+  });
+
   // fn DoIt[T](arg: Array[Box[T]]) -> Array[i32];
   FunctionDeclaration declaration;
   declaration.name = SpannedText{"DoIt"};
@@ -364,6 +379,16 @@ TEST_F(TypeContextTest, StructDeclaration_WithMethod) {
   auto* const struct_symbol =
       type_registry.GetSymbol<StructSymbol>(*binding.symbol_id);
   ASSERT_TRUE(struct_symbol);
+
+  // Ensure `test_method` symbol is populated within the Symbol's scope
+  scope_manager.WithScope(struct_symbol->self_scope_id, [&]() {
+    for (auto& [name, fn] : struct_decl.methods) {
+      SymbolId method_id = type_registry.NewFunctionSymbol(fn, &struct_decl);
+      scope_manager.InsertNameIntoScope(fn.name, NamedBinding::Method,
+                                        /*type_id=*/std::nullopt, method_id);
+    }
+  });
+
   type_context.DefineStructType(*binding.realized_type_id, *struct_symbol,
                                 /*template_arguments=*/{});
 

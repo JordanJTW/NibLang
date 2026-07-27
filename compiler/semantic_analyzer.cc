@@ -98,16 +98,33 @@ void SemanticAnalyzer::Check(Block& block, FunctionContext& context) {
   // Type check the full struct bodies (and functions) once all types are known.
   // Errors are logged from within `DefineStructType` and `DefineFunction`.
   for (auto& [self, declaration] : struct_decls) {
-    if (!self.realized_type_id)  // Only handle non-template (concrete) types
-      continue;
-
     CHECK(self.symbol_id.has_value());  // DeclareStructSymbol MUST provide one
     auto* symbol = type_registry_.GetSymbol<StructSymbol>(*self.symbol_id);
     CHECK(symbol);  // DeclareStructSymbol MUST create a StructSymbol
 
     scope_manager_.WithScope(symbol->self_scope_id, [&]() {
-      type_context_.DefineStructType(*self.realized_type_id, *symbol,
-                                     /*template_arguments=*/{});
+      // Create canonical symbols for all instance methods and define static
+      // methods with-in the Symbol scope. This ensures there is a single symbol
+      // for each method (shared by all instances) and that static methods are
+      // able to be found on the struct Symbol directly. :^)
+      for (auto& [name, fn] : declaration->methods) {
+        SymbolId method_id = type_registry_.NewFunctionSymbol(fn, declaration);
+        if (fn.function_kind == FunctionKind::Method) {
+          scope_manager_.InsertNameIntoScope(fn.name, NamedBinding::Method,
+                                             /*type_id=*/std::nullopt,
+                                             method_id);
+        } else {
+          // Intentionally not passing `self_id` for `static` methods.
+          type_context_.DefineFunction(method_id,
+                                       TypeContext::CheckFunctionBody::YES);
+        }
+      }
+
+      if (self.realized_type_id) {  // Only handle non-template (concrete) types
+        // DefineStructType() depends on method symbols already being populated.
+        type_context_.DefineStructType(*self.realized_type_id, *symbol,
+                                       /*template_arguments=*/{});
+      }
     });
   }
   for (auto& statement : block.statements) {
@@ -303,12 +320,12 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                       if (binding) {
                         switch (binding->kind) {
                           case NamedBinding::Function:
+                          case NamedBinding::Method:
                           case NamedBinding::Struct:
                           case NamedBinding::TypeAlias:
-                          case NamedBinding::Template: {
+                          case NamedBinding::Template:
                             ident.resolved = ResolvedIdentifier{*binding};
                             return ExpressionResult::of_binding(*binding);
-                          }
 
                           case NamedBinding::Argument:
                           case NamedBinding::Capture:
@@ -765,13 +782,6 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
         return std::nullopt;
       });
 
-  // Account for the implicit "self" argument for method calls
-  if (callee_result.binding && callee_result.binding->parent_type_id) {
-    argument_results.insert(
-        argument_results.begin(),
-        SpannedType{*callee_result.binding->parent_type_id, /*metadata=*/{}});
-  }
-
   std::optional<TypeId> callable_type_id = callee_result.type_id;
 
   if (!callable_type_id) {
@@ -872,7 +882,12 @@ SemanticAnalyzer::Result SemanticAnalyzer::HandleMemberAccess(
       if (binding->kind == NamedBinding::Field) {
         CHECK(binding->idx.has_value())
             << "member symbol must have an index for member access";
-        member_access.resolved = ResolvedAccess{binding->idx.value()};
+        member_access.resolved =
+            ResolvedAccess{ResolvedAccess::Field{binding->idx.value()}};
+      } else if (binding->kind == NamedBinding::Function) {
+        CHECK(binding->symbol_id.has_value()) << "missing SymbolId on binding";
+        member_access.resolved =
+            ResolvedAccess{ResolvedAccess::Method{binding->symbol_id.value()}};
       }
       return ExpressionResult::of_binding(*binding);
     }
@@ -904,8 +919,23 @@ SemanticAnalyzer::Result SemanticAnalyzer::HandleMemberAccess(
     if (auto binding = scope_manager_.FindBindingFor(
             member_name.text, ScopeManager::Current,
             struct_symbol->self_scope_id)) {
-      CHECK_EQ(binding->kind, NamedBinding::Function)
-          << "only static methods are currently supported";
+      
+      // Filters out non-static methods (those that require `self` with kind
+      // `Method`) and fields which are only accessible on an instance.
+      if (binding->kind != NamedBinding::Function) {
+        std::stringstream ss;
+        ss << "binding of type '" << binding->kind
+           << "' can only be accessed on an instance of "
+           << struct_symbol->declaration.name.text;
+        error_collector_.Add(ss.str(), member_access.member_name.metadata)
+            .WithNote("declared here", binding->name.metadata);
+        return std::nullopt;
+      }
+
+      CHECK(binding->symbol_id.has_value()) << "missing SymbolId on binding";
+      member_access.resolved =
+          ResolvedAccess{ResolvedAccess::Function{binding->symbol_id.value()}};
+
       return ExpressionResult::of_binding(*binding);
     }
 

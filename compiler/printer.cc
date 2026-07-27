@@ -80,8 +80,19 @@ void print_resolved_access(const std::optional<ResolvedAccess>& r,
               << std::endl;
   } else {
     std::cout << std::string(indent, ' ') << "ResolvedAccess:" << std::endl;
-    std::cout << std::string(indent + 2, ' ') << "member_index: " << r->index
-              << std::endl;
+    if (const auto* field = std::get_if<ResolvedAccess::Field>(&r->type)) {
+      std::cout << std::string(indent + 2, ' ')
+                << "Field(index: " << field->index << ")" << std::endl;
+    }
+    if (const auto* method = std::get_if<ResolvedAccess::Method>(&r->type)) {
+      std::cout << std::string(indent + 2, ' ')
+                << "Method(symbol_id: " << method->symbol_id << ")"
+                << std::endl;
+    }
+    if (const auto* fn = std::get_if<ResolvedAccess::Function>(&r->type)) {
+      std::cout << std::string(indent + 2, ' ')
+                << "Static(symbol_id: " << fn->symbol_id << ")" << std::endl;
+    }
   }
 }
 

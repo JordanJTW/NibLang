@@ -253,12 +253,16 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
             if (parsed_type_id.has_value()) {
               if (!type_context_.IsTypeSubsetOf(*result->type_id,
                                                 *parsed_type_id)) {
-                error_collector_.Add(
-                    "Assigning " +
-                        type_registry_.GetNameFromTypeId(*result->type_id) +
-                        " to " +
-                        type_registry_.GetNameFromTypeId(*parsed_type_id),
-                    statement->meta);
+                std::string expected_type =
+                    type_registry_.GetNameFromTypeId(*parsed_type_id);
+                error_collector_
+                    .Add(
+                        "unable to assign `" +
+                            type_registry_.GetNameFromTypeId(*result->type_id) +
+                            "` to `" + expected_type + "`",
+                        assign.value->meta)
+                    .WithNote("declared `" + expected_type + "` here",
+                              assign.type->metadata);
                 return;
               }
             } else {

@@ -85,15 +85,15 @@ MATCHER_P(IsRejectedWith,
       arg, result_listener);
 }
 
-ACTION(ReturnVoidType) {
-  return vm_value_t{.type = value_type_t::VALUE_TYPE_VOID};
+ACTION(ReturnUnitType) {
+  return vm_value_t{.type = value_type_t::VALUE_TYPE_UNIT};
 }
 
-ACTION(FreeArgsAndReturnVoidType) {
+ACTION(FreeArgsAndReturnUnitType) {
   for (const auto& arg : arg0) {
     vm_free_ref(const_cast<vm_value_t*>(&arg));
   }
-  return vm_value_t{.type = value_type_t::VALUE_TYPE_VOID};
+  return vm_value_t{.type = value_type_t::VALUE_TYPE_UNIT};
 }
 
 using MockNativeFunc =

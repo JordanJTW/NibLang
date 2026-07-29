@@ -51,8 +51,8 @@ static void rc_decrement(vm_value_t* value);
 
 static bool value_to_bool(vm_value_t value) {
   switch (value.type) {
-    case VALUE_TYPE_VOID:
-      assert(false && "VALUE_TYPE_VOID should never appear on stack");
+    case VALUE_TYPE_UNIT:
+      // Fall-through
     case VALUE_TYPE_NULL:
       return false;
     case VALUE_TYPE_BOOL:
@@ -163,7 +163,7 @@ void free_vm(vm_t* vm) {
 
 static void rc_increment(vm_value_t* value) {
   switch (value->type) {
-    case VALUE_TYPE_VOID:
+    case VALUE_TYPE_UNIT:
     case VALUE_TYPE_NULL:
     case VALUE_TYPE_BOOL:
     case VALUE_TYPE_INT:
@@ -184,7 +184,7 @@ static void rc_increment(vm_value_t* value) {
 
 static void rc_decrement(vm_value_t* value) {
   switch (value->type) {
-    case VALUE_TYPE_VOID:
+    case VALUE_TYPE_UNIT:
     case VALUE_TYPE_NULL:
     case VALUE_TYPE_BOOL:
     case VALUE_TYPE_INT:
@@ -356,6 +356,12 @@ static void run_frame(vm_t* vm, const char* name) {
       case OP_PUSH_NULL: {
         DEBUG_LOG("OP_PUSH_NULL");
         push_stack(&vm->stack, (vm_value_t){.type = VALUE_TYPE_NULL});
+        ++frame->pc;
+        break;
+      }
+      case OP_PUSH_UNIT: {
+        DEBUG_LOG("OP_PUSH_UNIT");
+        push_stack(&vm->stack, (vm_value_t){.type = VALUE_TYPE_UNIT});
         ++frame->pc;
         break;
       }
@@ -701,7 +707,7 @@ static void run_frame(vm_t* vm, const char* name) {
   }
 }
 
-vm_value_t vm_run(vm_t* vm, size_t entry_point_idx, bool pop_return) {
+vm_value_t vm_run(vm_t* vm, size_t entry_point_idx) {
   size_t idx = vm->native_functions_count + entry_point_idx;
   assert(idx < vm->total_functions_count && "invalid entry point idx");
 
@@ -714,10 +720,7 @@ vm_value_t vm_run(vm_t* vm, size_t entry_point_idx, bool pop_return) {
   vm->current_frame = frame;
   run_frame(vm, fn->name);
 
-  if (pop_return)
-    return pop_stack(&vm->stack);
-
-  return (vm_value_t){.type = VALUE_TYPE_NULL};
+  return pop_stack(&vm->stack);
 }
 
 bool vm_as_int32(const vm_value_t* value, int32_t* out) {
@@ -832,11 +835,7 @@ vm_value_t vm_call_function(vm_t* vm,
                             size_t argc) {
   if (vm_invoke_closure(vm, closure, argv, argc))
     run_frame(vm, closure->fn->name);
-  if (vm->stack.sp > 0) {
-    return pop_stack(&vm->stack);
-  } else {
-    return (vm_value_t){.type = VALUE_TYPE_NULL};
-  }
+  return pop_stack(&vm->stack);
 }
 
 static vm_value_t math_pow(vm_value_t* argv, size_t argc, void* vm) {
@@ -937,7 +936,7 @@ vm_value_t vm_throw_exception(vm_t* vm, vm_value_t exception) {
   vm->exception = exception;
   vm_adopt_ref(vm->exception);
   vm->unhandled_exception = true;
-  return (vm_value_t){.type = VALUE_TYPE_NULL};
+  return (vm_value_t){.type = VALUE_TYPE_UNIT};
 }
 
 vm_t* init_vm(const uint8_t* program,
@@ -1054,11 +1053,9 @@ bool vm_invoke(vm_t* vm, vm_function_t* fn, vm_value_t* argv, size_t argc) {
     }
     case VM_NATIVE_FUNC: {
       vm_value_t result = fn->as.native.fn(argv, argc, fn->as.native.userdata);
-      if (result.type != VALUE_TYPE_VOID) {
-        // Push to stack without taking ownership (callee handles incrementing).
-        assert(vm->stack.sp < vm->stack.capacity && "stack overflow");
-        vm->stack.values[vm->stack.sp++] = result;
-      }
+      // Push to stack without taking ownership (callee handles incrementing).
+      assert(vm->stack.sp < vm->stack.capacity && "stack overflow");
+      vm->stack.values[vm->stack.sp++] = result;
       return false;
     }
   }

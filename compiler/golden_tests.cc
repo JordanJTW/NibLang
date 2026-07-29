@@ -80,7 +80,7 @@ class GoldenTest : public ::testing::Test {
  protected:
   void SetUp() override {
     ON_CALL(native_check_fn_, Call(_))
-        .WillByDefault(FreeArgsAndReturnVoidType());
+        .WillByDefault(FreeArgsAndReturnUnitType());
   }
 
   std::vector<uint8_t> BuildProgram(std::string program_text) {
@@ -144,7 +144,7 @@ class GoldenTest : public ::testing::Test {
                        sizeof(kExternalFunctions) / sizeof(vm_function_t));
     ASSERT_NE(vm, nullptr);
 
-    vm_run(vm, 0, false);
+    vm_run(vm, 0);
     free_vm(vm);
   }
 
@@ -169,9 +169,9 @@ TEST_F(GoldenTest, AssignStatment) {
   {
     testing::InSequence _;
     EXPECT_CALL(native_check_fn_, Call(ElementsAre(StringType("hello"))))
-        .WillOnce(FreeArgsAndReturnVoidType());
+        .WillOnce(FreeArgsAndReturnUnitType());
     EXPECT_CALL(native_check_fn_, Call(ElementsAre(Int32Type(109))))
-        .WillOnce(FreeArgsAndReturnVoidType());
+        .WillOnce(FreeArgsAndReturnUnitType());
   }
 
   RunProgram(program);
@@ -203,15 +203,15 @@ TEST_F(GoldenTest, OptionalChainField) {
   {
     testing::InSequence _;
     EXPECT_CALL(native_check_fn_, Call(ElementsAre(StringType("hello"))))
-        .WillOnce(FreeArgsAndReturnVoidType());
+        .WillOnce(FreeArgsAndReturnUnitType());
     EXPECT_CALL(native_check_fn_, Call(ElementsAre(StringType("goodbye"))))
-        .WillOnce(FreeArgsAndReturnVoidType());
+        .WillOnce(FreeArgsAndReturnUnitType());
     EXPECT_CALL(native_check_fn_, Call(ElementsAre(NilType())))
-        .WillOnce(FreeArgsAndReturnVoidType());
+        .WillOnce(FreeArgsAndReturnUnitType());
     EXPECT_CALL(native_check_fn_, Call(ElementsAre(StringType("other"))))
-        .WillOnce(FreeArgsAndReturnVoidType());
+        .WillOnce(FreeArgsAndReturnUnitType());
     EXPECT_CALL(native_check_fn_, Call(ElementsAre(StringType("woo"))))
-        .WillOnce(FreeArgsAndReturnVoidType());
+        .WillOnce(FreeArgsAndReturnUnitType());
   }
 
   RunProgram(program);
@@ -240,13 +240,13 @@ TEST_F(GoldenTest, OptionalChainFieldDeep) {
   {
     testing::InSequence _;
     EXPECT_CALL(native_check_fn_, Call(ElementsAre(StringType("hello"))))
-        .WillOnce(FreeArgsAndReturnVoidType());
+        .WillOnce(FreeArgsAndReturnUnitType());
     EXPECT_CALL(native_check_fn_, Call(ElementsAre(StringType("goodbye"))))
-        .WillOnce(FreeArgsAndReturnVoidType());
+        .WillOnce(FreeArgsAndReturnUnitType());
     EXPECT_CALL(native_check_fn_, Call(ElementsAre(NilType())))
-        .WillOnce(FreeArgsAndReturnVoidType());
+        .WillOnce(FreeArgsAndReturnUnitType());
     EXPECT_CALL(native_check_fn_, Call(ElementsAre(StringType("other"))))
-        .WillOnce(FreeArgsAndReturnVoidType());
+        .WillOnce(FreeArgsAndReturnUnitType());
   }
 
   RunProgram(program);
@@ -265,7 +265,7 @@ TEST_F(GoldenTest, DISABLED_ArrayChain) {
   {
     testing::InSequence _;
     EXPECT_CALL(native_check_fn_, Call(ElementsAre(StringType("Jordan"))))
-        .WillOnce(FreeArgsAndReturnVoidType());
+        .WillOnce(FreeArgsAndReturnUnitType());
   }
 
   RunProgram(program);
@@ -286,9 +286,9 @@ TEST_F(GoldenTest, BasicFunction) {
   {
     testing::InSequence _;
     EXPECT_CALL(native_check_fn_, Call(ElementsAre(StringType("foo"))))
-        .WillOnce(FreeArgsAndReturnVoidType());
+        .WillOnce(FreeArgsAndReturnUnitType());
     EXPECT_CALL(native_check_fn_, Call(ElementsAre(StringType("bar"))))
-        .WillOnce(FreeArgsAndReturnVoidType());
+        .WillOnce(FreeArgsAndReturnUnitType());
   }
 
   RunProgram(program);
@@ -320,11 +320,11 @@ TEST_F(GoldenTest, FunctionAsValue) {
   {
     testing::InSequence _;
     EXPECT_CALL(native_check_fn_, Call(ElementsAre(Int32Type(1))))
-        .WillOnce(FreeArgsAndReturnVoidType());
+        .WillOnce(FreeArgsAndReturnUnitType());
     EXPECT_CALL(native_check_fn_, Call(ElementsAre(Int32Type(2))))
-        .WillOnce(FreeArgsAndReturnVoidType());
+        .WillOnce(FreeArgsAndReturnUnitType());
     EXPECT_CALL(native_check_fn_, Call(ElementsAre(Int32Type(3))))
-        .WillOnce(FreeArgsAndReturnVoidType());
+        .WillOnce(FreeArgsAndReturnUnitType());
   }
 
   RunProgram(program);
@@ -350,9 +350,9 @@ TEST_F(GoldenTest, Captures) {
   {
     testing::InSequence _;
     EXPECT_CALL(native_check_fn_, Call(ElementsAre(Int32Type(28))))
-        .WillOnce(FreeArgsAndReturnVoidType());
+        .WillOnce(FreeArgsAndReturnUnitType());
     EXPECT_CALL(native_check_fn_, Call(ElementsAre(Int32Type(55))))
-        .WillOnce(FreeArgsAndReturnVoidType());
+        .WillOnce(FreeArgsAndReturnUnitType());
   }
 
   RunProgram(program);
@@ -377,7 +377,7 @@ TEST_F(GoldenTest, TemplateStruct) {
   {
     testing::InSequence _;
     EXPECT_CALL(native_check_fn_, Call(ElementsAre(Int32Type(109))))
-        .WillOnce(FreeArgsAndReturnVoidType());
+        .WillOnce(FreeArgsAndReturnUnitType());
   }
 
   RunProgram(program);

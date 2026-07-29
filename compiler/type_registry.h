@@ -74,7 +74,7 @@ using Type = std::variant<AliasType,
 class TypeRegistry {
  public:
   enum LiteralType : TypeId {
-    Void = 0,
+    Unit = 0,
     i32,
     f32,
     Codepoint,

@@ -367,7 +367,7 @@ struct Expression {
       as;
 
   Metadata meta;
-  TypeId type;
+  std::optional<TypeId> type_id;
 };
 
 struct ReturnStatement {

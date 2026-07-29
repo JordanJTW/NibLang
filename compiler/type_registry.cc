@@ -166,7 +166,7 @@ std::string TypeRegistry::GetNameFromTypeId(TypeId type_id) const {
           [&](const BuiltInType& type) {
             static const std::unordered_map<TypeId, std::string>
                 kBuiltInTypeNames = {
-                    {LiteralType::Void, "Void"},
+                    {LiteralType::Unit, "Unit"},
                     {LiteralType::i32, "i32"},
                     {LiteralType::f32, "f32"},
                     {LiteralType::Codepoint, "Codepoint"},

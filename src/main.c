@@ -64,8 +64,8 @@ void print_result(vm_value_t* result, int indent) {
     case VALUE_TYPE_OPAQUE:
       printf("<opaque>");
       break;
-    case VALUE_TYPE_VOID:
-      printf("<none!?>");
+    case VALUE_TYPE_UNIT:
+      printf("()");
       break;
   }
 }
@@ -75,7 +75,7 @@ static vm_value_t vm_log(vm_value_t* argv, size_t argc, void* vm) {
     print_result(&argv[i], /*indent=*/0);
     vm_free_ref(&argv[i]);
   }
-  return (vm_value_t){.type = VALUE_TYPE_VOID};
+  return (vm_value_t){.type = VALUE_TYPE_UNIT};
 }
 
 static const vm_function_t kNativeFunctions[1] = {
@@ -118,7 +118,7 @@ int main(int argc, char* argv[]) {
   vm_t* vm = init_vm(buffer, file_size, kNativeFunctions,
                      sizeof(kNativeFunctions) / sizeof(vm_function_t));
   if (vm != NULL) {
-    vm_value_t result = vm_run(vm, 0, true);
+    vm_value_t result = vm_run(vm, 0);
     while (run_promise_jobs(vm, vm_get_job_queue(vm)))
       ;
     printf("Result: ");

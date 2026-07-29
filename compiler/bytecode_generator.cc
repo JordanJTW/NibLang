@@ -62,11 +62,8 @@ ByteCodeGenerator::FunctionObject ByteCodeGenerator::Build(
   if (symbol.declaration.body)
     EmitBlock(*symbol.declaration.body);
 
-  // Insert an return; to unwind the stack
-  if (auto* string =
-          std::get_if<std::string>(&symbol.declaration.return_type.type);
-      string && (*string == "Void"))
-    bytecode_.Return();
+  bytecode_.PushUnit();
+  bytecode_.Return();
 
   called_symbols = std::move(called_symbols_);
   return FunctionObject{&symbol, std::move(bytecode_), argument_count,
@@ -81,17 +78,19 @@ void ByteCodeGenerator::EmitBlock(const Block& block,
             [&](const std::unique_ptr<Expression>& expr) {
               EmitExpression(expr);
 
-              // Expressions always leave a value on the stack (if not
-              // Void) so when executed as a Statement the unused value
-              // must be consumed.
-              if (expr->type != TypeRegistry::Void)
-                bytecode_.StackDel();
+              // Expressions always leave a value on the stack so when executed
+              // as a Statement the unused value must be consumed.
+              bytecode_.StackDel();
             },
             [&](const FunctionDeclaration& fn) {
               // Will be handled as separate FunctionSymbol codegen.
             },
             [&](const ReturnStatement& ret) {
-              EmitExpression(ret.value);
+              if (ret.value) {
+                EmitExpression(ret.value);
+              } else {
+                bytecode_.PushUnit();
+              }
               bytecode_.Return();
             },
             [&](const ThrowStatement& thr) {
@@ -210,8 +209,8 @@ void ByteCodeGenerator::EmitExpression(
             if (binary.resolved->specialization ==
                 ResolvedBinary::Specialization::Nil) {
               const std::unique_ptr<Expression>& target =
-                  binary.lhs->type == TypeRegistry::Nil ? binary.rhs
-                                                        : binary.lhs;
+                  binary.lhs->type_id == TypeRegistry::Nil ? binary.rhs
+                                                           : binary.lhs;
               EmitExpression(target);
               switch (binary.op) {
                 case TokenKind::kCompareEq:

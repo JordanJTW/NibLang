@@ -37,7 +37,7 @@ class TypeContextTest : public ::testing::Test {
 
 TEST_F(TypeContextTest, GetTypeIdFor_BuiltInType) {
   static const std::unordered_map<std::string, TypeId> kBuiltInTypes = {
-      {"Void", LiteralType::Void}, {"i32", LiteralType::i32},
+      {"Unit", LiteralType::Unit}, {"i32", LiteralType::i32},
       {"f32", LiteralType::f32},   {"bool", LiteralType::Bool},
       {"any", LiteralType::Any},
   };
@@ -117,14 +117,14 @@ TEST_F(TypeContextTest, GetTypeIdFor_FunctionType) {
   EXPECT_EQ(*type_id, *second_call);
 }
 
-TEST_F(TypeContextTest, GetTypeIdFor_FunctionType_VoidReturn) {
+TEST_F(TypeContextTest, GetTypeIdFor_FunctionType_NoReturn) {
   ParsedFunctionType fn_type;
   fn_type.arguments = {ParsedType{"i32"}};
-  // No return_value means Void
+  // No return_value implies Unit()
   auto type_id = type_context.GetTypeIdFor(ParsedType{fn_type});
   ASSERT_TRUE(type_id.has_value());
   auto fn_info = type_registry.GetType<FunctionType>(type_id.value());
-  EXPECT_EQ(fn_info->return_type, LiteralType::Void);
+  EXPECT_EQ(fn_info->return_type, LiteralType::Unit);
 }
 
 TEST_F(TypeContextTest, DeclareStructSymbol_NoTemplate) {
@@ -362,7 +362,7 @@ TEST_F(TypeContextTest, StructDeclaration_WithMethod) {
       .name = SpannedText{"test_method"},
       .arguments = {{SpannedText{"self"}, ParsedType{"TestStruct"}},
                     {SpannedText{"arg"}, ParsedType{"i32"}}},
-      .return_type = ParsedType{"Void"},
+      .return_type = ParsedType{"Unit"},
       .function_kind = FunctionKind::Method,
       .body = std::make_unique<Block>(),
   };

@@ -12,7 +12,7 @@
 
 class Printer {
  public:
-  Printer(const TypeRegistry* type_registry) : type_registry_(type_registry) {}
+  explicit Printer(const TypeRegistry* type_registry) : type_registry_(type_registry) {}
 
   void Print(const Block& block);
   void Print(const Statement& stmt, size_t indent = 0);
@@ -22,8 +22,9 @@ class Printer {
  private:
   const TypeRegistry* const type_registry_;
 
-  std::string GetTypeName(TypeId type_id) const {
-    return type_registry_ ? type_registry_->GetNameFromTypeId(type_id)
-                          : "<unknown>";
+  std::string GetTypeName(std::optional<TypeId> type_id) const {
+    return (type_registry_ && type_id)
+               ? type_registry_->GetNameFromTypeId(*type_id)
+               : "<unknown>";
   }
 };

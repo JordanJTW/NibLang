@@ -24,6 +24,7 @@ class Assembler {
   Assembler& PushFloat(float value);
   Assembler& PushBool(bool value);
   Assembler& PushNil();
+  Assembler& PushUnit();
   Assembler& StackDup();
   Assembler& StackDel();
   Assembler& Call(uint32_t idx, uint32_t argc);

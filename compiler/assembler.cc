@@ -37,6 +37,10 @@ Assembler& Assembler::PushNil() {
   data_.push_back(OP_PUSH_NULL);
   return *this;
 }
+Assembler& Assembler::PushUnit() {
+  data_.push_back(OP_PUSH_UNIT);
+  return *this;
+}
 Assembler& Assembler::StackDup() {
   data_.push_back(OP_STACK_DUP);
   return *this;
@@ -275,6 +279,7 @@ std::string GetOpName(op_t op) {
     CASE_OP_NAME(OP_PUSH_TRUE);
     CASE_OP_NAME(OP_PUSH_FALSE);
     CASE_OP_NAME(OP_PUSH_NULL);
+    CASE_OP_NAME(OP_PUSH_UNIT);
     CASE_OP_NAME(OP_STORE_LOCAL);
     CASE_OP_NAME(OP_STACK_DUP);
     CASE_OP_NAME(OP_STACK_DEL);
@@ -437,6 +442,7 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
       case OP_PUSH_TRUE:
       case OP_PUSH_FALSE:
       case OP_PUSH_NULL:
+      case OP_PUSH_UNIT:
       case OP_STACK_DUP:
       case OP_STACK_DEL:
       case OP_TRY_POP:

@@ -199,6 +199,16 @@ void Parser::ParseBlock(Block& block, BlockType block_type) {
     if (current_token_.kind == TokenKind::kKwReturn) {
       AdvanceToken();  // consume 'return'
 
+      // Handles `return;` without return expression.
+      if (current_token_.kind == TokenKind::kEndExpr) {
+        AdvanceToken();  // consume ';'
+
+        block.statements.push_back(std::make_unique<Statement>(
+            Statement{ReturnStatement{nullptr},
+                      Metadata::fromTokens(start_token, current_token_)}));
+        continue;
+      }
+
       if (auto expr = ParseExpression()) {
         if (!ConsumeToken(TokenKind::kEndExpr,
                           "expected ';' after expression")) {
@@ -1374,9 +1384,7 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
                          current_token_.meta);
     return_type = ParseType();
   } else {
-    // Using the debug metadata for the last parentheses in the expression
-    // ensures that errors with deduced "Void" point to the absence of a return.
-    return_type = ParsedType{"Void", return_type_metadate};
+    return_type = ParsedType{"Unit", return_type_metadate};
   }
 
   if (!return_type.has_value()) {

@@ -83,7 +83,7 @@ vm_t* new_vm(const vm_value_t* constants,
 void free_vm(vm_t* vm);
 
 // Runs the function at `entery_point_idx` until OP_RETURN is encountered.
-vm_value_t vm_run(vm_t* vm, size_t entry_point_idx, bool pop_return);
+vm_value_t vm_run(vm_t* vm, size_t entry_point_idx);
 
 // Provides `value` as an i32 in `out` and returns true. If `value` is NULL or
 // is not an i32 then returns false and `out` is untouched.

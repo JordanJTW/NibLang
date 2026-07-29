@@ -223,11 +223,11 @@ void Printer::Print(const Statement& stmt, size_t indent) {
                       << "AssignStatement: " << assign.name.text;
             if (assign.type.has_value())
               std::cout << " Declared Type: " << assign.type.value()
-                        << " Type: " << GetTypeName(assign.value->type)
+                        << " Type: " << GetTypeName(assign.value->type_id)
                         << std::endl;
             else
               std::cout << " Declared Type: ?"
-                        << " Type: " << GetTypeName(assign.value->type)
+                        << " Type: " << GetTypeName(assign.value->type_id)
                         << std::endl;
 
             std::cout << std::string(indent + 2, ' ') << "Value:" << std::endl;
@@ -275,7 +275,7 @@ void Printer::Print(const Expression& expr, size_t indent) {
                       << "BinaryExpression (op=" << static_cast<int>(binary.op)
                       << ")" << std::endl;
             std::cout << std::string(indent + 2, ' ')
-                      << "Type: " << GetTypeName(expr.type) << std::endl;
+                      << "Type: " << GetTypeName(expr.type_id) << std::endl;
             print_resolved_binary(binary.resolved, indent + 2);
 
             std::cout << std::string(indent + 2, ' ') << "LHS:" << std::endl;
@@ -288,7 +288,7 @@ void Printer::Print(const Expression& expr, size_t indent) {
             std::cout << std::string(indent, ' ')
                       << "AssignmentExpression:" << std::endl;
             std::cout << std::string(indent + 2, ' ')
-                      << "Type: " << GetTypeName(expr.type) << std::endl;
+                      << "Type: " << GetTypeName(expr.type_id) << std::endl;
 
             std::cout << std::string(indent + 2, ' ') << "LHS:" << std::endl;
             Print(*assign.lhs, indent + 4);
@@ -299,7 +299,7 @@ void Printer::Print(const Expression& expr, size_t indent) {
             std::cout << std::string(indent, ' ')
                       << "CallExpression:" << std::endl;
             std::cout << std::string(indent + 2, ' ')
-                      << "Type: " << GetTypeName(expr.type) << std::endl;
+                      << "Type: " << GetTypeName(expr.type_id) << std::endl;
 
             std::cout << std::string(indent + 2, ' ') << "Callee:" << std::endl;
             Print(*call.callee, indent + 4);
@@ -315,7 +315,7 @@ void Printer::Print(const Expression& expr, size_t indent) {
             std::cout << std::string(indent, ' ') << "MemberAccessExpression: "
                       << member_access.member_name.text << std::endl;
             std::cout << std::string(indent + 2, ' ')
-                      << "Type: " << GetTypeName(expr.type) << std::endl;
+                      << "Type: " << GetTypeName(expr.type_id) << std::endl;
 
             std::cout << std::string(indent + 2, ' ') << "Object:" << std::endl;
             Print(*member_access.object, indent + 4);
@@ -325,7 +325,7 @@ void Printer::Print(const Expression& expr, size_t indent) {
             std::cout << std::string(indent, ' ')
                       << "ArrayAccessExpression:" << std::endl;
             std::cout << std::string(indent + 2, ' ')
-                      << "Type: " << GetTypeName(expr.type) << std::endl;
+                      << "Type: " << GetTypeName(expr.type_id) << std::endl;
 
             std::cout << std::string(indent + 2, ' ') << "Array:" << std::endl;
             Print(*array_access.array, indent + 4);
@@ -338,7 +338,7 @@ void Printer::Print(const Expression& expr, size_t indent) {
                       << "LogicExpression (op=" << static_cast<int>(logic.kind)
                       << "):" << std::endl;
             std::cout << std::string(indent + 2, ' ')
-                      << "Type: " << GetTypeName(expr.type) << std::endl;
+                      << "Type: " << GetTypeName(expr.type_id) << std::endl;
 
             std::cout << std::string(indent + 2, ' ') << "LHS:" << std::endl;
             Print(*logic.lhs, indent + 4);
@@ -356,7 +356,7 @@ void Printer::Print(const Expression& expr, size_t indent) {
                       << "PrefixUnaryExpression (op=" << prefix.op
                       << "):" << std::endl;
             std::cout << std::string(indent + 2, ' ')
-                      << "Type: " << GetTypeName(expr.type) << std::endl;
+                      << "Type: " << GetTypeName(expr.type_id) << std::endl;
 
             Print(*prefix.operand, indent + 2);
           },
@@ -365,12 +365,12 @@ void Printer::Print(const Expression& expr, size_t indent) {
                       << "PostfixUnaryExpression (op=" << postfix.op
                       << "):" << std::endl;
             std::cout << std::string(indent + 2, ' ')
-                      << "Type: " << GetTypeName(expr.type) << std::endl;
+                      << "Type: " << GetTypeName(expr.type_id) << std::endl;
             Print(*postfix.operand, indent + 2);
           },
           [&](const TypeCastExpression& cast) {
             std::cout << std::string(indent, ' ')
-                      << "TypeCastExpression(type: " << GetTypeName(expr.type)
+                      << "TypeCastExpression(type: " << GetTypeName(expr.type_id)
                       << ", strategy: "
                       << (cast.strategy == TypeCastStrategy::STRICT
                               ? "STRICT"
@@ -381,13 +381,13 @@ void Printer::Print(const Expression& expr, size_t indent) {
           [&](const OptionalChainExpression& chain) {
             std::cout << std::string(indent, ' ')
                       << "OptionalChainExpression(type: "
-                      << GetTypeName(expr.type) << "): " << std::endl;
+                      << GetTypeName(expr.type_id) << "): " << std::endl;
             Print(*chain.root, indent + 2);
           },
           [&](const NilCoalescingExpression& coalesce) {
             std::cout << std::string(indent, ' ')
                       << "NilCoalescingExpression(type: "
-                      << GetTypeName(expr.type) << "): " << std::endl;
+                      << GetTypeName(expr.type_id) << "): " << std::endl;
             std::cout << std::string(indent + 2, ' ') << "LHS:" << std::endl;
             Print(*coalesce.lhs, indent + 2);
 
@@ -397,7 +397,7 @@ void Printer::Print(const Expression& expr, size_t indent) {
           [&](const OptionalAccessExpression& optional_access) {
             std::cout << std::string(indent, ' ')
                       << "OptionalAccessExpression(type: "
-                      << GetTypeName(expr.type) << "): " << std::endl;
+                      << GetTypeName(expr.type_id) << "): " << std::endl;
             Print(*optional_access.target, indent + 2);
           },
           [&](const TemplateInstantiationExpression& temp) {

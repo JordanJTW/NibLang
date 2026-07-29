@@ -156,7 +156,7 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
           [&](const std::string& type_name) -> std::optional<TypeId> {
             static const std::unordered_map<std::string, TypeId> kBuiltInTypes =
                 {
-                    {"Void", LiteralType::Void},
+                    {"Unit", LiteralType::Unit},
                     {"i32", LiteralType::i32},
                     {"Codepoint", LiteralType::Codepoint},
                     {"f32", LiteralType::f32},
@@ -226,7 +226,7 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
 
             std::optional<TypeId> return_type =
                 type.return_value ? GetTypeIdFor(*type.return_value)
-                                  : LiteralType::Void;
+                                  : LiteralType::Unit;
             if (!return_type.has_value())
               return std::nullopt;
 
@@ -247,13 +247,10 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
           },
           [&](const ParsedParameterizedType& parameterized_type)
               -> std::optional<TypeId> {
-            std::string* base_type_identifier =
-                std::get_if<std::string>(&parameterized_type.type->type);
+            const std::string& base_type_identifier =
+                std::get<std::string>(parameterized_type.type->type);
 
-            CHECK(base_type_identifier)
-                << "ParameterizedType::type is not an identifier";
-
-            auto binding = scope_manager_.FindBindingFor(*base_type_identifier,
+            auto binding = scope_manager_.FindBindingFor(base_type_identifier,
                                                          ScopeManager::All);
 
             if (!binding || !binding->symbol_id)

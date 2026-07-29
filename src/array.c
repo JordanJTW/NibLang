@@ -120,5 +120,5 @@ vm_value_t vm_array_push(vm_value_t* argv, size_t argc, void* vm) {
   }
 
   array->data[array->len++] = argv[1];  // Ownership transferred
-  return (vm_value_t){.type = VALUE_TYPE_VOID};
+  return (vm_value_t){.type = VALUE_TYPE_UNIT};
 }

@@ -636,7 +636,7 @@ int main() {
   vm_t* vm = new_vm(constants, sizeof(constants) / sizeof(vm_value_t), funcs,
                     sizeof(funcs) / sizeof(vm_function_t));
 
-  vm_value_t map = vm_run(vm, 0, true);
+  vm_value_t map = vm_run(vm, 0);
 
   vm_free_ref(&map);
   free_vm(vm);

@@ -172,19 +172,31 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
             // Function bodies are checked only when a FunctionType is realized
           },
           [&](ReturnStatement& ret) {
-            Result result = RequireConcreteValue(ret.value, context);
+            if (ret.value) {
+              Result result = RequireConcreteValue(ret.value, context);
 
-            if (!result.has_value())
-              return;
+              if (!result.has_value())
+                return;
 
-            if (!type_context_.IsTypeSubsetOf(*result->type_id,
-                                              context.return_type_id)) {
-              error_collector_.Add(
-                  "Returning " +
-                      type_registry_.GetNameFromTypeId(*result->type_id) +
-                      " from function with return type " +
-                      type_registry_.GetNameFromTypeId(context.return_type_id),
-                  statement->meta);
+              if (!type_context_.IsTypeSubsetOf(*result->type_id,
+                                                context.return_type_id)) {
+                error_collector_.Add(
+                    "Returning " +
+                        type_registry_.GetNameFromTypeId(*result->type_id) +
+                        " from function with return type " +
+                        type_registry_.GetNameFromTypeId(
+                            context.return_type_id),
+                    statement->meta);
+              }
+            } else {
+              if (!type_context_.IsTypeSubsetOf(TypeRegistry::Unit,
+                                                context.return_type_id)) {
+                error_collector_.Add(
+                    "Returning `Unit` from function with return type " +
+                        type_registry_.GetNameFromTypeId(
+                            context.return_type_id),
+                    statement->meta);
+              }
             }
           },
           [&](ThrowStatement& thr) {
@@ -718,8 +730,9 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
       },
       expression->as);
 
-  expression->type =
-      (result && result->has_type_id()) ? *result->type_id : LiteralType::Void;
+  if (result) {
+    expression->type_id = result->type_id;
+  }
   return result;
 }
 
@@ -837,7 +850,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
     }
 
     TypeCheckCallArguments(argument_results, struct_type->field_types,
-                           debug_metadata, /*variadic_type=*/std::nullopt);
+                           debug_metadata,
+                           /*variadic_type=*/std::nullopt);
     call_expr.resolved = ResolvedCall{0, FunctionKind::Constructor};
     return ExpressionResult{*callable_type_id};
   }
@@ -919,7 +933,6 @@ SemanticAnalyzer::Result SemanticAnalyzer::HandleMemberAccess(
     if (auto binding = scope_manager_.FindBindingFor(
             member_name.text, ScopeManager::Current,
             struct_symbol->self_scope_id)) {
-      
       // Filters out non-static methods (those that require `self` with kind
       // `Method`) and fields which are only accessible on an instance.
       if (binding->kind != NamedBinding::Function) {

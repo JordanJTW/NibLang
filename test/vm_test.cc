@@ -67,10 +67,10 @@ TEST(VM, CallFunc) {
        .as = {.native = {.fn = native_trampoline, .userdata = &native_func}}}};
 
   EXPECT_CALL(native_func, Call(ElementsAre(Int32Type(10))))
-      .WillOnce(ReturnVoidType());
+      .WillOnce(ReturnUnitType());
 
   vm_t* vm = new_vm(nullptr, 0, funcs, sizeof(funcs) / sizeof(vm_function_t));
-  vm_run(vm, /*entry_point_idx=*/0, false);
+  vm_run(vm, /*entry_point_idx=*/0);
   free_vm(vm);
 }
 
@@ -99,11 +99,11 @@ TEST(VM, ConstantString) {
        .as = {.native = {.fn = native_trampoline, .userdata = &native_func}}}};
 
   EXPECT_CALL(native_func, Call(ElementsAre(StringType("hello world"))))
-      .WillOnce(FreeArgsAndReturnVoidType());
+      .WillOnce(FreeArgsAndReturnUnitType());
 
   vm_t* vm = new_vm(constants, sizeof(constants) / sizeof(vm_value_t), funcs,
                     sizeof(funcs) / sizeof(vm_function_t));
-  vm_run(vm, /*entry_point_idx=*/0, false);
+  vm_run(vm, /*entry_point_idx=*/0);
   free_vm(vm);
 }
 
@@ -150,11 +150,11 @@ TEST(VM, ForLoop) {
   for (int32_t expected_value = 0; expected_value < 5; ++expected_value) {
     EXPECT_CALL(native_func, Call(ElementsAre(Int32Type(expected_value))))
         .InSequence(seq)
-        .WillOnce(ReturnVoidType());
+        .WillOnce(ReturnUnitType());
   }
 
   vm_t* vm = new_vm(nullptr, 0, funcs, sizeof(funcs) / sizeof(vm_function_t));
-  vm_run(vm, /*entry_point_idx=*/0, false);
+  vm_run(vm, /*entry_point_idx=*/0);
   free_vm(vm);
 }
 
@@ -199,7 +199,7 @@ TEST(VM, RefCountString) {
   ::testing::Sequence seq;
   for (const auto& expected_str : {"ll", "rld"}) {
     EXPECT_CALL(print_func, Call(ElementsAre(StringType(expected_str))))
-        .WillOnce(FreeArgsAndReturnVoidType());
+        .WillOnce(FreeArgsAndReturnUnitType());
   }
 
   vm_value_t constants[] = {
@@ -208,7 +208,7 @@ TEST(VM, RefCountString) {
 
   vm_t* vm = new_vm(constants, sizeof(constants) / sizeof(vm_value_t), funcs,
                     sizeof(funcs) / sizeof(vm_function_t));
-  vm_run(vm, /*entry_point_idx=*/0, false);
+  vm_run(vm, /*entry_point_idx=*/0);
   free_vm(vm);
 }
 
@@ -233,6 +233,7 @@ TEST(VM, CallBuiltInPromise) {
                            .PushLocal(0)
                            .PushInt32(109)
                            .Call(VM_BUILTIN(1) /*Promise.fulfill*/, 2)
+                           .StackDel()  // Remove `Unit()` produced by `Promise.fulfill`
                            .Call(3 /*verifyResult*/, 1)
                            .Return()
                            .Build();
@@ -281,10 +282,10 @@ TEST(VM, CallBuiltInPromise) {
       .WillOnce([&final_promise](std::vector<vm_value_t> args) {
         EXPECT_EQ(args.size(), 1);
         final_promise = args[0];
-        return (vm_value_t){.type = value_type_t::VALUE_TYPE_NULL};
+        return (vm_value_t){.type = value_type_t::VALUE_TYPE_UNIT};
       });
 
-  vm_run(vm, /*entry_point_idx=*/0, false);
+  vm_run(vm, /*entry_point_idx=*/0);
 
   EXPECT_TRUE(run_promise_jobs(vm, vm_get_job_queue(vm)));
 
@@ -337,10 +338,10 @@ TEST_P(TryCatchTest, DISABLED_ValidateFlowControl) {
   ::testing::Sequence seq;
   for (uint32_t expected : GetParam().states) {
     EXPECT_CALL(state_func_, Call(ElementsAre(Int32Type(expected))))
-        .WillOnce(ReturnVoidType());
+        .WillOnce(ReturnUnitType());
   }
 
-  vm_run(vm_, /*entry_point_idx=*/0, false);
+  vm_run(vm_, /*entry_point_idx=*/0);
 
   vm_value_t exception;
   if (vm_get_exception(vm_, &exception)) {

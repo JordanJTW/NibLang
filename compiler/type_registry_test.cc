@@ -99,7 +99,7 @@ TEST_F(TypeRegistryTest, NewFunctionSymbol) {
 
 TEST_F(TypeRegistryTest, NewFunctionType) {
   FunctionType type{/*arg_types=*/{LiteralType::Bool, LiteralType::i32},
-                    /*return_type=*/LiteralType::Void,
+                    /*return_type=*/LiteralType::Unit,
                     /*variadic_type=*/std::nullopt};
 
   TypeId type_id = type_registry.NewFunctionType(type);
@@ -133,7 +133,7 @@ TEST_F(TypeRegistryTest, NewOptionalType) {
 }
 
 TEST_F(TypeRegistryTest, GetNameFromTypeId_BuiltIns) {
-  EXPECT_EQ(type_registry.GetNameFromTypeId(LiteralType::Void), "Void");
+  EXPECT_EQ(type_registry.GetNameFromTypeId(LiteralType::Unit), "Unit");
   EXPECT_EQ(type_registry.GetNameFromTypeId(LiteralType::i32), "i32");
   EXPECT_EQ(type_registry.GetNameFromTypeId(LiteralType::f32), "f32");
   EXPECT_EQ(type_registry.GetNameFromTypeId(LiteralType::Codepoint),

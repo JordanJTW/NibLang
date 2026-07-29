@@ -21,6 +21,7 @@ typedef enum {
   OP_PUSH_TRUE,
   OP_PUSH_FALSE,
   OP_PUSH_NULL,
+  OP_PUSH_UNIT,
   OP_PUSH_LOCAL,
   OP_STORE_LOCAL,
   OP_STACK_DUP,
@@ -100,7 +101,7 @@ typedef struct vm_map_t {
 } Map;
 
 typedef enum {
-  VALUE_TYPE_VOID,  // Special return value for functions
+  VALUE_TYPE_UNIT,
   VALUE_TYPE_NULL,
   VALUE_TYPE_BOOL,
   VALUE_TYPE_INT,

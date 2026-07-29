@@ -4,7 +4,7 @@
 
 // Trimmed down String (instead of std/types.nib) for smaller AST to debug.
 extern struct String {
-  fn length(self: String) -> i32;
+  fn length() -> i32;
 }
 
 fn add(x: i32, y: i32) -> i32 {
@@ -16,7 +16,7 @@ fn createDog() -> Dog {
 }
 
 struct Dog {
-  fn bark(self: Dog) -> i32 {
+  fn bark() -> i32 {
     let x: i32 = 0;
     while (x < "who let the dogs".length()) {
       x = x + 1;

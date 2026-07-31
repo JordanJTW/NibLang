@@ -42,16 +42,16 @@ TypeContext::TypeContext(ScopeManager& scope_manager,
 
 void TypeContext::DefineStructType(TypeId self_id,
                                    StructSymbol& symbol,
-                                   const std::vector<TypeId> template_arguemnts,
+                                   const std::vector<TypeId> template_arguments,
                                    CheckFunctionBody check_fn_body) {
   StructType struct_type(symbol.declaration);
-  struct_type.template_arguments = template_arguemnts;
+  struct_type.template_arguments = template_arguments;
   struct_type.scope_id =
       scope_manager_.EnterScope(ScopeManager::StructInstanceScope,
                                 "struct " + symbol.declaration.name.text);
 
-  // Cache the instance early in case a member/method is refers to self.
-  symbol.instances[template_arguemnts] =
+  // Cache the instance early in case a member/method refers to `self`.
+  symbol.instances[template_arguments] =
       TypeInstance{self_id, struct_type.scope_id};
 
   NamedBinding::Idx field_idx = 0;

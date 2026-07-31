@@ -33,6 +33,8 @@ static const char* ToString(FunctionKind kind) {
       return "Anonymous";
     case Method:
       return "Method";
+    case Interface:
+      return "Interface";
     case StaticMethod:
       return "StaticMethod";
     case Constructor:
@@ -238,29 +240,52 @@ void Printer::Print(const Statement& stmt, size_t indent) {
                       << (struct_decl.is_extern ? "extern " : "")
                       << struct_decl.name.text << std::endl;
 
-            std::cout << std::string(indent + 2, ' ') << "Fields:" << std::endl;
+            if (!struct_decl.fields.empty())
+              std::cout << std::string(indent + 2, ' ')
+                        << "Fields:" << std::endl;
             for (const auto& field : struct_decl.fields) {
               std::cout << std::string(indent + 4, ' ') << field.first.text
                         << ": " << field.second << std::endl;
             }
 
-            std::cout << std::string(indent + 2, ' ')
-                      << "Methods:" << std::endl;
+            if (!struct_decl.methods.empty())
+              std::cout << std::string(indent + 2, ' ')
+                        << "Methods:" << std::endl;
             for (auto& method : struct_decl.methods) {
               std::cout << std::string(indent + 4, ' ') << method.first.text
                         << ":" << std::endl;
               Print(method.second, indent + 6);
             }
+
+            if (!struct_decl.interfaces.empty())
+              std::cout << std::string(indent + 2, ' ')
+                        << "Implements:" << std::endl;
+            for (const auto& [name, interface] : struct_decl.interfaces) {
+              std::cout << std::string(indent + 4, ' ') << name.text
+                        << std::endl;
+            }
           },
           [&](const ImportStatement& import) {
-            std::cout << "ImportStatement(\"" << import.path.text << "\")"
-                      << std::endl;
+            std::cout << std::string(indent, ' ') << "ImportStatement(\""
+                      << import.path.text << "\")" << std::endl;
           },
           [&](const TypeAliasStatement& alias) {
-            std::cout << "TypeAliasStatement(" << alias.name.text << " = "
-                      << *alias.type << ")" << std::endl;
+            std::cout << std::string(indent, ' ') << "TypeAliasStatement("
+                      << alias.name.text << " = " << *alias.type << ")"
+                      << std::endl;
           },
-      },
+          [&](const InterfaceDeclaration& decl) {
+            std::cout << std::string(indent, ' ')
+                      << "Interface: " << decl.name.text << std::endl;
+
+            std::cout << std::string(indent + 2, ' ')
+                      << "Methods:" << std::endl;
+            for (const auto& [name, fn] : decl.methods) {
+              std::cout << std::string(indent + 4, ' ') << name.text << ":"
+                        << std::endl;
+              Print(fn, indent + 6);
+            }
+          }},
       stmt.as);
 }
 
@@ -369,9 +394,8 @@ void Printer::Print(const Expression& expr, size_t indent) {
             Print(*postfix.operand, indent + 2);
           },
           [&](const TypeCastExpression& cast) {
-            std::cout << std::string(indent, ' ')
-                      << "TypeCastExpression(type: " << GetTypeName(expr.type_id)
-                      << ", strategy: "
+            std::cout << std::string(indent, ' ') << "TypeCastExpression(type: "
+                      << GetTypeName(expr.type_id) << ", strategy: "
                       << (cast.strategy == TypeCastStrategy::STRICT
                               ? "STRICT"
                               : "OPTIONAL")

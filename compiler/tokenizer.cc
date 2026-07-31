@@ -114,26 +114,30 @@ Token Tokenizer::next() {
     return make_token(TokenKind::kEndOfFile);
 
   // Handle keywords
-  static constexpr std::array<std::pair<std::string_view, TokenKind>, 19>
-      kKeywordToToken{{{"if", TokenKind::kKwIf},
-                       {"else", TokenKind::kKwElse},
-                       {"fn", TokenKind::kKwFn},
-                       {"true", TokenKind::kKwTrue},
-                       {"false", TokenKind::kKwFalse},
-                       {"return", TokenKind::kKwReturn},
-                       {"throw", TokenKind::kKwThrow},
-                       {"while", TokenKind::kKwWhile},
-                       {"break", TokenKind::kKwBreak},
-                       {"continue", TokenKind::kKwContinue},
-                       {"struct", TokenKind::kKwStruct},
-                       {"extern", TokenKind::kKwExtern},
-                       {"let", TokenKind::kKwLet},
-                       {"alias", TokenKind::kKwAlias},
-                       {"static", TokenKind::kKwStatic},
-                       {"as", TokenKind::kKwAs},
-                       {"of", TokenKind::kKwTypeOf},
-                       {"Nil", TokenKind::kKwNil},
-                       {"@import", TokenKind::kKwImport}}};
+  static constexpr std::array<std::pair<std::string_view, TokenKind>, 21>
+      kKeywordToToken{{
+          {"if", TokenKind::kKwIf},
+          {"else", TokenKind::kKwElse},
+          {"fn", TokenKind::kKwFn},
+          {"true", TokenKind::kKwTrue},
+          {"false", TokenKind::kKwFalse},
+          {"return", TokenKind::kKwReturn},
+          {"throw", TokenKind::kKwThrow},
+          {"while", TokenKind::kKwWhile},
+          {"break", TokenKind::kKwBreak},
+          {"continue", TokenKind::kKwContinue},
+          {"struct", TokenKind::kKwStruct},
+          {"extern", TokenKind::kKwExtern},
+          {"let", TokenKind::kKwLet},
+          {"alias", TokenKind::kKwAlias},
+          {"static", TokenKind::kKwStatic},
+          {"as", TokenKind::kKwAs},
+          {"of", TokenKind::kKwTypeOf},
+          {"Nil", TokenKind::kKwNil},
+          {"@import", TokenKind::kKwImport},
+          {"interface", TokenKind::kKwInterface},
+          {"implements", TokenKind::kKwImplements},
+      }};
 
   char ch = data_[offset_];
 
@@ -260,6 +264,8 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kKwTypeOf);
     KIND_TO_NAME(kKwNil);
     KIND_TO_NAME(kKwImport);
+    KIND_TO_NAME(kKwInterface);
+    KIND_TO_NAME(kKwImplements);
     KIND_TO_NAME(kVariadic);
     KIND_TO_NAME(kOpenParen);
     KIND_TO_NAME(kCloseParen);

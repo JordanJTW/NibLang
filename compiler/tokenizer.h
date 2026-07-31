@@ -35,6 +35,8 @@ enum class TokenKind {
   kKwTypeOf,          // of
   kKwNil,             // Nil
   kKwImport,          // @import
+  kKwInterface,       // interface
+  kKwImplements,      // implements
   kVariadic,          // ...
   kOpenParen,         // (
   kCloseParen,        // )

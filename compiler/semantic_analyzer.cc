@@ -236,8 +236,7 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
             }
           },
           // `break` and `continue` are single word statements.
-          [&](const BreakStatement&) {},
-          [&](const ContinueStatement&) {},
+          [&](const BreakStatement&) {}, [&](const ContinueStatement&) {},
           [&](AssignStatement& assign) {
             // Ensure assignment expression's type matches the declared type (if
             // given, otherwise the variable's type is deduced from the value).
@@ -279,7 +278,9 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
           },
           [&](const ImportStatement& import) { /*nothing to check*/ },
           [&](const TypeAliasStatement& alias) { /* nothing to check */ },
-      },
+          [&](const InterfaceDeclaration& decl) {
+            // Function bodies are checked only when a FunctionType is realized
+          }},
       statement->as);
 }
 
@@ -330,7 +331,9 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                         return ExpressionResult::of_binding(*binding);
                       }
 
-                      // Fallback search to ALL scopes for functions/structs.
+                      // Fallback search to ALL scopes for top-level
+                      // declarations i.e. functions, structs, interfaces,
+                      // alias.
                       binding = scope_manager_.FindBindingFor(
                           ident.name, ScopeManager::All);
                       if (binding) {
@@ -340,6 +343,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                           case NamedBinding::Struct:
                           case NamedBinding::TypeAlias:
                           case NamedBinding::Template:
+                          case NamedBinding::Interface:
                             ident.resolved = ResolvedIdentifier{*binding};
                             return ExpressionResult::of_binding(*binding);
 

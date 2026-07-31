@@ -86,6 +86,7 @@ struct NamedBinding {
     Function,  // free functions, static methods, and bound methods
     Method,    // unbound (symbol level) method definitions
     Struct,
+    Interface,
     Field,
     Argument,
     Variable,
@@ -98,7 +99,8 @@ struct NamedBinding {
   std::optional<SymbolId> symbol_id;
 
   inline bool IsTypeRef() const {
-    return kind == Struct || kind == Template || kind == TypeAlias;
+    return kind == Struct || kind == Template || kind == TypeAlias ||
+           kind == Interface || kind == Method;
   }
   inline bool IsVariable() const {
     // A variable by any other name is just as sweet...
@@ -106,7 +108,7 @@ struct NamedBinding {
            kind == Capture || kind == Narrowed;
   }
   inline bool IsValue() const {
-    // Functions are effectively just variables refering to a code block
+    // Functions are effectively just variables referring to a code block
     return kind == Function || IsVariable();
   }
 
@@ -188,6 +190,7 @@ enum FunctionKind {
   Extern,
   Anonymous,
   Method,
+  Interface,
   StaticMethod,
   Constructor,
 };
@@ -392,11 +395,24 @@ struct WhileStatement {
 struct BreakStatement {};
 struct ContinueStatement {};
 
+struct ImplementsDeclaration {
+  SpannedText name;
+  std::vector<ParsedType> template_types;
+  std::vector<std::pair<SpannedText, FunctionDeclaration>> impls;
+};
+
+struct InterfaceDeclaration {
+  SpannedText name;
+  std::vector<TemplateArgument> template_variables;
+  std::vector<std::pair<SpannedText, FunctionDeclaration>> methods;
+};
+
 struct StructDeclaration {
   SpannedText name;
   std::vector<TemplateArgument> template_arguments;
   std::vector<std::pair<SpannedText, ParsedType>> fields;
   std::vector<std::pair<SpannedText, FunctionDeclaration>> methods;
+  std::vector<std::pair<SpannedText, ImplementsDeclaration>> interfaces;
   bool is_extern;
 
   bool IsTemplate() const { return !template_arguments.empty(); }
@@ -425,7 +441,8 @@ struct Statement {
                AssignStatement,              // let x: i32 = 42;
                StructDeclaration,            // struct Foo { ... }
                ImportStatement,              // @import "path/to/import"
-               TypeAliasStatement            // type name = ParsedType;
+               TypeAliasStatement,           // type name = ParsedType;
+               InterfaceDeclaration          // interface Foo { ... }
                >
       as;
   Metadata meta;

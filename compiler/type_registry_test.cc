@@ -26,8 +26,11 @@ TEST_F(TypeRegistryTest, NewStructSymbol) {
   ScopeId outer_scope = scope_manager.GetActiveScopeId();
 
   StructDeclaration declaration = {
-      SpannedText{"name"}, /*template_arguments=*/{},
-      /*fields=*/{{SpannedText{"foo"}, ParsedType{"i32"}}}, /*methods=*/{},
+      SpannedText{"name"},
+      /*template_arguments=*/{},
+      /*fields=*/{{SpannedText{"foo"}, ParsedType{"i32"}}},
+      /*methods=*/{},
+      /*interfaces=*/{},
       /*is_extern=*/false};
 
   NamedBinding binding = type_registry.NewStructSymbol(declaration);
@@ -52,8 +55,11 @@ TEST_F(TypeRegistryTest, NewStructSymbolWithTemplate) {
   ScopeId outer_scope = scope_manager.GetActiveScopeId();
 
   StructDeclaration declaration = {
-      SpannedText{"name"}, /*template_arguments=*/{{SpannedText{"T"}}},
-      /*fields=*/{{SpannedText{"foo"}, ParsedType{"T"}}}, /*methods=*/{},
+      SpannedText{"name"},
+      /*template_arguments=*/{{SpannedText{"T"}}},
+      /*fields=*/{{SpannedText{"foo"}, ParsedType{"T"}}},
+      /*methods=*/{},
+      /*interfaces=*/{},
       /*is_extern=*/false};
 
   NamedBinding binding = type_registry.NewStructSymbol(declaration);
@@ -168,7 +174,9 @@ TEST_F(TypeRegistryTest, GetNameFromTypeId_FunctionTypeWithVariadic) {
 TEST_F(TypeRegistryTest, GetNameFromTypeId_StructType) {
   StructDeclaration declaration = {SpannedText{"Foo"},
                                    /*template_arguments=*/{},
-                                   /*fields=*/{}, /*methods=*/{},
+                                   /*fields=*/{},
+                                   /*methods=*/{},
+                                   /*interfaces=*/{},
                                    /*is_extern=*/false};
   StructType type{declaration, /*field_types=*/{}, /*template_arguments=*/{},
                   /*scope_id*/ 0};
@@ -184,7 +192,9 @@ TEST_F(TypeRegistryTest, GetNameFromTypeId_StructTypeWithTemplate) {
   // the Type but they have no bearing on the function under test.
   StructDeclaration declaration = {SpannedText{"Foo"},
                                    /*template_arguments=*/{},
-                                   /*fields=*/{}, /*methods=*/{},
+                                   /*fields=*/{},
+                                   /*methods=*/{},
+                                   /*interfaces=*/{},
                                    /*is_extern=*/false};
   StructType type{declaration, /*field_types=*/{},
                   /*template_arguments=*/{LiteralType::i32, LiteralType::Bool},

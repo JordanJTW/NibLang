@@ -137,6 +137,15 @@ void Parser::ParseBlock(Block& block, BlockType block_type) {
       continue;
     }
 
+    if (current_token_.kind == TokenKind::kKwInterface) {
+      if (auto declaration = ParseInterfaceDeclaration()) {
+        block.statements.push_back(std::make_unique<Statement>(
+            Statement{std::move(*declaration),
+                      Metadata::fromTokens(start_token, current_token_)}));
+      }
+      continue;
+    }
+
     if (current_token_.kind == TokenKind::kKwWhile) {
       AdvanceToken();
 
@@ -1206,8 +1215,6 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
 
   Token name_token = current_token_;
   if (!ConsumeToken(TokenKind::kIdent, "requires a struct name")) {
-    error_collector_.Add("requires a struct name", current_token_.meta);
-
     // Synchronize to the start of template parameters or body
     auto is_body_or_templates = [](TokenKind kind) {
       return kind == TokenKind::kSquareOpen || kind == TokenKind::kOpenBrace;
@@ -1238,11 +1245,11 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
   // Strong synchronization points to anchor on in a struct declaration
   auto is_strong_anchor = [](TokenKind kind) {
     return kind == TokenKind::kKwFn || kind == TokenKind::kKwStatic ||
-           kind == TokenKind::kCloseBrace;
+           kind == TokenKind::kCloseBrace || kind == TokenKind::kKwImplements;
   };
 
   auto handle_member_error = [&, this]() -> bool {
-    return SynchronizeOnError([&, this](TokenKind kind) {
+    return SynchronizeOnError([&](TokenKind kind) {
       return is_strong_anchor(kind) || kind == TokenKind::kIdent;
     });
   };
@@ -1280,6 +1287,18 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
       }
       if (current_token_.kind == TokenKind::kEndExpr)
         AdvanceToken();  // consume ';'
+      continue;
+    }
+
+    if (current_token_.kind == TokenKind::kKwImplements) {
+      auto impl = ParseImplementsDeclaration();
+      if (!impl) {
+        if (!handle_member_error())
+          return std::nullopt;
+        continue;
+      }
+
+      struct_decl.interfaces.emplace_back(impl->name, std::move(*impl));
       continue;
     }
 
@@ -1322,6 +1341,129 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
 
   ConsumeToken(TokenKind::kCloseBrace, "expected '}' to close struct body");
   return struct_decl;
+}
+
+std::optional<ImplementsDeclaration> Parser::ParseImplementsDeclaration() {
+  CHECK(ConsumeToken(TokenKind::kKwImplements, "expected 'implements'"));
+
+  Token name_token = current_token_;
+  if (!ConsumeToken(TokenKind::kIdent, "requires a interface name")) {
+    // Synchronize to the start of template parameters or body
+    auto is_body_or_templates = [](TokenKind kind) {
+      return kind == TokenKind::kSquareOpen || kind == TokenKind::kOpenBrace;
+    };
+    if (!SynchronizeOnError(is_body_or_templates)) {
+      return std::nullopt;
+    }
+  }
+
+  // Optionally parse template arguments i.e. implements Foo[i32] { ... }
+  std::vector<ParsedType> template_arguments;
+  if (current_token_.kind == TokenKind::kSquareOpen) {
+    template_arguments = ParseTypeList(TokenKind::kCloseParen);
+    if (template_arguments.empty())
+      return std::nullopt;
+  }
+
+  ImplementsDeclaration declaration;
+  declaration.name = SpannedText::FromToken(std::move(name_token));
+  declaration.template_types = std::move(template_arguments);
+
+  if (!ConsumeToken(TokenKind::kOpenBrace, "expected '{' for interface body")) {
+    return std::nullopt;
+  }
+
+  auto handle_member_error = [&]() -> bool {
+    return SynchronizeOnError([](TokenKind kind) {
+      return kind == TokenKind::kKwFn || kind == TokenKind::kCloseBrace;
+    });
+  };
+
+  while (current_token_.kind != TokenKind::kCloseBrace &&
+         current_token_.kind != TokenKind::kEndOfFile) {
+    if (current_token_.kind == TokenKind::kKwFn) {
+      auto method = ParseFunctionDeclaration(FunctionKind::Method);
+      if (!method) {
+        if (!handle_member_error())
+          return std::nullopt;
+        continue;
+      }
+
+      declaration.impls.emplace_back(method->name, std::move(*method));
+      continue;
+    }
+
+    // Dead-end fallthrough fallback
+    error_collector_.Add("invalid start of interface method",
+                         current_token_.meta);
+    if (!handle_member_error())
+      return std::nullopt;
+  }
+
+  ConsumeToken(TokenKind::kCloseBrace, "expected '}' to close struct body");
+  return declaration;
+}
+
+std::optional<InterfaceDeclaration> Parser::ParseInterfaceDeclaration() {
+  CHECK(ConsumeToken(TokenKind::kKwInterface, "expected 'interface'"));
+
+  Token name_token = current_token_;
+  if (!ConsumeToken(TokenKind::kIdent, "requires a interface name")) {
+    // Synchronize to the start of template parameters or body
+    auto is_body_or_templates = [](TokenKind kind) {
+      return kind == TokenKind::kSquareOpen || kind == TokenKind::kOpenBrace;
+    };
+    if (!SynchronizeOnError(is_body_or_templates)) {
+      return std::nullopt;
+    }
+  }
+
+  // Optionally parse template variables i.e. [T, U = i32]
+  std::vector<TemplateArgument> template_variables;
+  if (current_token_.kind == TokenKind::kSquareOpen) {
+    auto result = ParseTemplateDeclarationList();
+    if (!result)
+      return std::nullopt;
+    template_variables = std::move(result.value());
+  }
+
+  InterfaceDeclaration declaration;
+  declaration.name = SpannedText::FromToken(std::move(name_token));
+  declaration.template_variables = std::move(template_variables);
+
+  if (!ConsumeToken(TokenKind::kOpenBrace, "expected '{' for interface body")) {
+    return std::nullopt;
+  }
+
+  auto handle_member_error = [&]() -> bool {
+    return SynchronizeOnError([](TokenKind kind) {
+      return kind == TokenKind::kKwFn || kind == TokenKind::kCloseBrace;
+    });
+  };
+
+  while (current_token_.kind != TokenKind::kCloseBrace &&
+         current_token_.kind != TokenKind::kEndOfFile) {
+    if (current_token_.kind == TokenKind::kKwFn) {
+      auto method = ParseFunctionDeclaration(FunctionKind::Interface);
+      if (!method) {
+        if (!handle_member_error())
+          return std::nullopt;
+        continue;
+      }
+
+      declaration.methods.emplace_back(method->name, std::move(*method));
+      continue;
+    }
+
+    // Dead-end fallthrough fallback
+    error_collector_.Add("invalid start of interface method",
+                         current_token_.meta);
+    if (!handle_member_error())
+      return std::nullopt;
+  }
+
+  ConsumeToken(TokenKind::kCloseBrace, "expected '}' to close struct body");
+  return declaration;
 }
 
 std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(

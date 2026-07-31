@@ -102,6 +102,8 @@ std::ostream& operator<<(std::ostream& os, NamedBinding::Kind kind) {
       return os << "Method";
     case NamedBinding::Struct:
       return os << "Struct";
+    case NamedBinding::Interface:
+      return os << "Interface";
     case NamedBinding::Field:
       return os << "Field";
     case NamedBinding::Argument:

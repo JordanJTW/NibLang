@@ -52,6 +52,9 @@ class Parser {
       ExternStruct is_extern);
   std::optional<FunctionDeclaration> ParseFunctionDeclaration(
       FunctionKind function_kind);
+  std::optional<InterfaceDeclaration> ParseInterfaceDeclaration();
+  std::optional<ImplementsDeclaration> ParseImplementsDeclaration();
+
   struct FunctionArgumentList {
     std::vector<std::pair<SpannedText, ParsedType>> arguments;
     std::optional<VariadicType> variadic_type;

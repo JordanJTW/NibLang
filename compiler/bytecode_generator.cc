@@ -141,6 +141,7 @@ void ByteCodeGenerator::EmitBlock(const Block& block,
             },
             [&](const ImportStatement& import) { /*nothing to compile*/ },
             [&](const TypeAliasStatement& alias) { /*nothing to compile*/ },
+            [&](const InterfaceDeclaration& decl) { /*nothing to compile*/ },
         },
         stmt->as);
   }
@@ -440,6 +441,14 @@ void ByteCodeGenerator::EmitCall(
         bytecode_.PatchCall(call.resolved->target_symbol_id,
                             call.arguments.size() + 1);
         called_symbols_.push_back(call.resolved->target_symbol_id);
+        break;
+      }
+      case Interface: {
+        EmitExpression(call.callee, optional_chain_ctx,
+                       AccessMode::OBJECT_ONLY);
+        for (const auto& argument : call.arguments)
+          EmitExpression(argument);
+        NOTREACHED() << "TODO: output virtual dispatch op-code";
         break;
       }
       case Constructor: {

@@ -1,10 +1,5 @@
-add_library(assembler assembler.cc)
-target_link_libraries(assembler PRIVATE logging)
-target_include_directories(assembler PRIVATE ${PROJECT_SOURCE_DIR})
-
-add_library(bytecode_generator bytecode_generator.cc)
-target_link_libraries(bytecode_generator PRIVATE assembler parser printer program_builder semantic_analyzer tokenizer type_context)
-target_include_directories(bytecode_generator PRIVATE ${PROJECT_SOURCE_DIR})
+add_subdirectory(codegen)
+add_subdirectory(parser)
 
 add_library(error_collector error_collector.cc)
 target_link_libraries(error_collector PRIVATE types)
@@ -12,17 +7,6 @@ target_include_directories(error_collector PRIVATE ${PROJECT_SOURCE_DIR})
 
 add_library(logging logging.cc)
 target_include_directories(logging PRIVATE ${PROJECT_SOURCE_DIR})
-
-add_library(printer printer.cc)
-target_include_directories(printer PRIVATE ${PROJECT_SOURCE_DIR})
-target_link_libraries(printer PRIVATE type_context types)
-
-add_library(parser parser.cc)
-target_include_directories(parser PRIVATE ${PROJECT_SOURCE_DIR})
-target_link_libraries(parser PRIVATE error_collector logging tokenizer types)
-
-add_library(program_builder program_builder.cc)
-target_include_directories(program_builder PRIVATE ${PROJECT_SOURCE_DIR})
 
 add_library(scope_manager scope_manager.cc)
 target_include_directories(scope_manager PRIVATE ${PROJECT_SOURCE_DIR})
@@ -32,9 +16,6 @@ target_link_libraries(scope_manager PRIVATE nlohmann_json::nlohmann_json)
 add_library(semantic_analyzer semantic_analyzer.cc)
 target_include_directories(semantic_analyzer PRIVATE ${PROJECT_SOURCE_DIR})
 target_link_libraries(semantic_analyzer PRIVATE error_collector logging printer scope_manager type_context type_registry type_resolver)
-
-add_library(tokenizer tokenizer.cc)
-target_include_directories(tokenizer PRIVATE ${PROJECT_SOURCE_DIR})
 
 add_library(type_context type_context.cc)
 target_include_directories(type_context PRIVATE ${PROJECT_SOURCE_DIR})
@@ -63,11 +44,6 @@ add_executable(golden_tests golden_tests.cc)
 target_link_libraries(golden_tests PRIVATE gmock_main bytecode_generator parser program_builder type_context vm)
 target_include_directories(golden_tests PRIVATE ${PROJECT_SOURCE_DIR})
 gtest_discover_tests(golden_tests)
-
-add_executable(parser_test parser_test.cc)
-target_link_libraries(parser_test PRIVATE gmock_main error_collector logging parser)
-target_include_directories(parser_test PRIVATE ${PROJECT_SOURCE_DIR})
-gtest_discover_tests(parser_test)
 
 add_executable(scope_manager_test scope_manager_test.cc)
 target_link_libraries(scope_manager_test PRIVATE gmock_main scope_manager types)

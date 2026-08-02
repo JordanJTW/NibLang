@@ -11,14 +11,13 @@
 #include <tuple>
 #include <vector>
 
-#include "compiler/assembler.h"
-#include "compiler/bytecode_generator.h"
+#include "codegen/assembler.h"
+#include "codegen/bytecode_generator.h"
+#include "codegen/program_builder.h"
 #include "compiler/error_collector.h"
 #include "compiler/gtest_helpers.h"
-#include "compiler/parser.h"
-#include "compiler/program_builder.h"
+#include "compiler/parser/parser.h"
 #include "compiler/semantic_analyzer.h"
-#include "compiler/tokenizer.h"
 #include "compiler/type_context.h"
 #include "compiler/types.h"
 #include "gmock/gmock.h"

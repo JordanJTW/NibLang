@@ -21,13 +21,13 @@
 #include <variant>
 #include <vector>
 
-#include "compiler/assembler.h"
-#include "compiler/bytecode_generator.h"
+#include "compiler/codegen/assembler.h"
+#include "compiler/codegen/bytecode_generator.h"
+#include "compiler/codegen/program_builder.h"
 #include "compiler/error_collector.h"
 #include "compiler/file.h"
-#include "compiler/parser.h"
-#include "compiler/printer.h"
-#include "compiler/program_builder.h"
+#include "compiler/parser/parser.h"
+#include "compiler/parser/printer.h"
 #include "compiler/semantic_analyzer.h"
 #include "compiler/type_context.h"
 #include "compiler/types.h"

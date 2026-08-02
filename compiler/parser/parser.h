@@ -2,16 +2,17 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause
 
+#pragma once
+
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <optional>
 #include <string>
-#include <string_view>
-#include <variant>
 
+#include "compiler/codegen/program_builder.h"
 #include "compiler/error_collector.h"
-#include "compiler/program_builder.h"
-#include "compiler/tokenizer.h"
+#include "compiler/parser/tokenizer.h"
 #include "compiler/types.h"
 
 class Parser {

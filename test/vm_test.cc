@@ -10,7 +10,7 @@
 #include <tuple>
 #include <vector>
 
-#include "compiler/assembler.h"
+#include "compiler/codegen/assembler.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "src/promise.h"

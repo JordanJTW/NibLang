@@ -2,13 +2,11 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause
 
-#include "compiler/assembler.h"
+#include "compiler/codegen/assembler.h"
 
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
-#include <cstdlib>
-#include <cstring>
 #include <string_view>
 #include <utility>
 

@@ -2,9 +2,8 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause
 
-#include "compiler/printer.h"
+#include "compiler/parser/printer.h"
 
-#include <cstdint>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -12,7 +11,8 @@
 #include <variant>
 #include <vector>
 
-#include "compiler/tokenizer.h"
+#include "compiler/parser/tokenizer.h"
+#include "compiler/types.h"
 
 namespace {
 
@@ -23,7 +23,7 @@ struct Overloaded : Ts... {
 template <class... Ts>
 Overloaded(Ts...) -> Overloaded<Ts...>;
 
-static const char* ToString(FunctionKind kind) {
+const char* ToString(FunctionKind kind) {
   switch (kind) {
     case Free:
       return "Free";

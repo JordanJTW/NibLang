@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-#include "compiler/assembler.h"
+#include "compiler/codegen/assembler.h"
 #include "src/types.h"
 #include "src/vm.h"
 

@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "compiler/error_collector.h"
-#include "compiler/tokenizer.h"
+#include "compiler/parser/tokenizer.h"
 #include "compiler/type_context.h"
 #include "compiler/types.h"
 
@@ -33,10 +33,8 @@ class SemanticAnalyzer {
     TypeId else_branch_type;
   };
 
-
   struct ExpressionResult {
-    explicit ExpressionResult(TypeId type_id)
-        : type_id(type_id) {}
+    explicit ExpressionResult(TypeId type_id) : type_id(type_id) {}
 
     static ExpressionResult of_binding(NamedBinding binding) {
       ExpressionResult res;

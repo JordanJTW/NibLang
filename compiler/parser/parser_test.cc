@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause
 
-#include "compiler/parser.h"
+#include "compiler/parser/parser.h"
 
 #include "compiler/types.h"
 #include "gmock/gmock.h"

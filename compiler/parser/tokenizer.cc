@@ -2,10 +2,9 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause
 
-#include "compiler/tokenizer.h"
+#include "compiler/parser/tokenizer.h"
 
 #include <array>
-#include <cctype>
 #include <optional>
 #include <string_view>
 #include <utility>

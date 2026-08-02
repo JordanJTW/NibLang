@@ -16,7 +16,7 @@
 #include <variant>
 #include <vector>
 
-#include "compiler/tokenizer.h"
+#include "compiler/parser/tokenizer.h"
 
 using SymbolId = size_t;
 using ScopeId = size_t;

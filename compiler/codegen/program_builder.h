@@ -4,19 +4,14 @@
 
 #pragma once
 
-#include <cstddef>
-#include <cstdint>
-#include <map>
 #include <optional>
 #include <span>
-#include <stack>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 #include <vector>
 
-#include "compiler/assembler.h"
-#include "compiler/bytecode_generator.h"
+#include "assembler.h"
+#include "bytecode_generator.h"
 #include "compiler/types.h"
 
 class ProgramBuilder {

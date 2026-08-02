@@ -8,9 +8,11 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
-#include "compiler/assembler.h"
-#include "compiler/tokenizer.h"
+#include "compiler/codegen/assembler.h"
+#include "compiler/parser/tokenizer.h"
 #include "compiler/type_context.h"
 
 class ConstantPool {

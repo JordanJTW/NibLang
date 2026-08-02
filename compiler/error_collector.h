@@ -8,8 +8,7 @@
 #include <vector>
 
 #include "compiler/file.h"
-#include "compiler/tokenizer.h"
-#include "compiler/types.h"
+#include "compiler/parser/tokenizer.h"
 
 class ErrorBuilder;
 

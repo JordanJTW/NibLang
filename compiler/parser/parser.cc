@@ -2,21 +2,19 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause
 
-#include "compiler/parser.h"
+#include "compiler/parser/parser.h"
 
 #include <cstddef>
-#include <cstdint>
 #include <functional>
 #include <iomanip>
-#include <iostream>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <variant>
 #include <vector>
 
-#include "compiler/tokenizer.h"
 #include "compiler/types.h"
+#include "compiler/parser/tokenizer.h"
 
 namespace {
 

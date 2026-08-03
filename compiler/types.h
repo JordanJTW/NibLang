@@ -25,46 +25,6 @@ using TypeId = size_t;
 struct FunctionDeclaration;
 struct StructDeclaration;
 
-struct InstanceHash {
-  std::size_t operator()(const std::vector<TypeId>& argument_type_ids) const {
-    std::size_t seed = argument_type_ids.size();
-    for (const auto& id : argument_type_ids) {
-      seed ^= std::hash<TypeId>{}(id) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-    }
-    return seed;
-  }
-};
-
-struct TypeInstance {
-  TypeId type_id;
-  ScopeId scope_id;
-};
-
-using InstanceCache =
-    std::unordered_map<std::vector<TypeId>, TypeInstance, InstanceHash>;
-
-struct FunctionSymbol {
-  FunctionDeclaration& declaration;
-  std::optional<StructDeclaration*> parent_declaration;
-  SymbolId symbol_id;
-  // The lexical enviroment this symbol was declared in
-  ScopeId environment_scope_id;
-
-  std::unordered_map<std::string, TypeId> default_template_type_ids;
-  InstanceCache instances;
-
-  bool IsExtern() const;
-  std::string GetName() const;
-};
-
-struct StructSymbol {
-  StructDeclaration& declaration;
-  // The environment created within the Struct declaration
-  ScopeId self_scope_id;
-
-  InstanceCache instances;
-};
-
 struct SpannedText {
   std::string text;
   Metadata metadata;

@@ -25,20 +25,6 @@ SpannedText SpannedText::FromToken(Token token) {
   return SpannedText{token.value, token.meta};
 }
 
-bool FunctionSymbol::IsExtern() const {
-  if (parent_declaration.has_value())
-    return parent_declaration.value()->is_extern && !declaration.body;
-
-  return declaration.function_kind == FunctionKind::Extern;
-}
-
-std::string FunctionSymbol::GetName() const {
-  if (parent_declaration.has_value())
-    return parent_declaration.value()->name.text + "_" + declaration.name.text;
-
-  return declaration.name.text;
-}
-
 std::ostream& operator<<(std::ostream& os, const NamedBinding& symbol) {
   os << "{name=" << symbol.name.text << ", kind=" << symbol.kind << ", type_id="
      << (symbol.realized_type_id ? std::to_string(*symbol.realized_type_id)

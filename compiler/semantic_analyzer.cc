@@ -6,17 +6,15 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <cstdint>
-#include <iostream>
 #include <iterator>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 #include <utility>
 #include <variant>
 
 #include "compiler/error_collector.h"
 #include "compiler/logging.h"
+#include "compiler/symbol_binder.h"
 #include "compiler/type_context.h"
 #include "compiler/type_resolver.h"
 
@@ -57,82 +55,8 @@ SemanticAnalyzer::SemanticAnalyzer(TypeContext& type_context,
       type_registry_(type_registry) {}
 
 void SemanticAnalyzer::Check(Block& block, FunctionContext& context) {
-  // Collect user-defined type names to ensure they're available for function
-  // signatures, field types, etc. This also allows for recursive types (e.g. a
-  // struct that has a field of its own type).
-  std::vector<std::pair<NamedBinding, StructDeclaration*>> struct_decls;
-  for (auto& statement : block.statements) {
-    if (auto* declaration = std::get_if<StructDeclaration>(&statement->as)) {
-      struct_decls.emplace_back(type_registry_.NewStructSymbol(*declaration),
-                                declaration);
-    }
-  }
-
-  // Collect alias to types. This needs to happen after the initial struct names
-  // are populated in the scope but before the types are actually instantiated.
-  for (auto& statement : block.statements) {
-    if (auto* alias = std::get_if<TypeAliasStatement>(&statement->as)) {
-      // If this is an alias to a specific type, it acts more like a link with
-      // no new type created just another binding to the existing type under a
-      // new name. This ensures aliased types can still be constructed, etc.
-      if (auto* target = std::get_if<std::string>(&alias->type->type)) {
-        std::optional<NamedBinding> target_binding =
-            scope_manager_.FindBindingFor(*target, ScopeManager::All);
-        if (!target_binding->IsTypeRef()) {
-          error_collector_.Add("Cannot create type alias '" + alias->name.text +
-                                   "' from value identifier '" + *target + "'",
-                               alias->type->metadata);
-        }
-        scope_manager_.InsertNameIntoScope(
-            alias->name, NamedBinding::TypeAlias,
-            target_binding->realized_type_id, target_binding->symbol_id,
-            target_binding->idx, target_binding->parent_type_id);
-      } else {
-        // In the case of an alias to a more complex type we do assign a new
-        // type to allow for recursive definitions i.e. alias Foo = Array[Foo].
-        type_context_.GetAliasOf(alias->name, *alias->type);
-      }
-    }
-  }
-
-  // Type check the full struct bodies (and functions) once all types are known.
-  // Errors are logged from within `DefineStructType` and `DefineFunction`.
-  for (auto& [self, declaration] : struct_decls) {
-    CHECK(self.symbol_id.has_value());  // DeclareStructSymbol MUST provide one
-    auto* symbol = type_registry_.GetSymbol<StructSymbol>(*self.symbol_id);
-    CHECK(symbol);  // DeclareStructSymbol MUST create a StructSymbol
-
-    scope_manager_.WithScope(symbol->self_scope_id, [&]() {
-      // Create canonical symbols for all instance methods and define static
-      // methods with-in the Symbol scope. This ensures there is a single symbol
-      // for each method (shared by all instances) and that static methods are
-      // able to be found on the struct Symbol directly. :^)
-      for (auto& [name, fn] : declaration->methods) {
-        SymbolId method_id = type_registry_.NewFunctionSymbol(fn, declaration);
-        if (fn.function_kind == FunctionKind::Method) {
-          scope_manager_.InsertNameIntoScope(fn.name, NamedBinding::Method,
-                                             /*type_id=*/std::nullopt,
-                                             method_id);
-        } else {
-          // Intentionally not passing `self_id` for `static` methods.
-          type_context_.DefineFunction(method_id,
-                                       TypeContext::CheckFunctionBody::YES);
-        }
-      }
-
-      if (self.realized_type_id) {  // Only handle non-template (concrete) types
-        // DefineStructType() depends on method symbols already being populated.
-        type_context_.DefineStructType(*self.realized_type_id, *symbol,
-                                       /*template_arguments=*/{});
-      }
-    });
-  }
-  for (auto& statement : block.statements) {
-    if (auto* declaration = std::get_if<FunctionDeclaration>(&statement->as)) {
-      SymbolId symbol_id = type_registry_.NewFunctionSymbol(*declaration);
-      type_context_.DefineFunction(symbol_id);
-    }
-  }
+  SymbolBinder(scope_manager_, type_registry_, type_context_, error_collector_)
+      .Process(block);
 
   for (auto& statement : block.statements) {
     CheckStatement(statement, context);
@@ -146,13 +70,13 @@ void SemanticAnalyzer::Check(Block& block, FunctionContext& context) {
       break;
 
     for (auto realized_function : function_bodies) {
-      if (!realized_function.delcaration.body)
+      if (!realized_function.declaration.body)
         continue;
 
       scope_manager_.WithScope(realized_function.scope_id, [&]() {
         FunctionContext fn_context{{}, realized_function.return_type_id};
-        Check(*realized_function.delcaration.body, fn_context);
-        realized_function.delcaration.resolved->required_captures =
+        Check(*realized_function.declaration.body, fn_context);
+        realized_function.declaration.resolved->required_captures =
             std::move(fn_context.required_captures);
       });
     }

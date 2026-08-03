@@ -38,10 +38,11 @@ TypeContext::TypeContext(ScopeManager& scope_manager,
       type_registry_(type_registry),
       error_collector_(error_collector) {}
 
-void TypeContext::DefineStructType(TypeId self_id,
-                                   StructSymbol& symbol,
-                                   const std::vector<TypeId> template_arguments,
-                                   CheckFunctionBody check_fn_body) {
+void TypeContext::DefineStructType(
+    TypeId self_id,
+    StructSymbol& symbol,
+    const std::vector<TypeId>& template_arguments,
+    CheckFunctionBody check_fn_body) {
   StructType struct_type(symbol.declaration);
   struct_type.template_arguments = template_arguments;
   struct_type.scope_id =
@@ -72,13 +73,7 @@ void TypeContext::DefineStructType(TypeId self_id,
     struct_type.field_types.push_back(type_id.value());
   }
 
-  for (const auto& binding :
-       scope_manager_.GetBindingsForScope(symbol.self_scope_id)) {
-    if (binding.kind != NamedBinding::Method)  // ignore fields/`static` methods
-      continue;
-
-    SymbolId symbol_id = binding.symbol_id.value();
-
+  for (auto& symbol_id : symbol.method_symbols) {
     // Errors are logged from within `DefineFunction`.
     DefineFunction(symbol_id, check_fn_body, self_id);
   }
@@ -308,21 +303,6 @@ TypeId TypeContext::GetUnionOf(const std::vector<TypeId>& types) {
   // to take advatange of better cache-locality (due to contiguous memory).
   auto key = UnionType{{normalized_types.begin(), normalized_types.end()}};
   return type_registry_.NewUnionType(std::move(key));
-}
-
-TypeId TypeContext::GetAliasOf(SpannedText name, const ParsedType& type) {
-  // All alias are nominally typed by definition so assign a new TypeId.
-  TypeId type_id = type_registry_.NewTypeId();
-  // The TypeId is assigned and added to the scope to allow for recursive type
-  // aliases but the `target_type_id` is unknown until it has been resolved.
-  scope_manager_.InsertNameIntoScope(name, NamedBinding::TypeAlias, type_id,
-                                     /*symbol_id=*/std::nullopt);
-
-  std::optional<TypeId> target_type_id = GetTypeIdFor(type);
-  if (target_type_id) {
-    type_registry_.NewAliasType(name.text, type_id, *target_type_id);
-  }
-  return type_id;
 }
 
 bool TypeContext::IsTypeNilable(TypeId type_id) const {

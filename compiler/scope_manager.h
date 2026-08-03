@@ -27,7 +27,9 @@ class ScopeManager {
   explicit ScopeManager(ErrorCollector& error_collector);
   ~ScopeManager() = default;
 
-  // Creates a new scope of `type` with `name` under the currently active scope.
+  // Creates a new scope of `type` with `name` without switching to it.
+  ScopeId CreateScope(ScopeType type, std::string_view name);
+  // Creates a new scope of `type` with `name` and enters into it.
   ScopeId EnterScope(ScopeType type, std::string_view name);
   // Exits the current scope, setting the active scope to its parent scope.
   void ExitScope();
@@ -99,7 +101,6 @@ class ScopeManager {
       ExitScope();
       return result;
     }
-
   }
 
   std::string ToJson(ScopeId scope_id) const;

@@ -15,7 +15,11 @@ target_link_libraries(scope_manager PRIVATE nlohmann_json::nlohmann_json)
 
 add_library(semantic_analyzer semantic_analyzer.cc)
 target_include_directories(semantic_analyzer PRIVATE ${PROJECT_SOURCE_DIR})
-target_link_libraries(semantic_analyzer PRIVATE error_collector logging printer scope_manager type_context type_registry type_resolver)
+target_link_libraries(semantic_analyzer PRIVATE error_collector logging printer scope_manager symbol_binder type_context type_registry type_resolver)
+
+add_library(symbol_binder symbol_binder.cc)
+target_include_directories(symbol_binder PRIVATE ${PROJECT_SOURCE_DIR})
+target_link_libraries(symbol_binder PRIVATE error_collector logging printer scope_manager type_context type_registry type_resolver)
 
 add_library(type_context type_context.cc)
 target_include_directories(type_context PRIVATE ${PROJECT_SOURCE_DIR})
@@ -56,7 +60,7 @@ target_include_directories(semantic_analyzer_test PRIVATE ${PROJECT_SOURCE_DIR})
 gtest_discover_tests(semantic_analyzer_test)
 
 add_executable(type_context_test type_context_test.cc)
-target_link_libraries(type_context_test PRIVATE gmock_main type_context types)
+target_link_libraries(type_context_test PRIVATE gmock_main symbol_binder type_context types)
 target_include_directories(type_context_test PRIVATE ${PROJECT_SOURCE_DIR})
 gtest_discover_tests(type_context_test)
 
@@ -66,6 +70,6 @@ target_include_directories(type_registry_test PRIVATE ${PROJECT_SOURCE_DIR})
 gtest_discover_tests(type_registry_test)
 
 add_executable(type_resolver_test type_resolver_test.cc)
-target_link_libraries(type_resolver_test PRIVATE gmock_main type_resolver types)
+target_link_libraries(type_resolver_test PRIVATE gmock_main symbol_binder type_resolver types)
 target_include_directories(type_resolver_test PRIVATE ${PROJECT_SOURCE_DIR})
 gtest_discover_tests(type_resolver_test)

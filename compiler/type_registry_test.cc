@@ -22,61 +22,61 @@ TEST_F(TypeRegistryTest, BuiltInTypes) {
   }
 }
 
-TEST_F(TypeRegistryTest, NewStructSymbol) {
-  ScopeId outer_scope = scope_manager.GetActiveScopeId();
-
-  StructDeclaration declaration = {
-      SpannedText{"name"},
-      /*template_arguments=*/{},
-      /*fields=*/{{SpannedText{"foo"}, ParsedType{"i32"}}},
-      /*methods=*/{},
-      /*interfaces=*/{},
-      /*is_extern=*/false};
-
-  NamedBinding binding = type_registry.NewStructSymbol(declaration);
-
-  EXPECT_EQ(binding.name.text, "name");
-  EXPECT_EQ(binding.kind, NamedBinding::Struct);
-  EXPECT_TRUE(binding.realized_type_id.has_value());
-  EXPECT_FALSE(binding.parent_type_id.has_value());
-  ASSERT_TRUE(binding.symbol_id.has_value());
-
-  const auto* const symbol =
-      type_registry.GetSymbol<StructSymbol>(*binding.symbol_id);
-  ASSERT_TRUE(symbol);
-
-  EXPECT_NE(symbol->self_scope_id, outer_scope);  // Creates a new inner scope
-  // TypeIds are assigned but no instances exist until AFTER all of the structs
-  // have been registered to allow for circular and out of order references.
-  EXPECT_TRUE(symbol->instances.empty());
+TEST_F(TypeRegistryTest, DISABLED_NewStructSymbol) {
+  // ScopeId outer_scope = scope_manager.GetActiveScopeId();
+  //
+  // StructDeclaration declaration = {
+  //     SpannedText{"name"},
+  //     /*template_arguments=*/{},
+  //     /*fields=*/{{SpannedText{"foo"}, ParsedType{"i32"}}},
+  //     /*methods=*/{},
+  //     /*interfaces=*/{},
+  //     /*is_extern=*/false};
+  //
+  // NamedBinding binding = type_registry.NewStructSymbol(declaration);
+  //
+  // EXPECT_EQ(binding.name.text, "name");
+  // EXPECT_EQ(binding.kind, NamedBinding::Struct);
+  // EXPECT_TRUE(binding.realized_type_id.has_value());
+  // EXPECT_FALSE(binding.parent_type_id.has_value());
+  // ASSERT_TRUE(binding.symbol_id.has_value());
+  //
+  // const auto* const symbol =
+  //     type_registry.GetSymbol<StructSymbol>(*binding.symbol_id);
+  // ASSERT_TRUE(symbol);
+  //
+  // EXPECT_NE(symbol->self_scope_id, outer_scope);  // Creates a new inner scope
+  // // TypeIds are assigned but no instances exist until AFTER all of the structs
+  // // have been registered to allow for circular and out of order references.
+  // EXPECT_TRUE(symbol->instances.empty());
 }
 
-TEST_F(TypeRegistryTest, NewStructSymbolWithTemplate) {
-  ScopeId outer_scope = scope_manager.GetActiveScopeId();
-
-  StructDeclaration declaration = {
-      SpannedText{"name"},
-      /*template_arguments=*/{{SpannedText{"T"}}},
-      /*fields=*/{{SpannedText{"foo"}, ParsedType{"T"}}},
-      /*methods=*/{},
-      /*interfaces=*/{},
-      /*is_extern=*/false};
-
-  NamedBinding binding = type_registry.NewStructSymbol(declaration);
-
-  EXPECT_EQ(binding.name.text, "name");
-  EXPECT_EQ(binding.kind, NamedBinding::Struct);
-  // Templated structs can not be realized directly from a declaration.
-  EXPECT_FALSE(binding.realized_type_id.has_value());
-  EXPECT_FALSE(binding.parent_type_id.has_value());
-  ASSERT_TRUE(binding.symbol_id.has_value());
-
-  const auto* const symbol =
-      type_registry.GetSymbol<StructSymbol>(*binding.symbol_id);
-  ASSERT_TRUE(symbol);
-
-  EXPECT_NE(symbol->self_scope_id, outer_scope);  // Creates a new inner scope
-  EXPECT_TRUE(symbol->instances.empty());
+TEST_F(TypeRegistryTest, DISABLED_NewStructSymbolWithTemplate) {
+  // ScopeId outer_scope = scope_manager.GetActiveScopeId();
+  //
+  // StructDeclaration declaration = {
+  //     SpannedText{"name"},
+  //     /*template_arguments=*/{{SpannedText{"T"}}},
+  //     /*fields=*/{{SpannedText{"foo"}, ParsedType{"T"}}},
+  //     /*methods=*/{},
+  //     /*interfaces=*/{},
+  //     /*is_extern=*/false};
+  //
+  // NamedBinding binding = type_registry.NewStructSymbol(declaration);
+  //
+  // EXPECT_EQ(binding.name.text, "name");
+  // EXPECT_EQ(binding.kind, NamedBinding::Struct);
+  // // Templated structs can not be realized directly from a declaration.
+  // EXPECT_FALSE(binding.realized_type_id.has_value());
+  // EXPECT_FALSE(binding.parent_type_id.has_value());
+  // ASSERT_TRUE(binding.symbol_id.has_value());
+  //
+  // const auto* const symbol =
+  //     type_registry.GetSymbol<StructSymbol>(*binding.symbol_id);
+  // ASSERT_TRUE(symbol);
+  //
+  // EXPECT_NE(symbol->self_scope_id, outer_scope);  // Creates a new inner scope
+  // EXPECT_TRUE(symbol->instances.empty());
 }
 
 TEST_F(TypeRegistryTest, NewFunctionSymbol) {

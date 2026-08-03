@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "compiler/scope_manager.h"
+#include "compiler/symbol_types.h"
 #include "compiler/types.h"
 
 struct AliasType {
@@ -87,17 +88,16 @@ class TypeRegistry {
 
   explicit TypeRegistry(ScopeManager& scope_manager);
 
-  // Creates a new StructSymbol for `declaration` in the symbol table and adds a
-  // NamedBinding to it in the current scope. If the `declaration` is concrete
-  // then a TypeId is assigned proactively (to be passed to DefineStructType).
-  NamedBinding NewStructSymbol(StructDeclaration& declaration);
+  // Registers `symbol` with a unique SymbolId in the SymbolTable.
+  // Returns the SymbolId and a pointer to `symbol` _in_ the SymbolTable.
+  std::pair<SymbolId, StructSymbol*> NewStructSymbol(StructSymbol symbol);
 
   // Creates a new FunctionSymbol for `declaration` in the symbol table and adds
   // a NamedBinding to it in the current scope. `parent_declaration` MUST be set
   // for method FunctionSymbols and should point to the owning parent struct.
   SymbolId NewFunctionSymbol(
       FunctionDeclaration& declaration,
-      std::optional<StructDeclaration*> parent_declaration = std::nullopt);
+      std::optional<const StructDeclaration*> parent_declaration = std::nullopt);
 
   // Interns `type` into the registry as `self_id` (or a newly generated TypeId
   // if one is not provided). Returns the TypeId for `type`.
@@ -119,7 +119,7 @@ class TypeRegistry {
   // Vends a new TypeId. The TypeId MUST be used (i.e. registered promptly).
   TypeId NewTypeId();
 
-  // Returns a human readable representation of an interned `type_id`.
+  // Returns a human-readable representation of an interned `type_id`.
   std::string GetNameFromTypeId(TypeId type_id) const;
 
   template <typename T>

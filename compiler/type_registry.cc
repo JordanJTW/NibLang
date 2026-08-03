@@ -60,33 +60,22 @@ TypeRegistry::TypeRegistry(ScopeManager& scope_manager)
     type_table_[i] = BuiltInType{};
 }
 
-NamedBinding TypeRegistry::NewStructSymbol(StructDeclaration& declaration) {
-  StructSymbol symbol = scope_manager_.NewScope(
-      ScopeManager::StructSymbolScope, "struct " + declaration.name.text,
-      [&]() {
-        return StructSymbol{declaration, scope_manager_.GetActiveScopeId()};
-      });
-
-  std::optional<TypeId> type_id = std::nullopt;
-  // If the `struct` is already realized at declaration (concrete) then assign
-  // its TypeId so that concrete struct/function declarations will fully resolve
-  if (!declaration.IsTemplate()) {
-    type_id = NewTypeId();
-  }
-
+std::pair<SymbolId, StructSymbol*> TypeRegistry::NewStructSymbol(
+    StructSymbol symbol) {
   SymbolId symbol_id = next_symbol_id_++;
-  symbol_table_.emplace(symbol_id, std::move(symbol));
-  return scope_manager_.InsertNameIntoScope(
-      declaration.name, NamedBinding::Struct, type_id, symbol_id);
+  auto [it, success] = symbol_table_.emplace(symbol_id, std::move(symbol));
+  CHECK(success) << "SymbolId already exists in SymbolTable";
+  return {symbol_id, std::get_if<StructSymbol>(&it->second)};
 }
 
 SymbolId TypeRegistry::NewFunctionSymbol(
     FunctionDeclaration& declaration,
-    std::optional<StructDeclaration*> parent_declaration) {
+    std::optional<const StructDeclaration*> parent_declaration) {
   SymbolId symbol_id = next_symbol_id_++;
-  FunctionSymbol symbol{declaration, std::move(parent_declaration), symbol_id,
+  FunctionSymbol symbol{declaration, parent_declaration, symbol_id,
                         scope_manager_.GetActiveScopeId()};
-  symbol_table_.emplace(symbol_id, std::move(symbol));
+  auto [it, success] = symbol_table_.emplace(symbol_id, std::move(symbol));
+  CHECK(success) << "SymbolId already exists in SymbolTable";
   return symbol_id;
 }
 

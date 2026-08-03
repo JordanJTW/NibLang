@@ -17,6 +17,7 @@
 #include "compiler/types.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "symbol_binder.h"
 
 using ::testing::_;
 using ::testing::ElementsAre;
@@ -50,6 +51,8 @@ class TypeResolverTest : public ::testing::Test {
   TypeRegistry type_registry{scope_manager};
   TypeContext type_context{scope_manager, type_registry, error_collector};
   TypeResolver type_resolver{type_registry, type_context, error_collector};
+  SymbolBinder symbol_binder{scope_manager, type_registry, type_context,
+                             error_collector};
 
   TypeResolver::Bindings bindings;
 
@@ -75,7 +78,7 @@ class TypeResolverTest : public ::testing::Test {
         .name = SpannedText{"Array"},
         .template_arguments = {{"T"}},
     };
-    type_registry.NewStructSymbol(array_declaration);
+    symbol_binder.BindStruct(array_declaration);
   }
 };
 
@@ -174,7 +177,7 @@ TEST_F(TypeResolverTest, ResolveConstructor) {
                  {SpannedText{"b"}, ParsedType{"B"}}},
   };
 
-  NamedBinding binding = type_registry.NewStructSymbol(declaration);
+  const auto& [binding, symbol] = symbol_binder.BindStruct(declaration);
 
   std::vector<TypeId> deduced_bindings;
   EXPECT_TRUE(type_resolver.Resolve(
@@ -194,7 +197,7 @@ TEST_F(TypeResolverTest, ResolveConstructorWithMissingArgument) {
                  {SpannedText{"b"}, ParsedType{"A"}}},
   };
 
-  NamedBinding binding = type_registry.NewStructSymbol(declaration);
+  const auto& [binding, symbol] = symbol_binder.BindStruct(declaration);
 
   std::vector<TypeId> deduced_bindings;
   EXPECT_TRUE(type_resolver.Resolve(

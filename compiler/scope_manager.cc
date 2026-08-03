@@ -15,10 +15,7 @@ ScopeManager::ScopeManager(ErrorCollector& error_collector)
 }
 
 ScopeId ScopeManager::EnterScope(ScopeType type, std::string_view name) {
-  ScopeId scope_id = scopes_.size();
-
-  scopes_.push_back(Scope{type, active_scope_id_, name.data()});
-  scopes_[active_scope_id_].children.push_back(scope_id);
+  const ScopeId scope_id = CreateScope(type, name);
   active_scope_id_ = scope_id;
 
   if (type == ScopeType::FunctionInstanceScope)
@@ -29,6 +26,13 @@ ScopeId ScopeManager::EnterScope(ScopeType type, std::string_view name) {
 
 void ScopeManager::ExitScope() {
   SetActiveScopeId(scopes_[active_scope_id_].parent_scope_id);
+}
+
+ScopeId ScopeManager::CreateScope(ScopeType type, std::string_view name) {
+  const ScopeId scope_id = scopes_.size();
+  scopes_.push_back(Scope{type, active_scope_id_, name.data()});
+  scopes_[active_scope_id_].children.push_back(scope_id);
+  return scope_id;
 }
 
 void ScopeManager::SetActiveScopeId(ScopeId scope_id) {
@@ -100,7 +104,8 @@ NamedBinding ScopeManager::InsertNameIntoScope(
                           .symbol_id = std::move(symbol_id),
                           .idx = std::move(idx),
                           .parent_type_id = std::move(parent_type_id)};
-  if (auto existing_binding = FindBindingFor(name.text, ScopeToCheck::Current)) {
+  if (auto existing_binding =
+          FindBindingFor(name.text, ScopeToCheck::Current)) {
     error_collector_
         .Add("Binding for '" + name.text + "' conflicts with existing binding",
              name.metadata)

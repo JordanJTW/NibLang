@@ -39,7 +39,7 @@ class TypeContext {
   void DefineStructType(
       TypeId self_id,
       StructSymbol& symbol,
-      std::vector<TypeId> template_arguments,
+      const std::vector<TypeId>& template_arguments,
       CheckFunctionBody check_fn_body = CheckFunctionBody::YES);
 
   // Declares a new function symbol in the current scope. Functions are
@@ -65,9 +65,6 @@ class TypeContext {
   // Returns the TypeId for the union of `types`.
   TypeId GetUnionOf(const std::vector<TypeId>& types);
 
-  // Creates an alias of `name` pointing to `type`.
-  TypeId GetAliasOf(SpannedText name, const ParsedType& type);
-
   // Realizes a template of a struct or function pointed to by `binding` into a
   // concrete TypeId using `argument_type_ids` as template arguments.
   // `binding` MUST have a `symbol_id` of the template Symbol to realize.
@@ -85,7 +82,7 @@ class TypeContext {
 
   struct RealizedFunction {
     ScopeId scope_id;
-    FunctionDeclaration& delcaration;
+    FunctionDeclaration& declaration;
     TypeId return_type_id;
   };
 

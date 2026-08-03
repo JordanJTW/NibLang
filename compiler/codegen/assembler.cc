@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
+#include <cstring>
 #include <string_view>
 #include <utility>
 

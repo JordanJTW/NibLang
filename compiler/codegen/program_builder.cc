@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 #include <optional>
 #include <string>
 #include <string_view>

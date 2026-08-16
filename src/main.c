@@ -13,7 +13,12 @@
 #include "src/vm.h"
 
 void print_result(vm_value_t* result, int indent) {
-  switch (result->type) {
+  if (vm_is_object(result)) {
+    printf("OBJ %d\n", result->type.tag.id);
+    return;
+  }
+
+  switch (result->type.raw) {
     case VALUE_TYPE_BOOL:
       printf("%s", result->as.boolean ? "true" : "false");
       break;
@@ -60,9 +65,6 @@ void print_result(vm_value_t* result, int indent) {
       break;
     case VALUE_TYPE_NULL:
       printf("(null)\n");
-      break;
-    case VALUE_TYPE_OPAQUE:
-      printf("<opaque>");
       break;
     case VALUE_TYPE_UNIT:
       printf("()");

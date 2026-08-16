@@ -111,11 +111,18 @@ typedef enum {
   VALUE_TYPE_FUNCTION,
   VALUE_TYPE_PROMISE,
   VALUE_TYPE_ARRAY,
-  VALUE_TYPE_OPAQUE,
 } value_type_t;
 
+typedef struct {
+  uint32_t id : 31;
+  uint32_t is_object : 1;
+} value_tag_t;
+
 typedef struct vm_value {
-  value_type_t type;
+  union {
+    value_tag_t tag;
+    int32_t raw;
+  } type;
   union {
     bool boolean;
     int32_t i32;
@@ -150,22 +157,58 @@ typedef struct vm_array_t {
   vm_value_t* data;
 } Array;
 
-static inline vm_value_t vm_bool_value(bool v) {
-  vm_value_t result = {.type = VALUE_TYPE_BOOL};
+inline vm_value_t vm_bool_value(bool v) {
+  vm_value_t result = {.type = {.raw = VALUE_TYPE_BOOL}};
   result.as.boolean = v;
   return result;
 }
 
-static inline vm_value_t vm_int_value(int32_t v) {
-  vm_value_t result = {.type = VALUE_TYPE_INT};
+inline vm_value_t vm_int_value(int32_t v) {
+  vm_value_t result = {.type = {.raw = VALUE_TYPE_INT}};
   result.as.i32 = v;
   return result;
 }
 
-static inline vm_value_t vm_float_value(float v) {
-  vm_value_t result = {.type = VALUE_TYPE_FLOAT};
+inline vm_value_t vm_float_value(float v) {
+  vm_value_t result = {.type = {.raw = VALUE_TYPE_FLOAT}};
   result.as.f32 = v;
   return result;
+}
+
+static inline bool vm_is_object(const vm_value_t* value) {
+  return value->type.tag.is_object;
+}
+
+static inline bool vm_is_bool(const vm_value_t* value) {
+  return value->type.raw == VALUE_TYPE_BOOL;
+}
+
+static inline bool vm_is_i32(const vm_value_t* value) {
+  return value->type.raw == VALUE_TYPE_INT;
+}
+
+static inline bool vm_is_f32(const vm_value_t* value) {
+  return value->type.raw == VALUE_TYPE_FLOAT;
+}
+
+static inline bool vm_is_string(const vm_value_t* value) {
+  return value->type.raw == VALUE_TYPE_STR;
+}
+
+static inline bool vm_is_function(const vm_value_t* value) {
+  return value->type.raw == VALUE_TYPE_FUNCTION;
+}
+
+static inline bool vm_is_array(const vm_value_t* value) {
+  return value->type.raw == VALUE_TYPE_ARRAY;
+}
+
+static inline bool vm_is_map(const vm_value_t* value) {
+  return value->type.raw == VALUE_TYPE_MAP;
+}
+
+static inline bool vm_is_promise(const vm_value_t* value) {
+  return value->type.raw == VALUE_TYPE_PROMISE;
 }
 
 #ifdef __cplusplus

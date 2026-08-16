@@ -35,7 +35,7 @@ TEST(Map, StoreAndGet_IntKey) {
 
   vm_value_t* retrieved = map_get(map.as.map, key);
   ASSERT_NE(retrieved, nullptr);
-  EXPECT_EQ(retrieved->type, value_type_t::VALUE_TYPE_INT);
+  EXPECT_EQ(retrieved->type.raw, value_type_t::VALUE_TYPE_INT);
   EXPECT_EQ(retrieved->as.i32, 99);
 }
 
@@ -51,7 +51,7 @@ TEST(Map, StoreAndGet_StringKey) {
 
   vm_value_t* retrieved = map_get(map.as.map, key);
   ASSERT_NE(retrieved, nullptr);
-  EXPECT_EQ(retrieved->type, value_type_t::VALUE_TYPE_STR);
+  EXPECT_EQ(retrieved->type.raw, value_type_t::VALUE_TYPE_STR);
   char* str;
   size_t len = vm_as_str(retrieved, &str);
   EXPECT_EQ(std::string(str, len), "world");
@@ -69,7 +69,7 @@ TEST(Map, StoreAndGet_MapKey) {
 
   vm_value_t* retrieved = map_get(map.as.map, key);
   ASSERT_NE(retrieved, nullptr);
-  EXPECT_EQ(retrieved->type, value_type_t::VALUE_TYPE_STR);
+  EXPECT_THAT(*retrieved, HasType(value_type_t::VALUE_TYPE_STR));
   char* str;
   size_t len = vm_as_str(retrieved, &str);
   EXPECT_EQ(std::string(str, len), "from map key");
@@ -99,7 +99,7 @@ TEST(Map, StoreAndGet_FullBucket) {
   {
     vm_value_t* retrieved = map_get(map.as.map, key_hello);
     ASSERT_NE(retrieved, nullptr);
-    EXPECT_EQ(retrieved->type, value_type_t::VALUE_TYPE_STR);
+    EXPECT_THAT(*retrieved, HasType(value_type_t::VALUE_TYPE_STR));
     char* str;
     size_t len = vm_as_str(retrieved, &str);
     EXPECT_EQ(std::string(str, len), "world");
@@ -107,7 +107,7 @@ TEST(Map, StoreAndGet_FullBucket) {
   {
     vm_value_t* retrieved = map_get(map.as.map, key_key);
     ASSERT_NE(retrieved, nullptr);
-    EXPECT_EQ(retrieved->type, value_type_t::VALUE_TYPE_STR);
+    EXPECT_THAT(*retrieved, HasType(value_type_t::VALUE_TYPE_STR));
     char* str;
     size_t len = vm_as_str(retrieved, &str);
     EXPECT_EQ(std::string(str, len), "value");
@@ -115,7 +115,7 @@ TEST(Map, StoreAndGet_FullBucket) {
   {
     vm_value_t* retrieved = map_get(map.as.map, key_foo);
     ASSERT_NE(retrieved, nullptr);
-    EXPECT_EQ(retrieved->type, VALUE_TYPE_STR);
+    EXPECT_THAT(*retrieved, HasType(value_type_t::VALUE_TYPE_STR));
     char* str;
     size_t len = vm_as_str(retrieved, &str);
     EXPECT_EQ(std::string(str, len), "bar");
@@ -137,6 +137,6 @@ TEST(Map, StoreAndGet_ReplaceValue) {
 
   vm_value_t* retrieved = map_get(map.as.map, key);
   ASSERT_NE(retrieved, nullptr);
-  EXPECT_EQ(retrieved->type, value_type_t::VALUE_TYPE_INT);
+  EXPECT_THAT(*retrieved, HasType(value_type_t::VALUE_TYPE_INT));
   EXPECT_EQ(retrieved->as.i32, 369);
 }

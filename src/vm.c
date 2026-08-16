@@ -30,7 +30,7 @@
 #endif  // NDEBUG
 
 static bool is_number_type(vm_value_t value) {
-  return value.type == VALUE_TYPE_INT || value.type == VALUE_TYPE_FLOAT;
+  return vm_is_i32(&value) || vm_is_f32(&value);
 }
 
 #define VM_BUILTIN_FUNCTION_COUNT 19
@@ -50,7 +50,10 @@ static void rc_increment(vm_value_t* value);
 static void rc_decrement(vm_value_t* value);
 
 static bool value_to_bool(vm_value_t value) {
-  switch (value.type) {
+  if (vm_is_object(&value))
+    return true;
+
+  switch (value.type.raw) {
     case VALUE_TYPE_UNIT:
       // Fall-through
     case VALUE_TYPE_NULL:
@@ -162,7 +165,12 @@ void free_vm(vm_t* vm) {
 }
 
 static void rc_increment(vm_value_t* value) {
-  switch (value->type) {
+  if (vm_is_object(value)) {
+    ++value->as.ref->count;
+    return;
+  }
+
+  switch (value->type.raw) {
     case VALUE_TYPE_UNIT:
     case VALUE_TYPE_NULL:
     case VALUE_TYPE_BOOL:
@@ -174,8 +182,7 @@ static void rc_increment(vm_value_t* value) {
     case VALUE_TYPE_MAP:
     case VALUE_TYPE_STR:
     case VALUE_TYPE_FUNCTION:
-    case VALUE_TYPE_PROMISE:
-    case VALUE_TYPE_OPAQUE: {
+    case VALUE_TYPE_PROMISE: {
       ++(value->as.ref->count);
       break;
     }
@@ -183,7 +190,19 @@ static void rc_increment(vm_value_t* value) {
 }
 
 static void rc_decrement(vm_value_t* value) {
-  switch (value->type) {
+  if (vm_is_object(value)) {
+    assert(value->as.ref->count > 0);
+    --(value->as.ref->count);
+    if (value->as.ref->count == 0) {
+      if (value->as.ref->allocation != NULL)
+        value->as.ref->allocation->object = NULL;
+
+      value->as.ref->deleter(value->as.ref, true);
+    }
+    return;
+  }
+
+  switch (value->type.raw) {
     case VALUE_TYPE_UNIT:
     case VALUE_TYPE_NULL:
     case VALUE_TYPE_BOOL:
@@ -195,8 +214,7 @@ static void rc_decrement(vm_value_t* value) {
     case VALUE_TYPE_MAP:
     case VALUE_TYPE_STR:
     case VALUE_TYPE_FUNCTION:
-    case VALUE_TYPE_PROMISE:
-    case VALUE_TYPE_OPAQUE: {
+    case VALUE_TYPE_PROMISE: {
       assert(value->as.ref->count > 0);
       --(value->as.ref->count);
 
@@ -387,8 +405,7 @@ static void run_frame(vm_t* vm, const char* name) {
         DEBUG_LOG("OP_DYNAMIC_CALL argc: %d", argc);
 
         vm_value_t fn = pop_stack(&vm->stack);
-        assert(fn.type == VALUE_TYPE_FUNCTION &&
-               "call invoked on non-function");
+        assert(vm_is_function(&fn) && "call invoked on non-function");
 
         vm->stack.sp -= argc;
         vm_invoke_closure(vm, fn.as.fn, vm->stack.values + vm->stack.sp, argc);
@@ -406,7 +423,7 @@ static void run_frame(vm_t* vm, const char* name) {
         DEBUG_LOG("OP_CALL idx: %d:%d (%s)", func_idx, fn->type, fn->name);
 
         uint32_t argc = read_u32_arg(frame, 1);
-        assert(vm->stack.sp >= argc && "stack overflow");
+        assert(vm->stack.sp >= argc && "stack underflow");
         vm->stack.sp -= argc;
         vm_invoke(vm, fn, vm->stack.values + vm->stack.sp, argc);
         frame->pc += 9;
@@ -504,8 +521,7 @@ static void run_frame(vm_t* vm, const char* name) {
         uint32_t local_idx = read_u32_arg(frame, 0);
         DEBUG_LOG("OP_INC idx: %d", local_idx);
         assert(frame->code->local_count > local_idx && "invalid local idx");
-        assert(frame->locals[local_idx].type == VALUE_TYPE_INT &&
-               "only i32 supported");
+        assert(vm_is_i32(&frame->locals[local_idx]) && "only i32 supported");
         ++(frame->locals[local_idx].as.i32);
         frame->pc += 5;
         break;
@@ -515,7 +531,7 @@ static void run_frame(vm_t* vm, const char* name) {
         vm_value_t arg1 = pop_stack(&vm->stack);
         DEBUG_LOG("OP_CONCAT");
 
-        assert(arg1.type == VALUE_TYPE_STR && arg2.type == VALUE_TYPE_STR &&
+        assert(vm_is_string(&arg1) && vm_is_string(&arg2) &&
                "OP_CONCAT only works with strings");
 
         size_t total_length = arg1.as.str->len + arg2.as.str->len;
@@ -529,8 +545,8 @@ static void run_frame(vm_t* vm, const char* name) {
         string->c_str[total_length] = '\0';  // Add in the \0 terminator
         string->rc.deleter = &delete_str;
 
-        push_stack(&vm->stack,
-                   (vm_value_t){.type = VALUE_TYPE_STR, .as.str = string});
+        push_stack(&vm->stack, (vm_value_t){.type = {.raw = VALUE_TYPE_STR},
+                                            .as.str = string});
         vm_free_ref(&arg1);
         vm_free_ref(&arg2);
         ++frame->pc;
@@ -575,11 +591,12 @@ static void run_frame(vm_t* vm, const char* name) {
         break;
       }
 #define EQUALITY_CASE($op, $condition)                                        \
+  DEBUG_LOG(#$op);                                                            \
   case $op: {                                                                 \
     vm_value_t v2 = pop_stack(&vm->stack);                                    \
     vm_value_t v1 = pop_stack(&vm->stack);                                    \
-    assert(v1.type == v2.type && "comparisons must be same type");            \
-    switch (v1.type) {                                                        \
+    assert(v1.type.raw == v2.type.raw && "comparisons must be same type");    \
+    switch (v1.type.raw) {                                                    \
       case VALUE_TYPE_BOOL:                                                   \
         DEBUG_LOG(#$op " %d" #$condition "%d", v1.as.boolean, v2.as.boolean); \
         push_stack(                                                           \
@@ -603,7 +620,7 @@ static void run_frame(vm_t* vm, const char* name) {
                          .as.boolean = (v1.as.f32 $condition v2.as.f32)});    \
         break;                                                                \
       default:                                                                \
-        assert("unsupported comparison type");                                \
+        assert(false && "unsupported comparison type");                       \
     }                                                                         \
     ++frame->pc;                                                              \
     break;                                                                    \
@@ -624,8 +641,9 @@ static void run_frame(vm_t* vm, const char* name) {
         vm_value_t target = pop_stack(&vm->stack);
 
         push_stack(&vm->stack,
-                   (vm_value_t){.type = VALUE_TYPE_BOOL,
-                                .as.boolean = (target.type == type)});
+                   (vm_value_t){.type = {.raw = VALUE_TYPE_BOOL},
+                                .as.boolean = (!vm_is_object(&target) &&
+                                               target.type.raw == type)});
         vm_free_ref(&target);
         frame->pc += 2;
         break;
@@ -638,7 +656,7 @@ static void run_frame(vm_t* vm, const char* name) {
         DEBUG_LOG("OP_JUMP_IF_%s to 0x%04x",
                   (op == OP_JUMP_IF_TRUE ? "TRUE" : "FALSE"), address);
         vm_value_t condition = pop_stack(&vm->stack);
-        assert(condition.type == VALUE_TYPE_BOOL && "condition must be bool");
+        assert(vm_is_bool(&condition) && "condition must be bool");
         if (condition.as.boolean == (op == OP_JUMP_IF_TRUE)) {
           frame->pc = address;
         } else {
@@ -724,7 +742,7 @@ vm_value_t vm_run(vm_t* vm, size_t entry_point_idx) {
 }
 
 bool vm_as_int32(const vm_value_t* value, int32_t* out) {
-  if (value == NULL || value->type != VALUE_TYPE_INT)
+  if (value == NULL || !vm_is_i32(value))
     return false;
   *out = value->as.i32;
   return true;
@@ -747,7 +765,7 @@ vm_value_t allocate_str_from_c_with_len(const char* str, size_t length) {
 }
 
 size_t vm_as_str(const vm_value_t* value, char** out) {
-  if (value == NULL || value->type != VALUE_TYPE_STR)
+  if (value == NULL || !vm_is_string(value))
     return 0;
   *out = value->as.str->c_str;
   return value->as.str->len;
@@ -763,7 +781,7 @@ void vm_free_ref(vm_value_t* value) {
 
 static float value_to_float(vm_value_t value) {
   assert(is_number_type(value) && "value is not a number type");
-  if (value.type == VALUE_TYPE_FLOAT)
+  if (vm_is_f32(&value))
     return value.as.f32;
   return (float)value.as.i32;
 }
@@ -771,7 +789,7 @@ static float value_to_float(vm_value_t value) {
 static vm_value_t handle_number_op(num_op_t op, vm_value_t a, vm_value_t b) {
   assert(is_number_type(a) && is_number_type(b) && "operands must be numbers");
 
-  if (a.type == VALUE_TYPE_FLOAT || b.type == VALUE_TYPE_FLOAT) {
+  if (vm_is_f32(&a) || vm_is_f32(&b)) {
     float f1 = value_to_float(a);
     float f2 = value_to_float(b);
 

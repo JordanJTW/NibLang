@@ -13,6 +13,11 @@
 #include "src/types.h"
 #include "src/vm.h"
 
+// Allows Arrays & Objects to use `vm_array_get`/`vm_array_set`.
+static inline bool is_array_like(vm_value_t* value) {
+  return vm_is_object(value) || vm_is_array(value);
+}
+
 void vm_array_destroy(void* ptr, bool should_free) {
   Array* array = ptr;
 
@@ -31,7 +36,7 @@ vm_value_t allocate_array(vm_t* vm, int length) {
   array->data = calloc(length, sizeof(vm_value_t));
   array->rc.deleter = &vm_array_destroy;
 
-  vm_value_t value = {.type = VALUE_TYPE_ARRAY, .as.array = array};
+  vm_value_t value = {.type.raw = VALUE_TYPE_ARRAY, .as.array = array};
   vm_adopt_ref(value);
   return value;
 }
@@ -48,8 +53,7 @@ vm_value_t vm_array_init(vm_value_t* argv, size_t argc, void* vm) {
 }
 
 vm_value_t vm_array_get(vm_value_t* argv, size_t argc, void* vm) {
-  assert(argc == 2 && (argv[0].type == VALUE_TYPE_ARRAY) &&
-         (argv[1].type == VALUE_TYPE_INT) &&
+  assert(argc == 2 && is_array_like(&argv[0]) && vm_is_i32(&argv[1]) &&
          "incorrect number of args or arg types");
 
   RC_AUTOFREE vm_value_t this = argv[0];
@@ -66,7 +70,7 @@ vm_value_t vm_array_get(vm_value_t* argv, size_t argc, void* vm) {
 }
 
 vm_value_t vm_array_length(vm_value_t* argv, size_t argc, void* vm) {
-  assert(argc == 1 && (argv[0].type == VALUE_TYPE_ARRAY) &&
+  assert(argc == 1 && vm_is_array(&argv[0]) &&
          "incorrect number of args or arg types");
 
   RC_AUTOFREE vm_value_t this = argv[0];
@@ -75,8 +79,7 @@ vm_value_t vm_array_length(vm_value_t* argv, size_t argc, void* vm) {
 }
 
 vm_value_t vm_array_set(vm_value_t* argv, size_t argc, void* vm) {
-  assert(argc == 3 && (argv[0].type == VALUE_TYPE_ARRAY) &&
-         (argv[1].type == VALUE_TYPE_INT) &&
+  assert(argc == 3 && is_array_like(&argv[0]) && vm_is_i32(&argv[1]) &&
          "incorrect number of args or arg types");
 
   RC_AUTOFREE vm_value_t this = argv[0];
@@ -97,7 +100,7 @@ vm_value_t vm_array_set(vm_value_t* argv, size_t argc, void* vm) {
 }
 
 vm_value_t vm_array_push(vm_value_t* argv, size_t argc, void* vm) {
-  assert(argc == 2 && (argv[0].type == VALUE_TYPE_ARRAY) &&
+  assert(argc == 2 && vm_is_array(&argv[0]) &&
          "incorrect number of args or arg types");
 
   RC_AUTOFREE vm_value_t this = argv[0];

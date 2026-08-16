@@ -15,7 +15,7 @@ extern "C" {
 #endif
 
 #define VM_BUILTIN_SELECT_BITMASK 0x80000000u
-#define VM_BUILTIN($idx) $idx | VM_BUILTIN_SELECT_BITMASK
+#define VM_BUILTIN($idx) ($idx | VM_BUILTIN_SELECT_BITMASK)
 
 enum {
   VM_BUILTIN_PROMISE_NEW = VM_BUILTIN(0),
@@ -82,7 +82,7 @@ vm_t* new_vm(const vm_value_t* constants,
              size_t functions_count);
 void free_vm(vm_t* vm);
 
-// Runs the function at `entery_point_idx` until OP_RETURN is encountered.
+// Runs the function at `entry_point_idx` until OP_RETURN is encountered.
 vm_value_t vm_run(vm_t* vm, size_t entry_point_idx);
 
 // Provides `value` as an i32 in `out` and returns true. If `value` is NULL or

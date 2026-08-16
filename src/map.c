@@ -13,10 +13,6 @@
 #include "src/types.h"
 #include "src/vm.h"
 
-static inline bool is_map(vm_value_t value) {
-  return value.type == VALUE_TYPE_MAP;
-}
-
 void free_map(void* self, bool should_free) {
   Map* map = self;
   for (size_t i = 0; i < map->bucket_count; ++i) {
@@ -36,20 +32,20 @@ void free_map(void* self, bool should_free) {
 vm_value_t allocate_map(vm_gc_t* gc, size_t bucket_count) {
   Map* map = vm_gc_allocate(gc, sizeof(Map) + sizeof(MapNode*) * bucket_count);
   if (map == NULL)
-    return (vm_value_t){.type = VALUE_TYPE_NULL};
+    return (vm_value_t){.type.raw = VALUE_TYPE_NULL};
 
   map->bucket_count = bucket_count;
   map->rc.deleter = &free_map;
   static uint32_t next_id = 0;
   map->id = ++next_id;
 
-  vm_value_t value = (vm_value_t){.type = VALUE_TYPE_MAP, .as.map = map};
+  vm_value_t value = (vm_value_t){.type.raw = VALUE_TYPE_MAP, .as.map = map};
   vm_adopt_ref(value);
   return value;
 }
 
 static uint32_t hash(vm_value_t value) {
-  switch (value.type) {
+  switch (value.type.raw) {
     case VALUE_TYPE_FLOAT:
       return (uint32_t)value.as.f32;
     case VALUE_TYPE_INT:
@@ -64,7 +60,7 @@ static uint32_t hash(vm_value_t value) {
       return hash;
     }
     default:
-      fprintf(stderr, "non-hashable value type: %d\n", value.type);
+      fprintf(stderr, "non-hashable value type: %d\n", value.type.raw);
       abort();
       return 0;
   }
@@ -73,10 +69,10 @@ static uint32_t hash(vm_value_t value) {
 static int compare(vm_value_t v1, vm_value_t v2) {
   // There is no type coercion so unlike types will never be equal BUT ordering
   // by type provides consistency.
-  if (v1.type != v2.type)
-    return v1.type - v2.type;
+  if (v1.type.raw != v2.type.raw)
+    return v1.type.raw - v2.type.raw;
 
-  switch (v1.type) {
+  switch (v1.type.raw) {
     case VALUE_TYPE_UNIT:
     case VALUE_TYPE_NULL:
     case VALUE_TYPE_BOOL:
@@ -84,7 +80,6 @@ static int compare(vm_value_t v1, vm_value_t v2) {
     case VALUE_TYPE_FUNCTION:
     case VALUE_TYPE_PROMISE:
     case VALUE_TYPE_ARRAY:
-    case VALUE_TYPE_OPAQUE:
       break;
     case VALUE_TYPE_MAP:
       return v1.as.map->id - v2.as.map->id;
@@ -151,7 +146,7 @@ vm_value_t vm_map_alloc(vm_value_t* argv, size_t argc, void* vm) {
 }
 
 vm_value_t vm_map_get(vm_value_t* argv, size_t argc, void* vm) {
-  assert(argc == 2 && is_map(argv[0]) &&
+  assert(argc == 2 && vm_is_map(&argv[0]) &&
          "incorrect number of args or arg types");
 
   RC_AUTOFREE vm_value_t this = argv[0];
@@ -159,18 +154,18 @@ vm_value_t vm_map_get(vm_value_t* argv, size_t argc, void* vm) {
 
   vm_value_t* value = map_get(this.as.map, key);
   if (value == NULL)
-    return (vm_value_t){.type = VALUE_TYPE_NULL};
+    return (vm_value_t){.type.raw = VALUE_TYPE_NULL};
 
   vm_adopt_ref(*value);
   return *value;
 }
 
 vm_value_t vm_map_set(vm_value_t* argv, size_t argc, void* vm) {
-  assert(argc == 3 && is_map(argv[0]) &&
+  assert(argc == 3 && vm_is_map(&argv[0]) &&
          "incorrect number of args or arg types");
 
   RC_AUTOFREE vm_value_t this = argv[0];
 
   map_insert(this.as.map, argv[1], argv[2]);
-  return (vm_value_t){.type = VALUE_TYPE_UNIT};
+  return (vm_value_t){.type.raw = VALUE_TYPE_UNIT};
 }

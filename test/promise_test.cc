@@ -159,11 +159,11 @@ TEST_F(PromiseTest, PromiseHandleCatch) {
 
   EXPECT_CALL(on_fulfilled_func, Call(_)).Times(0);
 
-  RC_AUTOFREE vm_value_t then_promise =
-      promise_then(vm_, job_queue_, promise_value,
-                   bind_to_function(vm_, 0 /*on_fulfilled_fn*/,
-                                    /*argv=*/nullptr, /*argc=*/0),
-                   (vm_value_t){.type = value_type_t::VALUE_TYPE_NULL});
+  RC_AUTOFREE vm_value_t then_promise = promise_then(
+      vm_, job_queue_, promise_value,
+      bind_to_function(vm_, 0 /*on_fulfilled_fn*/,
+                       /*argv=*/nullptr, /*argc=*/0),
+      (vm_value_t){.type = {.raw = value_type_t::VALUE_TYPE_NULL}});
 
   EXPECT_TRUE(run_promise_jobs(vm_, job_queue_));
   EXPECT_THAT(then_promise, IsRejectedWith(Int32Type(666)));
@@ -174,7 +174,7 @@ TEST_F(PromiseTest, PromiseHandleCatch) {
 
   RC_AUTOFREE vm_value_t catch_promise =
       promise_then(vm_, job_queue_, promise_value,
-                   (vm_value_t){.type = value_type_t::VALUE_TYPE_NULL},
+                   (vm_value_t){.type = {.raw = value_type_t::VALUE_TYPE_NULL}},
                    bind_to_function(vm_, 1 /*on_rejected_fn*/,
                                     /*argv=*/nullptr, /*argc=*/0));
 

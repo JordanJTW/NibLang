@@ -30,10 +30,6 @@ typedef struct vm_job_queue_t {
   vm_job_t* job_queue_tail;
 } vm_job_queue_t;
 
-static bool is_promise(vm_value_t value) {
-  return value.type == VALUE_TYPE_PROMISE;
-}
-
 static void free_promise(void* self, bool should_free) {
   Promise* promise = self;
   vm_free_ref(&promise->value);
@@ -57,10 +53,6 @@ vm_value_t allocate_promise(vm_t* vm) {
   vm_value_t value = {.type = VALUE_TYPE_PROMISE, .as.promise = promise};
   vm_adopt_ref(value);
   return value;
-}
-
-static bool is_function(vm_value_t value) {
-  return value.type == VALUE_TYPE_FUNCTION;
 }
 
 vm_job_queue_t* init_job_queue() {
@@ -100,7 +92,7 @@ vm_value_t promise_then(vm_t* vm,
                         vm_value_t source_promise,
                         vm_value_t on_fulfilled_fn,
                         vm_value_t on_rejected_fn) {
-  assert(is_promise(source_promise) && "promise_then called on non-promise");
+  assert(vm_is_promise(&source_promise) && "promise_then called on non-promise");
 
   vm_value_t new_promise = allocate_promise(vm);
 
@@ -131,7 +123,7 @@ void promise_resolve(vm_job_queue_t* job_queue,
                      vm_value_t promise,
                      vm_value_t value,
                      bool rejected) {
-  assert(is_promise(promise) && "promise_resolve called on non-promise");
+  assert(vm_is_promise(&promise) && "promise_resolve called on non-promise");
   Promise* p = promise.as.promise;
 
   if (p->state != PROMISE_STATE_PENDING)
@@ -164,7 +156,7 @@ static void promise_chain(vm_t* vm,
                           vm_job_queue_t* job_queue,
                           vm_value_t source_promise,
                           vm_value_t target_promise) {
-  assert(is_promise(source_promise) && is_promise(target_promise) &&
+  assert(vm_is_promise(&source_promise) && vm_is_promise(&target_promise) &&
          "promise_chain called on non-promise");
   if (source_promise.as.promise == target_promise.as.promise) {
     // TODO: Resolve with an Exception!
@@ -203,7 +195,7 @@ bool run_promise_jobs(vm_t* vm, vm_job_queue_t* job_queue) {
     vm_value_t result;
     bool is_exception = false;
 
-    if (job->fn.type == VALUE_TYPE_FUNCTION) {
+    if (vm_is_function(&job->fn)) {
       vm_adopt_ref(job->value);  // Arguments are expected to transfer ownership
       result = vm_call_function(vm, job->fn.as.fn, &job->value, /*argc=*/1);
       if (vm_get_exception(vm, &result))
@@ -215,7 +207,7 @@ bool run_promise_jobs(vm_t* vm, vm_job_queue_t* job_queue) {
       is_exception = job->rejected;
     }
 
-    if (is_promise(result)) {
+    if (vm_is_promise(&result)) {
       promise_chain(vm, job_queue, result, job->next_promise);
     } else {
       promise_resolve(job_queue, job->next_promise, result, is_exception);
@@ -229,7 +221,7 @@ vm_value_t vm_promise_alloc(vm_value_t* argv, size_t argc, void* userdata) {
   return allocate_promise(userdata);
 }
 vm_value_t vm_promise_fulfill(vm_value_t* argv, size_t argc, void* userdata) {
-  assert(argc == 2 && is_promise(argv[0]) &&
+  assert(argc == 2 && vm_is_promise(&argv[0]) &&
          "Promise.fulfill must be invoked with $this and a value");
 
   RC_AUTOFREE vm_value_t this = argv[0];
@@ -238,7 +230,7 @@ vm_value_t vm_promise_fulfill(vm_value_t* argv, size_t argc, void* userdata) {
   return (vm_value_t){.type = VALUE_TYPE_UNIT};
 }
 vm_value_t vm_promise_reject(vm_value_t* argv, size_t argc, void* userdata) {
-  assert(argc == 2 && is_promise(argv[0]) &&
+  assert(argc == 2 && vm_is_promise(&argv[0]) &&
          "Promise.reject must be invoked with $this and a value");
 
   RC_AUTOFREE vm_value_t this = argv[0];
@@ -247,7 +239,7 @@ vm_value_t vm_promise_reject(vm_value_t* argv, size_t argc, void* userdata) {
   return (vm_value_t){.type = VALUE_TYPE_UNIT};
 }
 vm_value_t vm_promise_then(vm_value_t* argv, size_t argc, void* userdata) {
-  assert(argc == 3 && is_promise(argv[0]) &&
+  assert(argc == 3 && vm_is_promise(&argv[0]) &&
          "Promise.then must be invoked with $this and two functions");
 
   RC_AUTOFREE vm_value_t this = argv[0];

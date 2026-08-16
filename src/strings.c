@@ -13,17 +13,9 @@
 
 #include "src/vm.h"
 
-static bool is_string(vm_value_t str) {
-  return str.type == VALUE_TYPE_STR;
-}
-
-static bool is_int32(vm_value_t i32) {
-  return i32.type == VALUE_TYPE_INT;
-}
-
 vm_value_t vm_strings_substring(vm_value_t* argv, size_t argc, void* vm) {
-  assert(argc == 3 && is_string(argv[0]) && is_int32(argv[1]) &&
-         is_int32(argv[2]) && "incorrect number of args or arg types");
+  assert(argc == 3 && vm_is_string(&argv[0]) && vm_is_i32(&argv[1]) &&
+         vm_is_i32(&argv[2]) && "incorrect number of args or arg types");
 
   RC_AUTOFREE vm_value_t this = argv[0];
 
@@ -43,7 +35,7 @@ vm_value_t vm_strings_substring(vm_value_t* argv, size_t argc, void* vm) {
 }
 
 vm_value_t vm_strings_get(vm_value_t* argv, size_t argc, void* vm) {
-  assert(argc == 2 && is_string(argv[0]) && is_int32(argv[1]) &&
+  assert(argc == 2 && vm_is_string(&argv[0]) && vm_is_i32(&argv[1]) &&
          "incorrect number of args or arg types");
 
   RC_AUTOFREE vm_value_t this = argv[0];
@@ -60,7 +52,7 @@ vm_value_t vm_strings_get(vm_value_t* argv, size_t argc, void* vm) {
 }
 
 vm_value_t vm_strings_starts_with(vm_value_t* argv, size_t argc, void* vm) {
-  assert(argc == 3 && is_string(argv[0]) && is_string(argv[1]) &&
+  assert(argc == 3 && vm_is_string(&argv[0]) && vm_is_string(&argv[1]) &&
          "incorrect number of args or arg types");
 
   RC_AUTOFREE vm_value_t this = argv[0];
@@ -82,7 +74,7 @@ vm_value_t vm_strings_starts_with(vm_value_t* argv, size_t argc, void* vm) {
 }
 
 vm_value_t vm_string_length(vm_value_t* argv, size_t argc, void* vm) {
-  assert(argc == 1 && (argv[0].type == VALUE_TYPE_STR) &&
+  assert(argc == 1 && vm_is_string(&argv[0]) &&
          "incorrect number of args or arg types");
 
   RC_AUTOFREE vm_value_t this = argv[0];
@@ -96,7 +88,12 @@ vm_value_t vm_string_valueof(vm_value_t* argv, size_t argc, void* vm) {
   vm_value_t number = argv[0];
 
   char buffer[12];
-  switch (number.type) {
+  if (vm_is_object(&number)) {
+    snprintf(buffer, sizeof(buffer), "%p", argv->as.array);
+    return allocate_str_from_c(buffer);
+  }
+
+  switch (number.type.raw) {
     case VALUE_TYPE_NULL:
       return allocate_str_from_c("Nil");
     case VALUE_TYPE_BOOL:

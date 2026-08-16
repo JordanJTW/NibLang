@@ -285,7 +285,7 @@ TEST(VM, CallBuiltInPromise) {
       .WillOnce([&final_promise](std::vector<vm_value_t> args) {
         EXPECT_EQ(args.size(), 1);
         final_promise = args[0];
-        return (vm_value_t){.type = value_type_t::VALUE_TYPE_UNIT};
+        return (vm_value_t){.type = {.raw = value_type_t::VALUE_TYPE_UNIT}};
       });
 
   vm_run(vm, /*entry_point_idx=*/0);

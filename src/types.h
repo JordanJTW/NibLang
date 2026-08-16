@@ -31,6 +31,9 @@ typedef enum {
   OP_DYNAMIC_CALL,
   OP_RETURN,
   OP_BIND,
+  // Objects
+  OP_NEW_OBJ,
+  OP_CALL_VIRTUAL,
   // Operators
   OP_ADD,
   OP_SUB,

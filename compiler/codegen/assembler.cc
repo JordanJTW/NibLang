@@ -72,6 +72,26 @@ Assembler& Assembler::PatchBind(uint32_t idx, uint32_t argc) {
   Bind(idx, argc);
   return *this;
 }
+Assembler& Assembler::NewObject(uint32_t id, uint32_t argc) {
+  PushOpAndArgs(OP_NEW_OBJ, {id, argc});
+  return *this;
+}
+Assembler& Assembler::PatchNewObject(uint32_t id, uint32_t argc) {
+  size_t index_address = data_.size() + 1 /* account for op code */;
+  virtual_patch_locations.emplace_back(id, index_address);
+  NewObject(id, argc);
+  return *this;
+}
+Assembler& Assembler::CallVirtual(uint32_t idx, uint32_t argc) {
+  PushOpAndArgs(OP_CALL_VIRTUAL, {idx, argc});
+  return *this;
+}
+Assembler& Assembler::PatchCallVirtual(uint32_t idx, uint32_t argc) {
+  size_t index_address = data_.size() + 1 /* account for op code */;
+  call_patch_locations.emplace_back(idx, index_address);
+  CallVirtual(idx, argc);
+  return *this;
+}
 Assembler& Assembler::PushLocal(uint32_t idx) {
   max_local_index = std::max(max_local_index, idx);
   PushOpAndArgs(OP_PUSH_LOCAL, {idx});
@@ -216,7 +236,8 @@ Assembler& Assembler::DebugString(const std::string& message) {
 
 std::vector<uint8_t> Assembler::Build(
     Metadata* metadata,
-    std::unordered_map<uint32_t, uint32_t> call_link_mapping) const {
+    std::unordered_map<uint32_t, uint32_t> call_link_mapping,
+    std::unordered_map<SymbolId, uint32_t> virtual_object_ids) const {
   std::vector<uint8_t> result = data_;
 
   // Late linking for Jump/Labels.
@@ -243,6 +264,19 @@ std::vector<uint8_t> Assembler::Build(
       result[address + 3] = (target_idx >> 24) & 0xFF;
     } else {
       LOG(FATAL) << "call idx '" << idx << "' was never linked";
+    }
+  }
+
+  for (const auto& [id, address] : virtual_patch_locations) {
+    if (auto iter = virtual_object_ids.find(id);
+        iter != virtual_object_ids.cend()) {
+      const auto [source_idx, target_idx] = *iter;
+      result[address] = target_idx & 0xFF;
+      result[address + 1] = (target_idx >> 8) & 0xFF;
+      result[address + 2] = (target_idx >> 16) & 0xFF;
+      result[address + 3] = (target_idx >> 24) & 0xFF;
+    } else {
+      LOG(FATAL) << "object '" << id << "' was never linked";
     }
   }
 
@@ -286,6 +320,8 @@ std::string GetOpName(op_t op) {
     CASE_OP_NAME(OP_DYNAMIC_CALL);
     CASE_OP_NAME(OP_RETURN);
     CASE_OP_NAME(OP_BIND);
+    CASE_OP_NAME(OP_NEW_OBJ);
+    CASE_OP_NAME(OP_CALL_VIRTUAL);
     CASE_OP_NAME(OP_ADD);
     CASE_OP_NAME(OP_SUB);
     CASE_OP_NAME(OP_MUL);
@@ -323,11 +359,11 @@ void PrintTwoArgumentOp(const std::vector<uint8_t>& bytecode,
   uint32_t arg2 = bytecode[pc + 5] | (bytecode[pc + 6] << 8) |
                   (bytecode[pc + 7] << 16) | (bytecode[pc + 8] << 24);
   printf(
-      "0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x,"
-      " // %04zx: %s %s: %u %s: %u\n"
+      "%04zx: 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x,"
+      " // %s %s: %u %s: %u\n"
       "      0x%02x, 0x%02x, 0x%02x, 0x%02x\n",
-      bytecode[pc], bytecode[pc + 1], bytecode[pc + 2], bytecode[pc + 3],
-      bytecode[pc + 4], pc, GetOpName(op).c_str(), arg1_name.data(), arg1,
+      pc, bytecode[pc], bytecode[pc + 1], bytecode[pc + 2], bytecode[pc + 3],
+      bytecode[pc + 4], GetOpName(op).c_str(), arg1_name.data(), arg1,
       arg2_name.data(), arg2, bytecode[pc + 5], bytecode[pc + 6],
       bytecode[pc + 7], bytecode[pc + 8]);
   pc += 8;
@@ -344,10 +380,10 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
         uint32_t arg = bytecode[pc + 1] | (bytecode[pc + 2] << 8) |
                        (bytecode[pc + 3] << 16) | (bytecode[pc + 4] << 24);
         printf(
-            "0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x,"
-            " // %04zx: %s %d \n",
-            bytecode[pc], bytecode[pc + 1], bytecode[pc + 2], bytecode[pc + 3],
-            bytecode[pc + 4], pc, GetOpName(op).c_str(), arg);
+            "%04zx: 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x,"
+            " // %s %d \n",
+            pc, bytecode[pc], bytecode[pc + 1], bytecode[pc + 2],
+            bytecode[pc + 3], bytecode[pc + 4], GetOpName(op).c_str(), arg);
         pc += 4;
         break;
       }
@@ -355,10 +391,10 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
         float arg = 0;
         memcpy(&arg, bytecode.data() + pc + 1, 4);
         printf(
-            "0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x,"
-            " // %04zx: %s %f \n",
-            bytecode[pc], bytecode[pc + 1], bytecode[pc + 2], bytecode[pc + 3],
-            bytecode[pc + 4], pc, GetOpName(op).c_str(), arg);
+            "%04zx: 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x,"
+            " // %s %f \n",
+            pc, bytecode[pc], bytecode[pc + 1], bytecode[pc + 2],
+            bytecode[pc + 3], bytecode[pc + 4], GetOpName(op).c_str(), arg);
         pc += 4;
         break;
       }
@@ -368,10 +404,10 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
         uint32_t arg = bytecode[pc + 1] | (bytecode[pc + 2] << 8) |
                        (bytecode[pc + 3] << 16) | (bytecode[pc + 4] << 24);
         printf(
-            "0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x,"
-            " // %04zx: %s 0x%x \n",
-            bytecode[pc], bytecode[pc + 1], bytecode[pc + 2], bytecode[pc + 3],
-            bytecode[pc + 4], pc, GetOpName(op).c_str(), arg);
+            "%04zx: 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x,"
+            " // %s 0x%x \n",
+            pc, bytecode[pc], bytecode[pc + 1], bytecode[pc + 2],
+            bytecode[pc + 3], bytecode[pc + 4], GetOpName(op).c_str(), arg);
         pc += 4;
         break;
       }
@@ -379,16 +415,21 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
         uint32_t argc = bytecode[pc + 1] | (bytecode[pc + 2] << 8) |
                         (bytecode[pc + 3] << 16) | (bytecode[pc + 4] << 24);
         printf(
-            "0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x,"
-            " // %04zx: %s argc: %d \n",
-            bytecode[pc], bytecode[pc + 1], bytecode[pc + 2], bytecode[pc + 3],
-            bytecode[pc + 4], pc, GetOpName(op).c_str(), argc);
+            "%04zx: 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x,"
+            " // %s argc: %d \n",
+            pc, bytecode[pc], bytecode[pc + 1], bytecode[pc + 2],
+            bytecode[pc + 3], bytecode[pc + 4], GetOpName(op).c_str(), argc);
         pc += 4;
         break;
       }
       case OP_BIND:
-      case OP_CALL: {
+      case OP_CALL:
+      case OP_CALL_VIRTUAL: {
         PrintTwoArgumentOp(bytecode, pc, "idx", "argc");
+        break;
+      }
+      case OP_NEW_OBJ: {
+        PrintTwoArgumentOp(bytecode, pc, "id", "argc");
         break;
       }
       case OP_TRY_PUSH: {
@@ -399,27 +440,26 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
                                 (bytecode[pc + 7] << 16) |
                                 (bytecode[pc + 8] << 24);
         printf(
-            "0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x,"
-            " // %04zx: %s catch: 0x%x finally: 0x%x\n"
+            "%04zx: 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x,"
+            " // %s catch: 0x%x finally: 0x%x\n"
             "      0x%02x 0x%02x 0x%02x 0x%02x,",
-            bytecode[pc], bytecode[pc + 1], bytecode[pc + 2], bytecode[pc + 3],
-            bytecode[pc + 4], pc, GetOpName(op).c_str(), catch_addr,
-            finally_addr, bytecode[pc + 5], bytecode[pc + 6], bytecode[pc + 7],
-            bytecode[pc + 8]);
+            pc, bytecode[pc], bytecode[pc + 1], bytecode[pc + 2],
+            bytecode[pc + 3], bytecode[pc + 4], GetOpName(op).c_str(),
+            catch_addr, finally_addr, bytecode[pc + 5], bytecode[pc + 6],
+            bytecode[pc + 7], bytecode[pc + 8]);
         pc += 8;
         break;
       }
       case OP_DEBUG: {
         uint8_t strlen = bytecode[pc + 1];
-        printf("strlen: %d\n", strlen);
-        fprintf(stderr, "  %04zx => %.*s\n", pc, (int)strlen,
+        fprintf(stderr, "%04zx: DEBUG \"%.*s\"\n", pc, (int)strlen,
                 (char*)(bytecode.data() + pc + 2));
         pc += 1 + strlen;
         break;
       }
       case OP_IS: {
-        printf("0x%02x 0x%02x, // %04zx: %s %u\n", bytecode[pc],
-               bytecode[pc + 1], pc, GetOpName(op).c_str(), bytecode[pc + 1]);
+        printf("%04zx: 0x%02x 0x%02x, // %s %u\n", pc, bytecode[pc],
+               bytecode[pc + 1], GetOpName(op).c_str(), bytecode[pc + 1]);
         pc += 1;
         break;
       }
@@ -446,7 +486,7 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
       case OP_STACK_DEL:
       case OP_TRY_POP:
       case OP_THROW: {
-        printf("0x%02x, // %04zx: %s\n", bytecode[pc], pc,
+        printf("%04zx: 0x%02x, // %s\n", pc, bytecode[pc],
                GetOpName(op).c_str());
         break;
       }

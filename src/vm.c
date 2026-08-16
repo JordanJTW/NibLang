@@ -94,6 +94,7 @@ typedef struct vm_t {
   bool unhandled_exception;
   uint8_t* bytecode_data;
   vm_gc_t gc;
+  vm_prog_virtual_t* virtual_table;
   vm_function_t functions[];
 } vm_t;
 
@@ -160,6 +161,7 @@ void free_vm(vm_t* vm) {
 
   free(vm->bytecode_data);
   free(vm->stack.values);
+  free(vm->virtual_table);
   free_job_queue(vm->job_queue);
   free(vm);
 }
@@ -587,6 +589,56 @@ static void run_frame(vm_t* vm, const char* name) {
         // Push to stack without taking ownership.
         assert(vm->stack.sp < vm->stack.capacity && "stack overflow");
         vm->stack.values[vm->stack.sp++] = bound_fn;
+        frame->pc += 9;
+        break;
+      }
+      case OP_NEW_OBJ: {
+        CHECK_BOUNDS(frame->pc + 8);
+        uint32_t id = read_u32_arg(frame, 0);
+        uint32_t argc = read_u32_arg(frame, 1);
+        DEBUG_LOG("OP_NEW_OBJ id: %d argc: %d", id, argc);
+
+        vm_value_t obj = allocate_array(vm, argc);
+        obj.type.tag.is_object = true;
+        obj.type.tag.id = id;
+
+        assert(vm->stack.sp >= argc && "stack underflow");
+        vm->stack.sp -= argc;
+        vm_value_t* const argv = vm->stack.values + vm->stack.sp;
+        memcpy(obj.as.array->data, argv, argc * sizeof(vm_value_t));
+        // Push to stack without taking ownership.
+        assert(vm->stack.sp < vm->stack.capacity && "stack overflow");
+        vm->stack.values[vm->stack.sp++] = obj;
+        frame->pc += 9;
+        break;
+      }
+      case OP_CALL_VIRTUAL: {
+        CHECK_BOUNDS(frame->pc + 8);
+        uint32_t id = read_u32_arg(frame, 0);
+        uint32_t argc = read_u32_arg(frame, 1);
+        DEBUG_LOG("OP_CALL_VIRTUAL idx: %d argc: %d", id, argc);
+
+        assert(vm->stack.sp >= argc && "stack underflow");
+        vm->stack.sp -= argc;
+
+        vm_value_t* const argv = vm->stack.values + vm->stack.sp;
+        uint32_t object_id = argv[0].type.tag.id;
+        assert(object_id < vm->virtual_table->dispatch_offset &&
+               "invalid object ID");
+        uint32_t row_displacement =
+            vm->virtual_table->dispatch_table[object_id];
+        uint32_t dispatch_idx = row_displacement + id;
+        assert(dispatch_idx < vm->virtual_table->dispatch_size &&
+               "invalid dispatch index");
+        uint32_t fn_idx =
+            vm->virtual_table
+                ->dispatch_table[vm->virtual_table->dispatch_offset +
+                                 row_displacement + id];
+        fn_idx = patch_function_idx(fn_idx, vm->native_functions_count);
+
+        vm_function_t* fn = &vm->functions[fn_idx];
+        DEBUG_LOG("OP_CALL idx: %d:%d (%s)", fn_idx, fn->type, fn->name);
+        vm_invoke(vm, fn, vm->stack.values + vm->stack.sp, argc);
         frame->pc += 9;
         break;
       }
@@ -1033,6 +1085,13 @@ vm_t* init_vm(const uint8_t* program,
       case DEBUG: {
         memcpy(vm->bytecode_data + header.bytecode_size, program + offset,
                section.size);
+        break;
+      }
+      case VIRTUAL: {
+        assert(vm->virtual_table == NULL &&
+               "dispatch table was already initialized!");
+        vm->virtual_table = malloc(section.size);
+        memcpy(vm->virtual_table, program + offset, section.size);
         break;
       }
     }

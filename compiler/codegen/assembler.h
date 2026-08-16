@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "compiler/types.h"
 #include "src/types.h"
 
 class Assembler {
@@ -32,6 +33,10 @@ class Assembler {
   Assembler& Bind(uint32_t idx, uint32_t argc);
   // The same as `Bind` but allows for remapping `idx` during linking.
   Assembler& PatchBind(uint32_t idx, uint32_t argc);
+  Assembler& NewObject(uint32_t id, uint32_t argc);
+  Assembler& PatchNewObject(uint32_t id, uint32_t argc);
+  Assembler& CallVirtual(uint32_t idx, uint32_t argc);
+  Assembler& PatchCallVirtual(uint32_t idx, uint32_t argc);
   Assembler& PushLocal(uint32_t idx);
   Assembler& Add();
   Assembler& Subtract();
@@ -70,7 +75,8 @@ class Assembler {
 
   std::vector<uint8_t> Build(
       Metadata* metadata = nullptr,
-      std::unordered_map<uint32_t, uint32_t> call_link_mapping = {}) const;
+      std::unordered_map<uint32_t, uint32_t> call_link_mapping = {},
+      std::unordered_map<SymbolId, uint32_t> virtual_object_ids = {}) const;
 
  private:
   void PushOpAndArgs(op_t op, std::initializer_list<uint32_t> args);
@@ -86,6 +92,7 @@ class Assembler {
   std::map<uint32_t, std::string> patch_locations;
   // Maps a PatchCall's idx argument to the address in the bytecode to patch.
   std::vector<std::pair<uint32_t, uint32_t>> call_patch_locations;
+  std::vector<std::pair<uint32_t, uint32_t>> virtual_patch_locations;
   // The maximum local storage index referenced in the bytecode
   uint32_t max_local_index = 0;
 };

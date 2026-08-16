@@ -24,8 +24,15 @@ typedef struct vm_prog_function_t {
   uint8_t bytecode[];
 } vm_prog_function_t;
 
+typedef struct {
+  uint16_t version;
+  uint16_t dispatch_offset;
+  uint32_t dispatch_size;
+  uint32_t dispatch_table[];
+} vm_prog_virtual_t;
+
 typedef struct vm_section_t {
-  enum { CONST_STR, FUNCTION, DEBUG } type;
+  enum { CONST_STR, FUNCTION, DEBUG, VIRTUAL } type;
   uint32_t size;
   vm_prog_function_t fn;
 } vm_section_t;

@@ -213,6 +213,50 @@ TEST(VM, RefCountString) {
   free_vm(vm);
 }
 
+TEST(VM, NewObject) {
+  auto main_bytecode = Assembler()
+                           .PushConstRef(0)
+                           .PushInt32(34)
+                           .NewObject(69, 2)
+                           .StoreLocal(0)
+                           .PushLocal(0)
+                           .Call(1, 1)  // output
+                           .PushUnit()
+                           .Return()
+                           .Build();
+
+  DumpByteCode(main_bytecode);
+
+  MockNativeFunc output_func;
+
+  vm_function_t funcs[] = {
+      {.type = vm_function_t::VM_BYTECODE,
+       .argument_count = 0,
+       .name = "main",
+       .as = {.bytecode =
+                  {
+                      .data = main_bytecode.data(),
+                      .data_len = main_bytecode.size(),
+                      .local_count = 1,
+                  }}},
+      {.type = vm_function_t::VM_NATIVE_FUNC,
+       .argument_count = 1,
+       .name = "output",
+       .as = {.native = {.fn = native_trampoline, .userdata = &output_func}}}};
+
+  EXPECT_CALL(output_func, Call(ElementsAre(IsObjectWithId(69))))
+      .WillOnce(FreeArgsAndReturnUnitType());
+
+  vm_value_t constants[] = {
+      allocate_str_from_c("Jordan"),
+  };
+
+  vm_t* vm = new_vm(constants, sizeof(constants) / sizeof(vm_value_t), funcs,
+                    sizeof(funcs) / sizeof(vm_function_t));
+  vm_run(vm, /*entry_point_idx=*/0);
+  free_vm(vm);
+}
+
 TEST(VM, CallBuiltInPromise) {
   // let root = getPromiseNative();
   // let final = root.then(returnValueByteCode);

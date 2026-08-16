@@ -34,6 +34,7 @@ TEST(VM, CallFunc) {
                            .StoreLocal(0)
                            .PushLocal(0)
                            .Call(2, 1)
+                           .PushUnit()
                            .Return()
                            .Build();
 
@@ -126,6 +127,7 @@ TEST(VM, ForLoop) {
                            .StoreLocal(0)
                            .Jump("loop_start")
                            .Label("exit")
+                           .PushUnit()
                            .Return()
                            .Build();
 
@@ -165,8 +167,6 @@ TEST(VM, RefCountString) {
                            .PushInt32(4)
                            .Call(VM_BUILTIN(4), 3)  // String.substring
                            .StoreLocal(0)
-                           .PushLocal(0)
-                           .StoreLocal(0)
                            .PushConstRef(0)
                            .PushInt32(8)
                            .PushInt32(11)
@@ -176,6 +176,7 @@ TEST(VM, RefCountString) {
                            .Call(1, 1)  // print
                            .PushLocal(1)
                            .Call(1, 1)  // print
+                           .PushUnit()
                            .Return()
                            .Build();
 
@@ -223,20 +224,22 @@ TEST(VM, CallBuiltInPromise) {
   auto returnValueByteCode =
       Assembler().PushInt32(42).PushLocal(0).Add().Return().Build();
 
-  auto main_bytecode = Assembler()
-                           .Call(2 /*getPromiseNative()*/, 0)
-                           .StoreLocal(0)
-                           .PushLocal(0)
-                           .Bind(1 /*returnValueByteCode()*/, /*argc=*/0)
-                           .PushLocal(2 /*undefined*/)
-                           .Call(VM_BUILTIN(3) /*Promise.then*/, 3)
-                           .PushLocal(0)
-                           .PushInt32(109)
-                           .Call(VM_BUILTIN(1) /*Promise.fulfill*/, 2)
-                           .StackDel()  // Remove `Unit()` produced by `Promise.fulfill`
-                           .Call(3 /*verifyResult*/, 1)
-                           .Return()
-                           .Build();
+  auto main_bytecode =
+      Assembler()
+          .Call(2 /*getPromiseNative()*/, 0)
+          .StoreLocal(0)
+          .PushLocal(0)
+          .Bind(1 /*returnValueByteCode()*/, /*argc=*/0)
+          .PushLocal(2 /*undefined*/)
+          .Call(VM_BUILTIN(3) /*Promise.then*/, 3)
+          .PushLocal(0)
+          .PushInt32(109)
+          .Call(VM_BUILTIN(1) /*Promise.fulfill*/, 2)
+          .StackDel()  // Remove `Unit()` produced by `Promise.fulfill`
+          .Call(3 /*verifyResult*/, 1)
+          .PushUnit()
+          .Return()
+          .Build();
 
   MockNativeFunc getPromiseNative;
   MockNativeFunc verifyResult;
@@ -384,6 +387,7 @@ INSTANTIATE_TEST_SUITE_P(
                                     .Label("finish_block")
                                     .PushInt32(TC_FINISH)
                                     .Call(1, 1)
+                                    .PushUnit()
                                     .Return(),
                         .states = {TC_BEFORE_THROW, TC_BEGIN_CATCH,
                                    TC_FIRST_EXCEPTION, TC_SECOND_EXCEPTION}},
@@ -407,6 +411,7 @@ INSTANTIATE_TEST_SUITE_P(
                         .Label("finish_block")
                         .PushInt32(TC_FINISH)
                         .Call(1, 1)
+                        .PushUnit()
                         .Return(),
             .states = {TC_BEFORE_THROW, TC_BEGIN_CATCH, TC_FIRST_EXCEPTION,
                        TC_END_CATCH, TC_FINISH}},
@@ -429,5 +434,6 @@ INSTANTIATE_TEST_SUITE_P(
                         .Label("finish_block")
                         .PushInt32(TC_FINISH)
                         .Call(1, 1)
+                        .PushUnit()
                         .Return(),
             .states = {TC_BEFORE_THROW, TC_AFTER_THROW, TC_FINISH}}));

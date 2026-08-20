@@ -76,7 +76,7 @@ class Assembler {
   std::vector<uint8_t> Build(
       Metadata* metadata = nullptr,
       std::unordered_map<uint32_t, uint32_t> call_link_mapping = {},
-      std::unordered_map<SymbolId, uint32_t> virtual_object_ids = {}) const;
+      std::unordered_map<uint32_t, uint32_t> virtual_object_ids = {}) const;
 
  private:
   void PushOpAndArgs(op_t op, std::initializer_list<uint32_t> args);

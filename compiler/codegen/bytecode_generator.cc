@@ -440,18 +440,29 @@ void ByteCodeGenerator::EmitCall(
         called_symbols_.push_back(call.resolved->target_symbol_id);
         break;
       }
-      case Interface: {
+      case Virtual: {
         EmitExpression(call.callee, optional_chain_ctx,
                        AccessMode::OBJECT_ONLY);
         for (const auto& argument : call.arguments)
           EmitExpression(argument);
-        NOTREACHED() << "TODO: output virtual dispatch op-code";
+
+        bytecode_.PatchCallVirtual(call.resolved->target_symbol_id,
+                                   call.arguments.size() + 1);
+        called_symbols_.push_back(call.resolved->target_symbol_id);
         break;
       }
       case Constructor: {
         for (const auto& argument : call.arguments)
           EmitExpression(argument);
         bytecode_.Call(VM_BUILTIN_ARRAY_INIT, call.arguments.size());
+        break;
+      }
+      case ConstructorVirtual: {
+        for (const auto& argument : call.arguments)
+          EmitExpression(argument);
+
+        bytecode_.PatchNewObject(call.resolved->target_symbol_id,
+                                 call.arguments.size());
         break;
       }
     }

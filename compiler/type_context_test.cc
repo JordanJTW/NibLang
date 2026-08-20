@@ -165,13 +165,14 @@ TEST_F(TypeContextTest, DefineStructType_NoTemplate) {
   declaration.name = SpannedText{"TestStruct"};
   declaration.fields = {{SpannedText{"field1"}, ParsedType{"i32"}},
                         {SpannedText{"field2"}, ParsedType{"f32"}}};
-  declaration.is_extern = false;
+  declaration.kind = StructDeclaration::Structure;
 
   const auto& [binding, symbol] = symbol_binder.BindStruct(declaration);
   ASSERT_TRUE(binding.realized_type_id.has_value());
   ASSERT_TRUE(binding.symbol_id.has_value());
 
-  type_context.DefineStructType(*binding.realized_type_id, *symbol,
+  type_context.DefineStructType(*binding.realized_type_id, *binding.symbol_id,
+                                *symbol,
                                 /*template_arguments=*/{});
 
   // Check that struct type is registered
@@ -205,9 +206,9 @@ TEST_F(TypeContextTest, DefineStructType_NoTemplate) {
 TEST_F(TypeContextTest, GetTemplateOf_Struct) {
   StructDeclaration declaration;
   declaration.name = SpannedText{"TestStruct"};
-  declaration.template_arguments = {{"T"}};
+  declaration.template_variables = {{"T"}};
   declaration.fields = {{SpannedText{"field1"}, ParsedType{"T"}}};
-  declaration.is_extern = false;
+  declaration.kind = StructDeclaration::Structure;
 
   const auto& [binding, symbol] = symbol_binder.BindStruct(declaration);
   ASSERT_FALSE(binding.realized_type_id.has_value());
@@ -268,7 +269,7 @@ TEST_F(TypeContextTest, GetTemplateOf_Nested) {
   // struct Box[T] { value: T; fn Get() -> T; }
   StructDeclaration box_declaration;
   box_declaration.name = SpannedText{"Box"};
-  box_declaration.template_arguments = {{"T"}};
+  box_declaration.template_variables = {{"T"}};
   box_declaration.fields = {{SpannedText{"value"}, ParsedType{"T"}}};
   box_declaration.methods.emplace_back(
       SpannedText{"Get"},
@@ -278,7 +279,7 @@ TEST_F(TypeContextTest, GetTemplateOf_Nested) {
                           .function_kind = FunctionKind::Method,
                           .template_arguments = {},
                           .body = std::make_unique<Block>()});
-  box_declaration.is_extern = false;
+  box_declaration.kind = StructDeclaration::Structure;
 
   const auto& [box_binding, box_symbol] =
       symbol_binder.BindStruct(box_declaration);
@@ -287,7 +288,7 @@ TEST_F(TypeContextTest, GetTemplateOf_Nested) {
   // struct Array[T] { value: Box[T]; fn Push[R](value: T) -> Box[R]; }
   StructDeclaration array_declaration;
   array_declaration.name = SpannedText{"Array"};
-  array_declaration.template_arguments = {{"T"}};
+  array_declaration.template_variables = {{"T"}};
   array_declaration.fields = {
       {SpannedText{"value"}, make_template_type("Box", ParsedType{"T"})}};
   array_declaration.methods.emplace_back(
@@ -299,7 +300,7 @@ TEST_F(TypeContextTest, GetTemplateOf_Nested) {
           .function_kind = FunctionKind::Method,
           .template_arguments = {{"R"}},
           .body = std::make_unique<Block>()});
-  array_declaration.is_extern = false;
+  array_declaration.kind = StructDeclaration::Structure;
 
   const auto& [array_binding, array_symbol] =
       symbol_binder.BindStruct(array_declaration);
@@ -356,13 +357,14 @@ TEST_F(TypeContextTest, StructDeclaration_WithMethod) {
   StructDeclaration struct_decl;
   struct_decl.name = SpannedText{"TestStruct"};
   struct_decl.methods.emplace_back("test_method", std::move(method_decl));
-  struct_decl.is_extern = false;
+  struct_decl.kind = StructDeclaration::Structure;
 
   const auto& [binding, symbol] = symbol_binder.BindStruct(struct_decl);
   ASSERT_TRUE(binding.realized_type_id.has_value());
   ASSERT_TRUE(binding.symbol_id.has_value());
 
-  type_context.DefineStructType(*binding.realized_type_id, *symbol,
+  type_context.DefineStructType(*binding.realized_type_id, *binding.symbol_id,
+                                *symbol,
                                 /*template_arguments=*/{});
 
   auto struct_info =
@@ -381,13 +383,14 @@ TEST_F(TypeContextTest, StructDeclaration_WithMethod) {
 TEST_F(TypeContextTest, DefineFunction_ExternMethod) {
   StructDeclaration struct_decl;
   struct_decl.name = SpannedText{"String"};
-  struct_decl.is_extern = true;
+  struct_decl.kind = StructDeclaration::Opaque;
 
   const auto& [binding, symbol] = symbol_binder.BindStruct(struct_decl);
   ASSERT_TRUE(binding.realized_type_id.has_value());
   ASSERT_TRUE(binding.symbol_id.has_value());
 
-  type_context.DefineStructType(*binding.realized_type_id, *symbol,
+  type_context.DefineStructType(*binding.realized_type_id, *binding.symbol_id,
+                                *symbol,
                                 /*template_arguments=*/{});
 
   FunctionDeclaration method_decl{
@@ -399,9 +402,8 @@ TEST_F(TypeContextTest, DefineFunction_ExternMethod) {
 
   auto method_symbol_id =
       type_registry.NewFunctionSymbol(method_decl, &struct_decl);
-  auto method_binding = type_context.DefineFunction(
-      method_symbol_id, TypeContext::CheckFunctionBody::YES,
-      *binding.realized_type_id);
+  auto method_binding =
+      type_context.DefineFunction(method_symbol_id, *binding.realized_type_id);
   ASSERT_TRUE(method_binding.has_value());
   EXPECT_EQ(method_binding->kind, NamedBinding::Function);
   EXPECT_EQ(method_binding->symbol_id, method_symbol_id);
@@ -423,7 +425,7 @@ TEST_F(TypeContextTest, IsTypeSubsetOf) {
 
   StructDeclaration test_struct_decl;
   test_struct_decl.name = SpannedText{"TestStruct"};
-  test_struct_decl.is_extern = true;
+  test_struct_decl.kind = StructDeclaration::Opaque;
 
   const auto& [binding, symbol] = symbol_binder.BindStruct(test_struct_decl);
   ASSERT_TRUE(binding.realized_type_id.has_value());
@@ -433,7 +435,8 @@ TEST_F(TypeContextTest, IsTypeSubsetOf) {
   auto* const struct_symbol =
       type_registry.GetSymbol<StructSymbol>(*binding.symbol_id);
   ASSERT_TRUE(struct_symbol);
-  type_context.DefineStructType(struct_type_id, *struct_symbol,
+  type_context.DefineStructType(struct_type_id, *binding.symbol_id,
+                                *struct_symbol,
                                 /*template_arguments=*/{});
 
   EXPECT_TRUE(type_context.IsTypeSubsetOf(LiteralType::i32, union_id.value()));

@@ -22,7 +22,8 @@ class ProgramBuilder {
 
   std::vector<uint8_t> GenerateImage(
       std::vector<ByteCodeGenerator::FunctionObject> objects,
-      std::vector<const FunctionSymbol*> external_functions);
+      std::vector<const FunctionSymbol*> external_functions,
+      std::vector<const FunctionSymbol*> virtual_functions = {});
   static bool DumpImage(std::vector<uint8_t> program);
 
  private:

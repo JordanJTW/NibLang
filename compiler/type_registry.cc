@@ -152,9 +152,10 @@ std::string TypeRegistry::GetNameFromTypeId(TypeId type_id) const {
 
   return std::visit(
       Overloaded{
-          [&](const BuiltInType& type) {
+          [&](const BuiltInType&) {
             static const std::unordered_map<TypeId, std::string>
                 kBuiltInTypeNames = {
+                    {LiteralType::Error, "error"},
                     {LiteralType::Unit, "Unit"},
                     {LiteralType::i32, "i32"},
                     {LiteralType::f32, "f32"},
@@ -166,7 +167,7 @@ std::string TypeRegistry::GetNameFromTypeId(TypeId type_id) const {
                 };
             return kBuiltInTypeNames.at(type_id);
           },
-          [&](const FunctionType type) {
+          [&](const FunctionType& type) {
             std::stringstream ss;
             ss << "fn (";
             for (size_t i = 0; i < type.arg_types.size(); ++i) {
@@ -182,21 +183,23 @@ std::string TypeRegistry::GetNameFromTypeId(TypeId type_id) const {
             ss << ") -> " << GetNameFromTypeId(type.return_type);
             return ss.str();
           },
-          [&](const StructType type) {
-            if (type.template_arguments.empty())
-              return "struct " + type.declaration.name.text;
-
+          [&](const StructType& type) {
             std::stringstream ss;
-            ss << "struct " << type.declaration.name.text << "[";
-            for (size_t i = 0; i < type.template_arguments.size(); ++i) {
-              if (i > 0)
-                ss << ", ";
-              ss << GetNameFromTypeId(type.template_arguments[i]);
+            if (type.template_arguments.empty()) {
+              ss << type.declaration.kind << " " << type.declaration.name.text;
+            } else {
+              ss << type.declaration.kind << " " << type.declaration.name.text
+                 << "[";
+              for (size_t i = 0; i < type.template_arguments.size(); ++i) {
+                if (i > 0)
+                  ss << ", ";
+                ss << GetNameFromTypeId(type.template_arguments[i]);
+              }
+              ss << "]";
             }
-            ss << "]";
             return ss.str();
           },
-          [&](const UnionType type) {
+          [&](const UnionType& type) {
             std::stringstream ss;
             ss << "Union[";
             for (size_t i = 0; i < type.types.size(); ++i) {
@@ -207,10 +210,10 @@ std::string TypeRegistry::GetNameFromTypeId(TypeId type_id) const {
             ss << "]";
             return ss.str();
           },
-          [&](const OptionalType type) {
+          [&](const OptionalType& type) {
             return GetNameFromTypeId(type.wrapped_type) + "?";
           },
-          [&](const AliasType type) { return "Alias[" + type.name + "]"; },
+          [&](const AliasType& type) { return "Alias[" + type.name + "]"; },
           [&](const PlaceholderType& type) {
             return "$" + std::to_string(type.idx);
           }},

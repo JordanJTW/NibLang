@@ -40,9 +40,9 @@ TypeContext::TypeContext(ScopeManager& scope_manager,
 
 void TypeContext::DefineStructType(
     TypeId self_id,
+    SymbolId symbol_id,
     StructSymbol& symbol,
-    const std::vector<TypeId>& template_arguments,
-    CheckFunctionBody check_fn_body) {
+    const std::vector<TypeId>& template_arguments) {
   StructType struct_type(symbol.declaration);
   struct_type.template_arguments = template_arguments;
   struct_type.scope_id =
@@ -62,51 +62,121 @@ void TypeContext::DefineStructType(
       continue;
     }
 
-    if (scope_manager_.FindBindingFor(name.text, ScopeManager::Current)) {
-      error_collector_.Add("Duplicate field name in struct: " + name.text,
-                           name.metadata);
-      continue;
-    }
-
     scope_manager_.InsertNameIntoScope(name, NamedBinding::Field, type_id,
                                        /*symbol_id=*/std::nullopt, field_idx++);
     struct_type.field_types.push_back(type_id.value());
   }
 
-  for (auto& symbol_id : symbol.method_symbols) {
-    // Errors are logged from within `DefineFunction`.
-    DefineFunction(symbol_id, check_fn_body, self_id);
+  for (auto& [name, implementation] : symbol.declaration.interfaces) {
+    auto binding = scope_manager_.FindBindingFor(name.text, ScopeManager::All);
+    if (!binding || binding->kind != NamedBinding::Struct) {
+      error_collector_.Add("unable to find interface `" + name.text + "`",
+                           name.metadata);
+      continue;  // Keep looking for further errors
+    }
+
+    std::optional<TypeId> type_id = binding->realized_type_id;
+    if (!type_id.has_value()) {
+      std::vector<TypeId> template_arguments;
+      bool encountered_type_error = false;
+      for (const auto& type : implementation.template_types) {
+        if (auto argument_type_id = GetTypeIdFor(type)) {
+          template_arguments.push_back(*argument_type_id);
+        } else {
+          // Keep parsing the rest of the types even if an error is
+          // encountered with one to give as many errors as possible.
+          std::stringstream ss;
+          ss << "unknown type used as template argument: " << type;
+          error_collector_.Add(ss.str(), type.metadata);
+          encountered_type_error = true;
+        }
+      }
+      if (encountered_type_error)
+        continue;
+
+      type_id = GetTemplateOf(*binding, template_arguments);
+    }
+
+    if (!type_id.has_value())
+      continue;  // Errors will have already been logged by `GetTemplateOf`
+
+    std::unordered_map<std::string, NamedBinding> implementations;
+    scope_manager_.NewScope(
+        ScopeManager::BlockScope, "impl " + name.text, [&]() {
+          for (auto& [name, fn] : implementation.impls) {
+            // TODO: `parent` should incorporate interface somehow for naming?
+            SymbolId symbol_id =
+                type_registry_.NewFunctionSymbol(fn, &symbol.declaration);
+            if (auto binding = DefineFunction(symbol_id, self_id))
+              implementations.emplace(name.text, *binding);
+          }
+          struct_type.interface_scopes.push_back(
+              scope_manager_.GetActiveScopeId());
+        });
+
+    const auto* interface_type = type_registry_.GetType<StructType>(*type_id);
+    CHECK(interface_type);
+
+    for (const auto& binding :
+         scope_manager_.GetBindingsForScope(interface_type->scope_id)) {
+      CHECK(binding.realized_type_id) << "Templated methods not supported!";
+      CHECK_EQ(binding.kind, NamedBinding::Function);
+
+      if (!implementations.contains(binding.name.text)) {
+        error_collector_
+            .Add("implementation of `" + interface_type->declaration.name.text +
+                     "` is missing method \"" + binding.name.text + "\"",
+                 name.metadata)
+            .WithNote("defined here", binding.name.metadata);
+        continue;
+      }
+
+      if (binding.realized_type_id !=
+          implementations[binding.name.text].realized_type_id) {
+        error_collector_
+            .Add("interface expects \"" + binding.name.text + "\" with type `" +
+                     type_registry_.GetNameFromTypeId(
+                         *binding.realized_type_id) +
+                     "`",
+                 binding.name.metadata)
+            .WithNote(
+                "instead has type `" +
+                    type_registry_.GetNameFromTypeId(
+                        *implementations[binding.name.text].realized_type_id) +
+                    "`",
+                implementations[binding.name.text].name.metadata);
+        continue;
+      }
+
+      auto* interface_symbol =
+          type_registry_.GetSymbol<FunctionSymbol>(*binding.symbol_id);
+      CHECK(interface_symbol);
+      interface_symbol->implementations.emplace(
+          symbol_id, *implementations[binding.name.text].symbol_id);
+    }
+
+    struct_type.interface_types.insert(*type_id);
   }
+
   scope_manager_.ExitScope();
 
   type_registry_.NewStructType(std::move(struct_type), self_id);
+
+  scope_manager_.WithScope(struct_type.scope_id, [&]() {
+    for (auto& symbol_id : symbol.method_symbols) {
+      // Errors are logged from within `DefineFunction`.
+      DefineFunction(symbol_id, self_id);
+    }
+  });
 }
 
 std::optional<NamedBinding> TypeContext::DefineFunction(
     SymbolId symbol_id,
-    CheckFunctionBody check_fn_body,
     std::optional<TypeId> self_id) {
   FunctionSymbol* symbol = type_registry_.GetSymbol<FunctionSymbol>(symbol_id);
   CHECK(symbol) << "DefineFunction passed an invalid `symbol_id`";
 
   FunctionDeclaration& fn = symbol->declaration;
-
-  if (!symbol->IsExtern()) {
-    if (!fn.body) {
-      error_collector_.Add(
-          "non-extern functions MUST have a body: " + fn.name.text,
-          fn.name.metadata);
-      return std::nullopt;
-    }
-
-    if (fn.variadic_type.has_value()) {
-      error_collector_.Add("'...' is only allowed in extern functions",
-                           fn.variadic_type->variadic_span);
-      return std::nullopt;
-    }
-  }
-
-  fn.resolved = ResolvedFunction{};
 
   std::optional<TypeInstance> instance;
   if (fn.template_arguments.empty()) {
@@ -118,28 +188,18 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
       // Errors logged in DeclareFunctionType()
       return std::nullopt;
     }
-  } else {
-    for (const auto& argument : fn.template_arguments) {
-      if (!argument.default_type.has_value())
-        continue;
-
-      // Default template names must be resolved in their declaration context.
-      auto type_id = GetTypeIdFor(*argument.default_type);
-      if (!type_id.has_value()) {
-        error_collector_.Add("unknown type provided as template argument",
-                             argument.default_type->metadata);
-        continue;
-      }
-
-      symbol->default_template_type_ids[argument.name.text] = *type_id;
-    }
   }
 
   auto type_id = instance ? instance->type_id : std::optional<TypeId>{};
   NamedBinding binding = scope_manager_.InsertNameIntoScope(
-      fn.name, NamedBinding::Function, std::move(type_id), symbol_id,
+      fn.name, NamedBinding::Function, type_id, symbol_id,
       /*idx=*/std::nullopt, self_id);
-  fn.resolved->function_symbol = binding;
+  fn.resolved = ResolvedFunction{.function_symbol = binding};
+
+  if (!fn.template_arguments.empty()) {
+    GetTemplateOf(binding, symbol->constrained_template_type_ids);
+  }
+
   return binding;
 }
 
@@ -246,8 +306,12 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
             auto binding = scope_manager_.FindBindingFor(base_type_identifier,
                                                          ScopeManager::All);
 
-            if (!binding || !binding->symbol_id)
+            if (!binding || !binding->symbol_id) {
+              error_collector_.Add(
+                  "unknown base type `" + base_type_identifier + "`",
+                  parameterized_type.type->metadata);
               return std::nullopt;
+            }
 
             std::vector<TypeId> argument_type_ids;
             for (const auto& parsed_type : parameterized_type.parameters) {
@@ -258,7 +322,7 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
               }
             }
 
-            return GetTemplateOf(binding.value(), std::move(argument_type_ids),
+            return GetTemplateOf(binding.value(), argument_type_ids,
                                  CheckFunctionBody::NO);
           }},
       type.type);
@@ -379,6 +443,9 @@ bool TypeContext::IsTypeSubsetOf(TypeId sub_type_id,
   if (sub_type_id == LiteralType::Never || super_type_id == LiteralType::Any)
     return true;
 
+  if (sub_type_id == LiteralType::Error || super_type_id == LiteralType::Error)
+    return true;
+
   const Type& sub_type = type_registry_.type_table().at(sub_type_id);
   const Type& super_type = type_registry_.type_table().at(super_type_id);
 
@@ -422,6 +489,17 @@ bool TypeContext::IsTypeSubsetOf(TypeId sub_type_id,
     return IsTypeSubsetOf(sub_type_id, super_wrapped);
   }
 
+  if (std::holds_alternative<StructType>(sub_type) &&
+      std::holds_alternative<StructType>(super_type)) {
+    const auto& sub = std::get<StructType>(sub_type);
+    const auto& super = std::get<StructType>(super_type);
+
+    if (!sub.declaration.IsInterface() && super.declaration.IsInterface()) {
+      return sub.interface_types.contains(super_type_id);
+    }
+    // Intentional fall-through
+  }
+
   // Neither type is a union so they must be different concrete types.
   return false;
 }
@@ -440,6 +518,26 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
     ss << type_registry_.GetNameFromTypeId(argument_type_ids[i]);
   }
 
+  auto check_template_constraints =
+      [&](const std::vector<SpannedType>& constraint_types) -> bool {
+    bool violated_constraint = false;
+    for (size_t i = 0; i < argument_type_ids.size(); ++i) {
+      if (i > constraint_types.size())
+        return false;
+
+      if (!IsTypeSubsetOf(argument_type_ids[i], constraint_types[i].type_id)) {
+        error_collector_.Add(
+            "`" + type_registry_.GetNameFromTypeId(argument_type_ids[i]) +
+                "` does not inherit from constraint `" +
+                type_registry_.GetNameFromTypeId(constraint_types[i].type_id) +
+                "`",
+            constraint_types[i].metadata);
+        violated_constraint = true;
+      }
+    }
+    return violated_constraint;
+  };
+
   if (StructSymbol* symbol =
           type_registry_.GetSymbol<StructSymbol>(*binding.symbol_id)) {
     if (auto it = symbol->instances.find(argument_type_ids);
@@ -451,7 +549,7 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
     LOG(INFO) << "New Struct.TemplateOf(" << symbol->declaration.name.text
               << ") + [" << ss.str() << "] => " << self_id;
 
-    const auto& template_arguments = symbol->declaration.template_arguments;
+    const auto& template_arguments = symbol->declaration.template_variables;
 
     if (argument_type_ids.size() < template_arguments.size()) {
       error_collector_.Add(
@@ -472,8 +570,8 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
                   scope_manager_.DeclareTemplateBinding(
                       template_arguments[i].name, argument_type_ids[i]);
 
-                DefineStructType(self_id, *symbol, argument_type_ids,
-                                 check_fn_body);
+                DefineStructType(self_id, *binding.symbol_id, *symbol,
+                                 argument_type_ids);
                 return self_id;
               });
         });

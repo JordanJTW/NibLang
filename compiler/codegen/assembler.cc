@@ -237,7 +237,7 @@ Assembler& Assembler::DebugString(const std::string& message) {
 std::vector<uint8_t> Assembler::Build(
     Metadata* metadata,
     std::unordered_map<uint32_t, uint32_t> call_link_mapping,
-    std::unordered_map<SymbolId, uint32_t> virtual_object_ids) const {
+    std::unordered_map<uint32_t, uint32_t> virtual_object_ids) const {
   std::vector<uint8_t> result = data_;
 
   // Late linking for Jump/Labels.

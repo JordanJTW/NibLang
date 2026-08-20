@@ -13,6 +13,7 @@
 #include <iterator>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -230,6 +231,8 @@ int main(int argc, char* argv[]) {
   std::set<SymbolId> processed_symbols;
   std::vector<SymbolId> symbols_to_process;
 
+  std::unordered_set<const FunctionSymbol*> virtual_objects;
+
   auto process_symbol = [&](const FunctionSymbol& symbol) {
     // .insert().second returns false if the symbol was already in the set
     if (!processed_symbols.insert(symbol.symbol_id).second) {
@@ -242,6 +245,14 @@ int main(int argc, char* argv[]) {
       return;
     }
 
+    if (symbol.RequiresVirtualDispatch()) {
+      for (const auto& [self_id, symbol_id] : symbol.implementations) {
+        symbols_to_process.push_back(symbol_id);
+        virtual_objects.insert(&symbol);
+      }
+      return;
+    }
+
     ByteCodeGenerator generator{scope_manager, constant_pool};
     function_objects.push_back(
         std::move(generator).Build(symbol, called_symbols));
@@ -251,7 +262,7 @@ int main(int argc, char* argv[]) {
     }
   };
 
-  for (const auto& [id, symbol] : type_registry.symbol_table()) {
+  for (const auto& symbol : type_registry.symbol_table() | std::views::values) {
     if (const auto* fn_symbol = std::get_if<FunctionSymbol>(&symbol)) {
       if (fn_symbol->declaration.name.text == "main") {
         process_symbol(*fn_symbol);
@@ -292,8 +303,12 @@ int main(int argc, char* argv[]) {
 
   ProgramBuilder builder{constant_pool, kRuntimeFunctions};
 
+  std::vector<const FunctionSymbol*> interface_methods(virtual_objects.begin(),
+                                                       virtual_objects.end());
+
   std::vector<uint8_t> program_image = builder.GenerateImage(
-      std::move(function_objects), std::move(external_functions));
+      std::move(function_objects), std::move(external_functions),
+      std::move(interface_methods));
 
   if (opts.mode == OutputMode::DumpImage) {
     return ProgramBuilder::DumpImage(program_image) ? 0 : -1;

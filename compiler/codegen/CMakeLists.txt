@@ -8,3 +8,9 @@ target_include_directories(bytecode_generator PRIVATE ${PROJECT_SOURCE_DIR})
 
 add_library(program_builder program_builder.cc)
 target_include_directories(program_builder PRIVATE ${PROJECT_SOURCE_DIR})
+target_link_libraries(program_builder PRIVATE virtual_dispatch)
+
+add_library(virtual_dispatch virtual_dispatch.cc)
+target_include_directories(virtual_dispatch PRIVATE ${PROJECT_SOURCE_DIR})
+target_link_libraries(virtual_dispatch PRIVATE types)
+

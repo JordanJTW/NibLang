@@ -46,14 +46,14 @@ class Parser {
 
   std::unique_ptr<Expression> ParseCall(std::unique_ptr<Expression> callee);
 
-  std::optional<std::vector<TemplateArgument>> ParseTemplateDeclarationList();
+  std::optional<std::vector<TemplateVariable>> ParseTemplateDeclarationList();
 
   enum class ExternStruct { YES, NO };
   std::optional<StructDeclaration> ParseStructDeclaration(
       ExternStruct is_extern);
   std::optional<FunctionDeclaration> ParseFunctionDeclaration(
       FunctionKind function_kind);
-  std::optional<InterfaceDeclaration> ParseInterfaceDeclaration();
+  std::optional<StructDeclaration> ParseInterfaceDeclaration();
   std::optional<ImplementsDeclaration> ParseImplementsDeclaration();
 
   struct FunctionArgumentList {

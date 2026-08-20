@@ -177,9 +177,8 @@ TEST_F(TypeRegistryTest, GetNameFromTypeId_StructType) {
                                    /*fields=*/{},
                                    /*methods=*/{},
                                    /*interfaces=*/{},
-                                   /*is_extern=*/false};
-  StructType type{declaration, /*field_types=*/{}, /*template_arguments=*/{},
-                  /*scope_id*/ 0};
+                                   /*kind=*/StructDeclaration::Structure};
+  StructType type{declaration};
 
   TypeId type_id = type_registry.NewTypeId();
   type_registry.NewStructType(std::move(type), type_id);
@@ -188,16 +187,17 @@ TEST_F(TypeRegistryTest, GetNameFromTypeId_StructType) {
 }
 
 TEST_F(TypeRegistryTest, GetNameFromTypeId_StructTypeWithTemplate) {
-  // Normally `declaration` would have `template_arguments` if they appear in
-  // the Type but they have no bearing on the function under test.
   StructDeclaration declaration = {SpannedText{"Foo"},
                                    /*template_arguments=*/{},
                                    /*fields=*/{},
                                    /*methods=*/{},
                                    /*interfaces=*/{},
-                                   /*is_extern=*/false};
-  StructType type{declaration, /*field_types=*/{},
+                                   /*kind=*/StructDeclaration::Structure};
+  StructType type{declaration,
+                  /*field_types=*/{},
                   /*template_arguments=*/{LiteralType::i32, LiteralType::Bool},
+                  /*interface_types=*/{},
+                  /*interface_scopes=*/{},
                   /*scope_id*/ 0};
 
   TypeId type_id = type_registry.NewTypeId();

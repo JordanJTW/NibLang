@@ -33,12 +33,14 @@ const char* ToString(FunctionKind kind) {
       return "Anonymous";
     case Method:
       return "Method";
-    case Interface:
+    case Virtual:
       return "Interface";
     case StaticMethod:
       return "StaticMethod";
     case Constructor:
       return "Constructor";
+    case ConstructorVirtual:
+      return "ConstructorVirtual";
   }
 
   __builtin_unreachable();  // All FunctionKinds MUST be handled above.
@@ -236,8 +238,8 @@ void Printer::Print(const Statement& stmt, size_t indent) {
             Print(*assign.value, indent + 4);
           },
           [&](const StructDeclaration& struct_decl) {
-            std::cout << std::string(indent, ' ') << "StructDeclaration: "
-                      << (struct_decl.is_extern ? "extern " : "")
+            std::cout << std::string(indent, ' ')
+                      << "StructDeclaration kind: " << struct_decl.kind
                       << struct_decl.name.text << std::endl;
 
             if (!struct_decl.fields.empty())

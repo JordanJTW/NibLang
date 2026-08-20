@@ -150,9 +150,10 @@ enum FunctionKind {
   Extern,
   Anonymous,
   Method,
-  Interface,
   StaticMethod,
   Constructor,
+  Virtual,             // Assigned to functions needing dynamic dispatch
+  ConstructorVirtual,  // Assigned to objects participating in dispatch
 };
 
 struct ResolvedCall {
@@ -281,9 +282,10 @@ struct ResolvedFunction {
   std::vector<NamedBinding> required_captures;
 };
 
-struct TemplateArgument {
+struct TemplateVariable {
   SpannedText name;
   std::optional<ParsedType> default_type;
+  std::optional<ParsedType> constraint_type;
 };
 
 struct FunctionDeclaration {
@@ -291,7 +293,7 @@ struct FunctionDeclaration {
   std::vector<std::pair<SpannedText, ParsedType>> arguments;
   ParsedType return_type;
   FunctionKind function_kind;
-  std::vector<TemplateArgument> template_arguments;
+  std::vector<TemplateVariable> template_arguments;
   std::optional<VariadicType> variadic_type;
 
   std::unique_ptr<Block> body;
@@ -363,20 +365,23 @@ struct ImplementsDeclaration {
 
 struct InterfaceDeclaration {
   SpannedText name;
-  std::vector<TemplateArgument> template_variables;
+  std::vector<TemplateVariable> template_variables;
   std::vector<std::pair<SpannedText, FunctionDeclaration>> methods;
 };
 
 struct StructDeclaration {
   SpannedText name;
-  std::vector<TemplateArgument> template_arguments;
+  std::vector<TemplateVariable> template_variables;
   std::vector<std::pair<SpannedText, ParsedType>> fields;
   std::vector<std::pair<SpannedText, FunctionDeclaration>> methods;
   std::vector<std::pair<SpannedText, ImplementsDeclaration>> interfaces;
-  bool is_extern;
+  enum Kind { Structure, Interface, Opaque } kind;
 
-  bool IsTemplate() const { return !template_arguments.empty(); }
+  inline bool IsOpaque() const { return kind == Opaque; }
+  inline bool IsInterface() const { return kind == Interface; }
 };
+
+std::ostream& operator<<(std::ostream& os, const StructDeclaration::Kind& kind);
 
 struct AssignStatement {
   SpannedText name;

@@ -109,3 +109,18 @@ std::ostream& operator<<(std::ostream& os, NamedBinding::Kind kind) {
   __builtin_unreachable();  // All Symbol::Kind MUST be handled above.
   return os;
 }
+
+std::ostream& operator<<(std::ostream& os,
+                         const StructDeclaration::Kind& kind) {
+  switch (kind) {
+    case StructDeclaration::Structure:
+      return os << "struct";
+    case StructDeclaration::Interface:
+      return os << "interface";
+    case StructDeclaration::Opaque:
+      return os << "opaque";
+  }
+
+  __builtin_unreachable();  // All `kind` MUST be handled above.
+  return os;
+}

@@ -153,9 +153,17 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
             }
           },
           [&](WhileStatement& while_stmt) {
-            RequireConcreteValue(while_stmt.condition, context);
+            Result result = RequireConcreteValue(while_stmt.condition, context);
+
+            const auto narrowing_info = result
+                                            ? result->narrowing_info
+                                            : std::vector<ScopeNarrowingInfo>{};
             {
               AutoScope _{scope_manager_, ScopeManager::BlockScope, "while"};
+              for (const auto& narrowing : narrowing_info) {
+                scope_manager_.DeclareNarrowedBinding(narrowing.symbol,
+                                                      narrowing.if_branch_type);
+              }
               Check(while_stmt.body, context);
             }
           },
@@ -170,8 +178,11 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
             }
 
             Result result = RequireConcreteValue(assign.value, context);
-            if (!result.has_value())
+            if (!result.has_value()) {
+              NamedBinding binding = scope_manager_.DeclareVariableBinding(
+                  assign.name, TypeRegistry::Error);
               return;
+            }
 
             if (parsed_type_id.has_value()) {
               if (!type_context_.IsTypeSubsetOf(*result->type_id,
@@ -186,7 +197,7 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
                         assign.value->meta)
                     .WithNote("declared `" + expected_type + "` here",
                               assign.type->metadata);
-                return;
+                parsed_type_id = TypeRegistry::Error;
               }
             } else {
               parsed_type_id = result->type_id;
@@ -407,9 +418,11 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
 
             if (!lhs->binding.has_value() ||
                 !(lhs->binding->kind == NamedBinding::Kind::Variable ||
-                  lhs->binding->kind == NamedBinding::Kind::Field)) {
+                  lhs->binding->kind == NamedBinding::Kind::Field ||
+                  lhs->binding->kind == NamedBinding::Kind::Narrowed ||
+                  lhs->binding->kind == NamedBinding::Kind::Argument)) {
               error_collector_
-                  .Add("can not assign to '" + lhs->binding->name.text,
+                  .Add("can not assign to '" + lhs->binding->name.text + "'",
                        assign.lhs->meta)
                   .WithNote("declared here", lhs->binding->name.metadata);
               return std::nullopt;
@@ -759,7 +772,9 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
       const FunctionSymbol& symbol = *type_registry_.GetSymbol<FunctionSymbol>(
           *callee_result.binding->symbol_id);
       call_expr.resolved = ResolvedCall{*callee_result.binding->symbol_id,
-                                        symbol.declaration.function_kind};
+                                        symbol.RequiresVirtualDispatch()
+                                            ? FunctionKind::Virtual
+                                            : symbol.declaration.function_kind};
     } else {
       call_expr.resolved = ResolvedCall{*callee_result.binding->symbol_id,
                                         FunctionKind::Anonymous};
@@ -775,16 +790,20 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
 
   if (const auto* const struct_type =
           type_registry_.GetType<StructType>(*callable_type_id)) {
-    if (struct_type->declaration.is_extern) {
-      error_collector_.Add("extern structs have no constructor",
-                           debug_metadata);
+    if (struct_type->declaration.kind != StructDeclaration::Structure) {
+      error_collector_.Add(
+          "`opaque` or `interface` structs have no constructor",
+          debug_metadata);
       return std::nullopt;
     }
 
     TypeCheckCallArguments(argument_results, struct_type->field_types,
                            debug_metadata,
                            /*variadic_type=*/std::nullopt);
-    call_expr.resolved = ResolvedCall{0, FunctionKind::Constructor};
+    call_expr.resolved = ResolvedCall{*callee_result.binding->symbol_id,
+                                      struct_type->interface_types.empty()
+                                          ? FunctionKind::Constructor
+                                          : FunctionKind::ConstructorVirtual};
     return ExpressionResult{*callable_type_id};
   }
 
@@ -836,6 +855,16 @@ SemanticAnalyzer::Result SemanticAnalyzer::HandleMemberAccess(
             ResolvedAccess{ResolvedAccess::Method{binding->symbol_id.value()}};
       }
       return ExpressionResult::of_binding(*binding);
+    }
+
+    for (ScopeId interface_scope_id : struct_type->interface_scopes) {
+      if (auto binding = scope_manager_.FindBindingFor(
+              member_name.text, ScopeManager::Current, interface_scope_id)) {
+        CHECK_EQ(binding->kind, NamedBinding::Function);
+        member_access.resolved =
+            ResolvedAccess{ResolvedAccess::Method{binding->symbol_id.value()}};
+        return ExpressionResult::of_binding(*binding);
+      }
     }
 
     error_collector_

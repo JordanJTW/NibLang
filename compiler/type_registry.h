@@ -3,6 +3,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <variant>
 #include <vector>
 
@@ -45,6 +46,9 @@ struct StructType {
   // A separate _ordered_ list of field types used for constructors.
   std::vector<TypeId> field_types;
   std::vector<TypeId> template_arguments;
+  // The interfaces implemented by this struct.
+  std::unordered_set<TypeId> interface_types;
+  std::vector<ScopeId> interface_scopes;
   // Represents the lexical scope of the struct definition.
   ScopeId scope_id;
 };
@@ -75,7 +79,8 @@ using Type = std::variant<AliasType,
 class TypeRegistry {
  public:
   enum LiteralType : TypeId {
-    Unit = 0,
+    Error = 0,  // Internal only "error" sentinel (not a type)
+    Unit,
     i32,
     f32,
     Codepoint,

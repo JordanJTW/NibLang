@@ -33,7 +33,7 @@ bool TypeResolver::Resolve(
     Metadata expression_metadata) {
   auto create_pattern_type =
       [this,
-       &binding](const std::vector<TemplateArgument>& template_variables) {
+       &binding](const std::vector<TemplateVariable>& template_variables) {
         std::vector<TypeId> placeholder_type_ids(template_variables.size(), 0);
         for (size_t idx = 0; idx < template_variables.size(); ++idx) {
           placeholder_type_ids[idx] = type_registry_.NewPlaceholderType(idx);
@@ -99,7 +99,7 @@ bool TypeResolver::Resolve(
 
   else if (const auto* symbol =
                type_registry_.GetSymbol<StructSymbol>(*binding.symbol_id)) {
-    const auto& variables = symbol->declaration.template_arguments;
+    const auto& variables = symbol->declaration.template_variables;
     if (auto pattern_type_id = create_pattern_type(variables)) {
       const auto* pattern_type =
           type_registry_.GetType<StructType>(*pattern_type_id);

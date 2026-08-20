@@ -59,9 +59,9 @@ extern struct Promise[T] {
   static fn all[ResultType](
     promises: Array[Promise[ResultType]]
   ) -> Promise[Array[ResultType]] {
-    let promise = Promise.of(Array[ResultType]).new();
+    let promise = Promise.new.of(Array[ResultType])();
 
-    let results = Array.of(ResultType).withSize(promises.length());
+    let results = Array.withSize.of(ResultType)(promises.length());
     let completed = Box(0);
 
     let idx = 0;
@@ -71,8 +71,8 @@ extern struct Promise[T] {
           results.set(idx, value);  
           completed.value = completed.value + 1;
 
-          if (completed.value == promises.length()) { 
-            promise.fulfill(results); 
+          if (completed.value == promises.length()) {
+            promise.fulfill(results);
           }
         },
         fn (error: any) -> any {

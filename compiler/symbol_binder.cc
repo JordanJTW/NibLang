@@ -39,22 +39,28 @@ void SymbolBinder::Process(const Block& block) {
         if (fn.function_kind == FunctionKind::StaticMethod) {
           // Intentionally not passing `self_id` for `static` methods.
           type_context_.DefineFunction(
-              type_registry_.NewFunctionSymbol(fn, &struct_symbol->declaration),
-              TypeContext::CheckFunctionBody::YES);
+              NewFunction(fn, &struct_symbol->declaration));
         }
       }
+
+      struct_symbol->constrained_template_type_ids =
+          BindTemplateVariableConstraints(
+              struct_symbol->declaration.template_variables);
 
       if (binding.realized_type_id) {  // Templated structs have no TypeId yet
         // DefineStructType() depends on method symbols already being populated.
         type_context_.DefineStructType(*binding.realized_type_id,
-                                       *struct_symbol,
+                                       *binding.symbol_id, *struct_symbol,
                                        /*template_arguments=*/{});
+      } else {
+        type_context_.GetTemplateOf(
+            binding, struct_symbol->constrained_template_type_ids);
       }
     });
   }
   for (auto& statement : block.statements) {
     if (auto* declaration = std::get_if<FunctionDeclaration>(&statement->as)) {
-      SymbolId symbol_id = type_registry_.NewFunctionSymbol(*declaration);
+      SymbolId symbol_id = NewFunction(*declaration);
       type_context_.DefineFunction(symbol_id);
     }
   }
@@ -66,7 +72,7 @@ SymbolBinder::StructBinding SymbolBinder::BindStruct(
   // Create a single canonical Symbol for each method (shared across instances)
   for (auto& fn : declaration.methods | std::views::values) {
     if (fn.function_kind == FunctionKind::Method) {
-      SymbolId method_id = type_registry_.NewFunctionSymbol(fn, &declaration);
+      SymbolId method_id = NewFunction(fn, &declaration);
       method_symbols.push_back(method_id);
     }
   }
@@ -79,7 +85,7 @@ SymbolBinder::StructBinding SymbolBinder::BindStruct(
   std::optional<TypeId> type_id = std::nullopt;
   // If the `struct` is already realized at declaration (concrete) then assign
   // its TypeId so that concrete struct/function declarations will fully resolve
-  if (!declaration.IsTemplate()) {
+  if (declaration.template_variables.empty()) {
     type_id = type_registry_.NewTypeId();
   }
 
@@ -88,6 +94,45 @@ SymbolBinder::StructBinding SymbolBinder::BindStruct(
   auto binding = scope_manager_.InsertNameIntoScope(
       declaration.name, NamedBinding::Struct, type_id, symbol_id);
   return {std::move(binding), symbol_ref};
+}
+
+SymbolId SymbolBinder::NewFunction(
+    FunctionDeclaration& declaration,
+    std::optional<const StructDeclaration*> parent_declaration) {
+  SymbolId symbol_id =
+      type_registry_.NewFunctionSymbol(declaration, parent_declaration);
+
+  auto* symbol = type_registry_.GetSymbol<FunctionSymbol>(symbol_id);
+  CHECK(symbol) << "FunctionSymbol not registered to: " << symbol_id;
+  symbol->constrained_template_type_ids =
+      BindTemplateVariableConstraints(symbol->declaration.template_arguments);
+
+  if (symbol->IsMethodBodyRequired() && !declaration.body) {
+    error_collector_.Add(
+        "non-extern functions MUST have a body: " + declaration.name.text,
+        declaration.name.metadata);
+  }
+
+  if (!symbol->IsExtern() && declaration.variadic_type) {
+    error_collector_.Add("'...' is only allowed in extern functions",
+                         declaration.variadic_type->variadic_span);
+  }
+
+  return symbol_id;
+}
+
+std::vector<TypeId> SymbolBinder::BindTemplateVariableConstraints(
+    const std::vector<TemplateVariable>& template_variables) {
+  std::vector<TypeId> template_constraint_types;
+  for (const auto& [name, default_type, constraint_type] : template_variables) {
+    TypeId constraint_type_id = TypeRegistry::Any;
+    if (constraint_type) {
+      if (auto type_id = type_context_.GetTypeIdFor(*constraint_type))
+        constraint_type_id = *type_id;
+    }
+    template_constraint_types.push_back(constraint_type_id);
+  }
+  return template_constraint_types;
 }
 
 void SymbolBinder::BindTypeAlias(const TypeAliasStatement& alias) {
@@ -126,5 +171,7 @@ void SymbolBinder::BindTypeAlias(const TypeAliasStatement& alias) {
 
   if (auto target_type_id = type_context_.GetTypeIdFor(*alias.type)) {
     type_registry_.NewAliasType(alias.name.text, type_id, *target_type_id);
+  } else {
+    type_registry_.NewAliasType(alias.name.text, type_id, TypeRegistry::Error);
   }
 }

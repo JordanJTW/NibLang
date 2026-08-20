@@ -627,15 +627,16 @@ static void run_frame(vm_t* vm, const char* name) {
                "invalid object ID");
         uint32_t row_displacement =
             vm->virtual_table->dispatch_table[object_id];
-        uint32_t dispatch_idx = row_displacement + id;
-        assert(dispatch_idx < vm->virtual_table->dispatch_size &&
+        uint32_t dispatch_idx = (row_displacement + id) * 2;
+        assert(dispatch_idx + 1 < vm->virtual_table->dispatch_size &&
                "invalid dispatch index");
-        uint32_t fn_idx =
-            vm->virtual_table
-                ->dispatch_table[vm->virtual_table->dispatch_offset +
-                                 row_displacement + id];
+        uint32_t* data = vm->virtual_table->dispatch_table +
+                         vm->virtual_table->dispatch_offset + dispatch_idx;
+        uint32_t fn_idx = data[0];
         fn_idx = patch_function_idx(fn_idx, vm->native_functions_count);
-
+        uint32_t owner_id = data[1];
+        assert(owner_id == object_id &&
+               "virtual method does not belong to object");
         vm_function_t* fn = &vm->functions[fn_idx];
         DEBUG_LOG("OP_CALL idx: %d:%d (%s)", fn_idx, fn->type, fn->name);
         vm_invoke(vm, fn, vm->stack.values + vm->stack.sp, argc);

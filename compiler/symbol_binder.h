@@ -23,6 +23,13 @@ class SymbolBinder {
  private:
   void BindTypeAlias(const TypeAliasStatement& alias);
 
+  SymbolId NewFunction(FunctionDeclaration& declaration,
+                       std::optional<const StructDeclaration*>
+                           parent_declaration = std::nullopt);
+
+  std::vector<TypeId> BindTemplateVariableConstraints(
+      const std::vector<TemplateVariable>& template_variables);
+
   ScopeManager& scope_manager_;
   TypeRegistry& type_registry_;
   TypeContext& type_context_;

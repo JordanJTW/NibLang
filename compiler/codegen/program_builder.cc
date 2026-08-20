@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include "compiler/codegen/virtual_dispatch.h"
 #include "compiler/logging.h"
 #include "src/prog_types.h"
 #include "src/vm.h"
@@ -73,7 +74,8 @@ std::optional<NamedBinding::Idx> ProgramBuilder::LinkExternalCallIdx(
 
 std::vector<uint8_t> ProgramBuilder::GenerateImage(
     std::vector<ByteCodeGenerator::FunctionObject> objects,
-    std::vector<const FunctionSymbol*> external_functions) {
+    std::vector<const FunctionSymbol*> external_functions,
+    std::vector<const FunctionSymbol*> virtual_functions) {
   std::vector<std::string> constants = constant_pool_.GetStrings();
 
   vm_prog_header_t header = {
@@ -101,7 +103,7 @@ std::vector<uint8_t> ProgramBuilder::GenerateImage(
   for (auto& obj : objects) {
     debug_offset.push_back(debug_info.size());
 
-    const auto& name = obj.symbol->declaration.name.text;
+    const auto& name = obj.symbol->GetName();
 
     if (name.empty()) {
       debug_info.push_back('\0');
@@ -129,15 +131,62 @@ std::vector<uint8_t> ProgramBuilder::GenerateImage(
   }
 
   for (const auto* symbol : external_functions) {
-    if (auto call_idx = LinkExternalCallIdx(symbol->GetName()))
+    if (auto call_idx = LinkExternalCallIdx(symbol->GetName())) {
       call_idx_remapping[symbol->symbol_id] = *call_idx;
+    } else {
+      LOG(FATAL) << "Unable to link external function: `" << symbol->GetName()
+                 << "`";
+    }
   }
+
+  VirtualDispatchResult result =
+      BuildDispatchTable(virtual_functions, call_idx_remapping);
+
+  for (const auto [symbol_id, idx] : result.symbol_to_interface_id) {
+    CHECK(!call_idx_remapping.contains(symbol_id))
+        << "Virtual function was already mapped!";
+    call_idx_remapping[symbol_id] = idx;
+  }
+
+  size_t virtual_section_size =
+      sizeof(vm_prog_virtual_t) +
+      result.row_displacements.size() * sizeof(uint32_t) +
+      result.dispatch_table.size() * sizeof(uint32_t) * 2;  // index + owner
+  program_image.resize(offset + sizeof(vm_section_t) + virtual_section_size);
+
+  vm_section_t virtual_section_header = {
+      .type = vm_section_t::VIRTUAL,
+      .size = static_cast<uint16_t>(virtual_section_size)};
+  memcpy(program_image.data() + offset, &virtual_section_header,
+         sizeof(vm_section_t));
+  offset += sizeof(vm_section_t);
+
+  vm_prog_virtual_t virtual_section;
+  virtual_section.version = 0;
+  virtual_section.dispatch_offset = result.row_displacements.size();
+  virtual_section.dispatch_size = result.dispatch_table.size() * 2;
+
+  memcpy(program_image.data() + offset, &virtual_section,
+         sizeof(vm_prog_virtual_t));
+  offset += sizeof(vm_prog_virtual_t);
+  memcpy(program_image.data() + offset, result.row_displacements.data(),
+         virtual_section.dispatch_offset * sizeof(uint32_t));
+  offset += virtual_section.dispatch_offset * sizeof(uint32_t);
+
+  auto* const dispatch_table_image =
+      reinterpret_cast<uint32_t*>(program_image.data() + offset);
+  CHECK_EQ(result.dispatch_table.size(), result.slot_owners.size());
+  for (size_t i = 0; i < result.dispatch_table.size(); ++i) {
+    dispatch_table_image[i * 2] = result.dispatch_table[i];
+    dispatch_table_image[i * 2 + 1] = result.slot_owners[i];
+  }
+  offset += virtual_section.dispatch_size * sizeof(uint32_t);
 
   size_t bytecode_size = 0;
   for (size_t idx = 0; idx < objects.size(); ++idx) {
     const auto& obj = objects[idx];
-    std::vector<uint8_t> fn_bytecode =
-        obj.bytecode.Build(nullptr, call_idx_remapping);
+    std::vector<uint8_t> fn_bytecode = obj.bytecode.Build(
+        nullptr, call_idx_remapping, result.symbol_to_object_id);
     program_image.resize(offset + sizeof(vm_section_t) + fn_bytecode.size());
 
     vm_section_t section = {
@@ -157,8 +206,7 @@ std::vector<uint8_t> ProgramBuilder::GenerateImage(
   header.debug_size = debug_info.size();
   memcpy(program_image.data(), &header, sizeof(vm_prog_header_t));
 
-  for (size_t id = 0; id < constants.size(); ++id) {
-    const auto& value = constants[id];
+  for (const auto& value : constants) {
     program_image.resize(offset + sizeof(vm_section_t) + value.size());
 
     vm_section_t section = {.type = vm_section_t::CONST_STR,
@@ -208,13 +256,17 @@ bool ProgramBuilder::DumpImage(std::vector<uint8_t> program) {
   };
   std::vector<FunctionInfo> functions;
 
+  std::vector<uint32_t> row_displacements;
+  std::vector<uint32_t> dispatch_table;
+
   while (offset + sizeof(vm_section_t) < program.size()) {
     vm_section_t section;
     memcpy(&section, program.data() + offset, sizeof(vm_section_t));
     offset += sizeof(vm_section_t);
 
     if (offset + section.size > program.size()) {
-      LOG(ERROR) << "Section size exceeds program size";
+      LOG(ERROR) << "Section size exceeds program size (" << section.type
+                 << "): " << section.size;
       return false;
     }
 
@@ -245,6 +297,24 @@ bool ProgramBuilder::DumpImage(std::vector<uint8_t> program) {
         break;
       }
 
+      case vm_section_t::VIRTUAL: {
+        vm_prog_virtual_t virtual_header;
+        memcpy(&virtual_header, program.data() + offset,
+               sizeof(vm_prog_virtual_t));
+
+        row_displacements.resize(virtual_header.dispatch_offset);
+        memcpy(row_displacements.data(),
+               program.data() + offset + sizeof(vm_prog_virtual_t),
+               virtual_header.dispatch_offset * sizeof(uint32_t));
+
+        dispatch_table.resize(virtual_header.dispatch_size);
+        memcpy(dispatch_table.data(),
+               program.data() + offset + sizeof(vm_prog_virtual_t) +
+                   virtual_header.dispatch_offset * sizeof(uint32_t),
+               virtual_header.dispatch_size * sizeof(uint32_t));
+        break;
+      }
+
       default:
         LOG(ERROR) << "Unknown section type: "
                    << static_cast<int>(section.type);
@@ -267,6 +337,11 @@ bool ProgramBuilder::DumpImage(std::vector<uint8_t> program) {
               << ", bytecode size: " << fn.bytecode.size() << ")";
     DumpByteCode(fn.bytecode);
     printf("\n");
+  }
+
+  if (!dispatch_table.empty()) {
+    CHECK(!row_displacements.empty());
+    PrintDispatchTable(row_displacements, dispatch_table);
   }
 
   if (parsed_constants != header.constant_count ||

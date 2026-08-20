@@ -76,7 +76,7 @@ class TypeResolverTest : public ::testing::Test {
   void SetUp() override {
     static StructDeclaration array_declaration = {
         .name = SpannedText{"Array"},
-        .template_arguments = {{"T"}},
+        .template_variables = {{"T"}},
     };
     symbol_binder.BindStruct(array_declaration);
   }
@@ -172,7 +172,7 @@ TEST_F(TypeResolverTest, ResolveConstructor) {
   // struct Foo[A, B] { a: A, b: B }
   static StructDeclaration declaration = {
       .name = SpannedText{"Foo"},
-      .template_arguments = {{"A"}, {"B"}},
+      .template_variables = {{"A"}, {"B"}},
       .fields = {{SpannedText{"a"}, ParsedType{"A"}},
                  {SpannedText{"b"}, ParsedType{"B"}}},
   };
@@ -192,7 +192,7 @@ TEST_F(TypeResolverTest, ResolveConstructorWithMissingArgument) {
   // struct Foo[A] { a: A, b: A }
   static StructDeclaration declaration = {
       .name = SpannedText{"Foo"},
-      .template_arguments = {{"A"}},
+      .template_variables = {{"A"}},
       .fields = {{SpannedText{"a"}, ParsedType{"A"}},
                  {SpannedText{"b"}, ParsedType{"A"}}},
   };

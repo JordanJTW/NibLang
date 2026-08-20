@@ -13,8 +13,8 @@
 #include <variant>
 #include <vector>
 
-#include "compiler/types.h"
 #include "compiler/parser/tokenizer.h"
+#include "compiler/types.h"
 
 namespace {
 
@@ -1151,16 +1151,16 @@ std::vector<ParsedType> Parser::ParseTypeList(TokenKind end_of_list_token) {
   return return_types;
 }
 
-std::optional<std::vector<TemplateArgument>>
+std::optional<std::vector<TemplateVariable>>
 Parser::ParseTemplateDeclarationList() {
   CHECK_EQ(current_token_.kind, TokenKind::kSquareOpen);
   AdvanceToken();  // consume [
 
-  std::vector<TemplateArgument> template_parameters;
+  std::vector<TemplateVariable> template_variables;
   while (current_token_.kind != TokenKind::kSquareClose &&
          current_token_.kind != TokenKind::kEndOfFile) {
     Token parameter_token = current_token_;
-    if (!ConsumeToken(TokenKind::kIdent, "expected template parameter")) {
+    if (!ConsumeToken(TokenKind::kIdent, "expected template variable")) {
       // Attempt to synchronize to the next parameter (or end of list)
 
       if (!SynchronizeOnError([](TokenKind kind) {
@@ -1173,6 +1173,19 @@ Parser::ParseTemplateDeclarationList() {
       continue;
     }
 
+    std::optional<ParsedType> constraint;
+    if (current_token_.kind == TokenKind::kColon) {
+      AdvanceToken();  // consume :
+      constraint = ParseType();
+
+      if (!constraint.has_value()) {
+        error_collector_.Add(
+            "expected valid type constraint after ':' in template variable",
+            current_token_.meta);
+        // Intentional fall-through to continue parsing since optional
+      }
+    }
+
     std::optional<ParsedType> default_type;  // Default types are optional
     if (current_token_.kind == TokenKind::kAssign) {
       AdvanceToken();  // consume =
@@ -1180,31 +1193,35 @@ Parser::ParseTemplateDeclarationList() {
 
       if (!default_type.has_value()) {
         error_collector_.Add(
-            "expected valid type after '=' in template parameter",
+            "expected valid type after '=' in template variable",
             current_token_.meta);
         // Intentional fall-through to continue parsing since optional
       }
     }
 
-    template_parameters.emplace_back(
+    template_variables.emplace_back(
         SpannedText::FromToken(std::move(parameter_token)),
-        std::move(default_type));
+        std::move(default_type), std::move(constraint));
 
     if (current_token_.kind == TokenKind::kComma) {
       AdvanceToken();  // consume ,
     } else if (current_token_.kind != TokenKind::kSquareClose) {
-      error_collector_.Add("expected ',' or ']' after template parameter",
+      error_collector_.Add("expected ',' or ']' after template variable",
                            current_token_.meta);
-      if (!SynchronizeOnError(
-              [](TokenKind kind) { return kind == TokenKind::kSquareClose; })) {
+      if (!SynchronizeOnError([](TokenKind kind) {
+            return kind == TokenKind::kComma || kind == TokenKind::kSquareClose;
+          })) {
         return std::nullopt;
       }
+
+      if (current_token_.kind == TokenKind::kComma)
+        AdvanceToken();  // consume ,
     }
   }
 
   ConsumeToken(TokenKind::kSquareClose,
-               "expected ']' to close template arguments");
-  return template_parameters;
+               "expected ']' to close template variable list");
+  return template_variables;
 }
 
 std::optional<StructDeclaration> Parser::ParseStructDeclaration(
@@ -1222,8 +1239,8 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
     }
   }
 
-  // Optionally parse template paramters i.e. [T, U = i32]
-  std::vector<TemplateArgument> template_parameters;
+  // Optionally parse template parameters i.e. [T, U = i32]
+  std::vector<TemplateVariable> template_parameters;
   if (current_token_.kind == TokenKind::kSquareOpen) {
     auto result = ParseTemplateDeclarationList();
     if (!result)
@@ -1233,8 +1250,10 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
 
   StructDeclaration struct_decl;
   struct_decl.name = SpannedText::FromToken(std::move(name_token));
-  struct_decl.is_extern = is_extern == ExternStruct::YES;
-  struct_decl.template_arguments = std::move(template_parameters);
+  struct_decl.kind =
+      (is_extern == ExternStruct::YES ? StructDeclaration::Opaque
+                                      : StructDeclaration::Structure);
+  struct_decl.template_variables = std::move(template_parameters);
 
   if (!ConsumeToken(TokenKind::kOpenBrace, "expected '{' for struct body")) {
     return std::nullopt;
@@ -1246,7 +1265,7 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
            kind == TokenKind::kCloseBrace || kind == TokenKind::kKwImplements;
   };
 
-  auto handle_member_error = [&, this]() -> bool {
+  auto handle_member_error = [&]() -> bool {
     return SynchronizeOnError([&](TokenKind kind) {
       return is_strong_anchor(kind) || kind == TokenKind::kIdent;
     });
@@ -1358,7 +1377,9 @@ std::optional<ImplementsDeclaration> Parser::ParseImplementsDeclaration() {
   // Optionally parse template arguments i.e. implements Foo[i32] { ... }
   std::vector<ParsedType> template_arguments;
   if (current_token_.kind == TokenKind::kSquareOpen) {
-    template_arguments = ParseTypeList(TokenKind::kCloseParen);
+    AdvanceToken();  // consume [
+
+    template_arguments = ParseTypeList(TokenKind::kSquareClose);
     if (template_arguments.empty())
       return std::nullopt;
   }
@@ -1402,7 +1423,7 @@ std::optional<ImplementsDeclaration> Parser::ParseImplementsDeclaration() {
   return declaration;
 }
 
-std::optional<InterfaceDeclaration> Parser::ParseInterfaceDeclaration() {
+std::optional<StructDeclaration> Parser::ParseInterfaceDeclaration() {
   CHECK(ConsumeToken(TokenKind::kKwInterface, "expected 'interface'"));
 
   Token name_token = current_token_;
@@ -1417,7 +1438,7 @@ std::optional<InterfaceDeclaration> Parser::ParseInterfaceDeclaration() {
   }
 
   // Optionally parse template variables i.e. [T, U = i32]
-  std::vector<TemplateArgument> template_variables;
+  std::vector<TemplateVariable> template_variables;
   if (current_token_.kind == TokenKind::kSquareOpen) {
     auto result = ParseTemplateDeclarationList();
     if (!result)
@@ -1425,9 +1446,10 @@ std::optional<InterfaceDeclaration> Parser::ParseInterfaceDeclaration() {
     template_variables = std::move(result.value());
   }
 
-  InterfaceDeclaration declaration;
+  StructDeclaration declaration;
   declaration.name = SpannedText::FromToken(std::move(name_token));
   declaration.template_variables = std::move(template_variables);
+  declaration.kind = StructDeclaration::Interface;
 
   if (!ConsumeToken(TokenKind::kOpenBrace, "expected '{' for interface body")) {
     return std::nullopt;
@@ -1442,7 +1464,7 @@ std::optional<InterfaceDeclaration> Parser::ParseInterfaceDeclaration() {
   while (current_token_.kind != TokenKind::kCloseBrace &&
          current_token_.kind != TokenKind::kEndOfFile) {
     if (current_token_.kind == TokenKind::kKwFn) {
-      auto method = ParseFunctionDeclaration(FunctionKind::Interface);
+      auto method = ParseFunctionDeclaration(FunctionKind::Method);
       if (!method) {
         if (!handle_member_error())
           return std::nullopt;
@@ -1470,7 +1492,7 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
   CHECK(ConsumeToken(TokenKind::kKwFn, "expected 'fn'"));
 
   SpannedText function_name;
-  std::vector<TemplateArgument> template_parameters;
+  std::vector<TemplateVariable> template_parameters;
   if (function_kind == FunctionKind::Anonymous) {
     // Perform single-token deletion recovery to try to keep parsing happy...
     if (current_token_.kind == TokenKind::kIdent) {

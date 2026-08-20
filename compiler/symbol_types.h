@@ -4,12 +4,11 @@
 #include <unordered_map>
 #include <vector>
 
+#include "compiler/types.h"
+
 using SymbolId = size_t;
 using ScopeId = size_t;
 using TypeId = size_t;
-
-struct FunctionDeclaration;
-struct StructDeclaration;
 
 struct InstanceHash {
   std::size_t operator()(const std::vector<TypeId>& argument_type_ids) const {
@@ -36,14 +35,26 @@ struct FunctionSymbol {
   // The lexical environment this symbol was declared in
   ScopeId environment_scope_id;
 
-  std::unordered_map<std::string, TypeId> default_template_type_ids;
+  std::vector<TypeId> constrained_template_type_ids;
+  std::unordered_map<SymbolId, SymbolId> implementations;
   InstanceCache instances;
 
   inline bool IsExtern() const {
     if (parent_declaration.has_value())
-      return parent_declaration.value()->is_extern && !declaration.body;
+      return parent_declaration.value()->IsOpaque() && !declaration.body;
 
     return declaration.function_kind == FunctionKind::Extern;
+  }
+
+  inline bool IsMethodBodyRequired() const {
+    return !(IsExtern() || RequiresVirtualDispatch());
+  }
+
+  inline bool RequiresVirtualDispatch() const {
+    if (parent_declaration.has_value())
+      return parent_declaration.value()->IsInterface();
+
+    return false;
   }
 
   inline std::string GetName() const {
@@ -59,7 +70,8 @@ struct StructSymbol {
   StructDeclaration& declaration;
   // The environment created within the Struct declaration
   ScopeId self_scope_id;
-  std::vector<SymbolId> method_symbols;
 
+  std::vector<SymbolId> method_symbols;
+  std::vector<TypeId> constrained_template_type_ids;
   InstanceCache instances;
 };

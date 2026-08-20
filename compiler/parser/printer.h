@@ -12,7 +12,8 @@
 
 class Printer {
  public:
-  explicit Printer(const TypeRegistry* type_registry) : type_registry_(type_registry) {}
+  explicit Printer(const TypeRegistry* type_registry)
+      : type_registry_(type_registry) {}
 
   void Print(const Block& block);
   void Print(const Statement& stmt, size_t indent = 0);

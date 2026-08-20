@@ -59,7 +59,7 @@ extern struct Array[T] {
 extern struct Map[K, V] {
   static fn new[K, V]() -> Map[K, V];
   fn get(key: K) -> V;
-  fn set(key: K, value: V) -> Void;
+  fn set(key: K, value: V) -> Unit;
 }
 
 extern struct String {

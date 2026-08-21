@@ -1,0 +1,68 @@
+// RUN: sh -c '%compiler %s --output %t 2>&1 | /opt/homebrew/opt/llvm/bin/FileCheck %s -DPATH=%s'
+
+struct Foo {
+  static fn static_method() {}
+  fn instance_method() {}
+}
+
+fn main() {
+  Foo.static_method();
+  Foo.instance_method();
+
+  let foo = Foo();
+  foo.instance_method();
+  foo.static_method();
+
+  Foo.x;
+  Foo.not_method();
+  foo.not_method();
+
+  main.name;
+  main.name();
+}
+
+// CHECK: Error: [[PATH]]:10:3:
+// CHECK-NEXT: Foo.instance_method();
+// CHECK-NEXT: ^ no member 'instance_method' found on type `Foo`
+// CHECK: Note: [[PATH]]:3:8:
+// CHECK-NEXT: struct Foo {
+// CHECK-NEXT: ^ declared here
+
+// CHECK: Error: [[PATH]]:14:7:
+// CHECK-NEXT:   foo.static_method();
+// CHECK-NEXT: ^ no member 'static_method' found on instance of `struct Foo`
+// CHECK: Note: [[PATH]]:3:8:
+// CHECK-NEXT: struct Foo {
+// CHECK-NEXT: ^ declared here
+
+// CHECK: Error: [[PATH]]:16:3:
+// CHECK-NEXT:   Foo.x;
+// CHECK-NEXT: ^ no member 'x' found on type `Foo`
+// CHECK: Note: [[PATH]]:3:8:
+// CHECK-NEXT: struct Foo {
+// CHECK-NEXT: ^ declared here
+
+// CHECK: Error: [[PATH]]:17:3:
+// CHECK-NEXT:   Foo.not_method();
+// CHECK-NEXT: ^ no member 'not_method' found on type `Foo`
+// CHECK: Note: [[PATH]]:3:8:
+// CHECK-NEXT: struct Foo {
+// CHECK-NEXT: ^ declared here
+
+// CHECK: Error: [[PATH]]:18:7:
+// CHECK-NEXT:   foo.not_method();
+// CHECK-NEXT: ^ no member 'not_method' found on instance of `struct Foo`
+// CHECK: Note: [[PATH]]:3:8:
+// CHECK-NEXT: struct Foo {
+// CHECK-NEXT: ^ declared here
+
+// CHECK: Error: [[PATH]]:20:3:
+// CHECK-NEXT:   main.name;
+// CHECK-NEXT: ^ type `fn () -> Unit` does not support member access
+
+// CHECK: Error: [[PATH]]:21:3:
+// CHECK-NEXT:   main.name();
+// CHECK-NEXT: ^ type `fn () -> Unit` does not support member access
+
+
+

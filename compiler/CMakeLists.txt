@@ -1,5 +1,6 @@
 add_subdirectory(codegen)
 add_subdirectory(parser)
+add_subdirectory(tests)
 
 add_library(error_collector error_collector.cc)
 target_link_libraries(error_collector PRIVATE types)

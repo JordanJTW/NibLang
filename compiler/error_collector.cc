@@ -63,6 +63,7 @@ void ErrorCollector::PrintAllErrors(const std::vector<File>& files) const {
       print_error(file->resolved_path, file->file_contents, message.span,
                   message.text, "Note");
     }
+    std::cerr << std::endl;
   }
 }
 

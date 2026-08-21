@@ -1,0 +1,84 @@
+// Copyright (c) 2026, Jordan Werthman <jordanwerthman@gmail.com>
+//
+// SPDX-License-Identifier: BSD-2-Clause
+
+// Trimmed down String (instead of std/types.nib) for smaller AST to debug.
+@import "std/types.nib"
+
+interface Hashable {
+    fn hash() -> i32;
+}
+
+interface Printable {
+    fn to_string() -> String;
+}
+
+interface Comparable[T] {
+    fn compare(other: T) -> i32;
+}
+
+struct Foo {
+
+    implements Printable {
+        fn to_string() -> String { return "Foo"; }
+    }
+
+    implements Hashable {
+        fn hash() -> i32 { return 0; }
+    }
+
+    fn to_string() -> String { return "Just A Method"; }
+}
+
+struct Bar {
+    implements Printable {
+        fn to_string() -> String { return "Bar"; }
+    }
+
+    implements Comparable[Bar] {
+        fn compare(other: Bar) -> i32 {
+            return 0;
+        }
+    }
+}
+
+struct Person {
+    name: String;
+    age: i32;
+
+    implements Printable {
+        fn to_string() -> String {
+            return self.name;
+        }
+    }
+
+    implements Hashable {
+        fn hash() -> i32 {
+            return self.age;
+        }
+    }
+}
+
+extern fn log(...any);
+
+fn print(x: Printable) {
+    log(x.to_string(),"\n");
+}
+
+fn hash(x: Hashable) {
+    log(x.hash());
+}
+
+fn compare(x: Comparable[Bar]) {
+    x.compare(Bar());
+}
+
+fn main() -> String {
+    print(Person("Jordan", 34));
+    print(Foo());
+    print(Bar());
+    hash(Person("Destiny", 34));
+    compare(Bar());
+//     Foo().hash();
+    return Foo().to_string();
+}

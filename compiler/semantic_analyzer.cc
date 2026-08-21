@@ -330,16 +330,14 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                   (lhs->type_id == LiteralType::Nil &&
                    type_context_.IsTypeSubsetOf(*lhs->type_id,
                                                 *rhs->type_id)))) {
-              error_collector_.Add("LHS and RHS are not compatible",
-                                   expression->meta);
-              error_collector_.Add(
-                  "LHS type is " +
-                      type_registry_.GetNameFromTypeId(*lhs->type_id),
-                  binary.lhs->meta);
-              error_collector_.Add(
-                  "But RHS type is " +
-                      type_registry_.GetNameFromTypeId(*rhs->type_id),
-                  binary.rhs->meta);
+              error_collector_
+                  .Add("LHS and RHS are not compatible", expression->meta)
+                  .WithNote("LHS type is " +
+                                type_registry_.GetNameFromTypeId(*lhs->type_id),
+                            binary.lhs->meta)
+                  .WithNote("But RHS type is " +
+                                type_registry_.GetNameFromTypeId(*rhs->type_id),
+                            binary.rhs->meta);
               return std::nullopt;
             }
 
@@ -467,16 +465,14 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
               return std::nullopt;
 
             if (lhs->type_id != rhs->type_id) {
-              error_collector_.Add("LHS and RHS are not compatible",
-                                   expression->meta);
-              error_collector_.Add(
-                  "LHS type is " +
-                      type_registry_.GetNameFromTypeId(*lhs->type_id),
-                  logic.lhs->meta);
-              error_collector_.Add(
-                  "But RHS type is " +
-                      type_registry_.GetNameFromTypeId(*rhs->type_id),
-                  logic.rhs->meta);
+              error_collector_
+                  .Add("LHS and RHS are not compatible", expression->meta)
+                  .WithNote("LHS type is " +
+                                type_registry_.GetNameFromTypeId(*lhs->type_id),
+                            logic.lhs->meta)
+                  .WithNote("But RHS type is " +
+                                type_registry_.GetNameFromTypeId(*rhs->type_id),
+                            logic.rhs->meta);
               return std::nullopt;
             }
 

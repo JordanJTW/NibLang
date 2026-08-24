@@ -206,6 +206,7 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
             // Register the variable's type within the current scope.
             NamedBinding binding = scope_manager_.DeclareVariableBinding(
                 assign.name, parsed_type_id.value());
+            CHECK(!assign.resolved) << "Identifier was previously resolved";
             assign.resolved = ResolvedIdentifier{binding};
           },
           [&](StructDeclaration& struct_decl) {
@@ -245,6 +246,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                       auto binding = scope_manager_.FindBindingFor(
                           ident.name, ScopeManager::Function);
                       if (binding) {
+                        CHECK(!ident.resolved)
+                            << "Identifier was previously resolved";
                         ident.resolved = ResolvedIdentifier{*binding};
                         return ExpressionResult::of_binding(*binding);
                       }
@@ -262,6 +265,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                               binding->name, *binding->realized_type_id);
                         }
 
+                        CHECK(!ident.resolved)
+                            << "Identifier was previously resolved";
                         ident.resolved = ResolvedIdentifier{*binding};
                         return ExpressionResult::of_binding(*binding);
                       }
@@ -279,6 +284,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                           case NamedBinding::TypeAlias:
                           case NamedBinding::Template:
                           case NamedBinding::Interface:
+                            CHECK(!ident.resolved)
+                                << "Identifier was previously resolved";
                             ident.resolved = ResolvedIdentifier{*binding};
                             return ExpressionResult::of_binding(*binding);
 
@@ -379,7 +386,10 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                                        else_branch_type});
               }
             }
-            binary.resolved = std::move(resolved);
+
+            CHECK(!binary.resolved)
+                << "BinaryExpression was previously resolved";
+            binary.resolved = resolved;
 
             // Comparison operators will always generate a boolean
             if (binary.op == TokenKind::kCompareGt ||
@@ -490,7 +500,9 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
           },
           [&](ClosureExpression& closure) -> SemanticAnalyzer::Result {
             SymbolId symbol_id = type_registry_.NewFunctionSymbol(closure.fn);
-            if (auto binding = type_context_.DefineFunction(symbol_id)) {
+            if (auto binding = type_context_.DefineFunction(
+                    symbol_id, /*self_id=*/std::nullopt,
+                    TypeContext::CheckFunctionBody::YES)) {
               return ExpressionResult(*binding->realized_type_id);
             }
             CHECK(false) << "Failed to declare symbol for closure";
@@ -780,11 +792,14 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
         callee_result.binding->kind == NamedBinding::Function) {
       const auto& symbol = type_registry_.GetSymbolChecked<FunctionSymbol>(
           callee_result.binding->GetSymbolId());
+      CHECK(!call_expr.resolved) << "CallExpression was previously resolved";
       call_expr.resolved = ResolvedCall{callee_result.binding->GetSymbolId(),
                                         symbol.RequiresVirtualDispatch()
                                             ? FunctionKind::Virtual
                                             : symbol.declaration.function_kind};
     } else {
+      CHECK(!call_expr.resolved) << "CallExpression was previously resolved";
+      // Assume a bound closure on the stack so no `target_symbol_id` is needed.
       call_expr.resolved = ResolvedCall{0, FunctionKind::Anonymous};
     }
 
@@ -801,6 +816,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
     TypeCheckCallArguments(argument_results, struct_type->field_types,
                            debug_metadata,
                            /*variadic_type=*/std::nullopt);
+    CHECK(!call_expr.resolved) << "CallExpression was previously resolved";
     call_expr.resolved = ResolvedCall{callee_result.binding->GetSymbolId(),
                                       struct_type->interface_types.empty()
                                           ? FunctionKind::Constructor
@@ -861,12 +877,15 @@ SemanticAnalyzer::Result SemanticAnalyzer::HandleMemberAccess(
     if (auto binding = scope_manager_.FindBindingFor(
             member_name.text, ScopeManager::Current, struct_type->scope_id)) {
       if (binding->kind == NamedBinding::Field) {
-        CHECK(binding->idx.has_value())
+        CHECK(binding->idx)
             << "member symbol must have an index for member access";
+        CHECK(!member_access.resolved)
+            << "MemberAccessExpression was previously resolved";
         member_access.resolved =
             ResolvedAccess{ResolvedAccess::Field{binding->idx.value()}};
       } else if (binding->kind == NamedBinding::Function) {
-        CHECK(binding->symbol_id.has_value()) << "missing SymbolId on binding";
+        CHECK(!member_access.resolved)
+            << "MemberAccessExpression was previously resolved";
         member_access.resolved =
             ResolvedAccess{ResolvedAccess::Method{binding->GetSymbolId()}};
       }
@@ -876,7 +895,9 @@ SemanticAnalyzer::Result SemanticAnalyzer::HandleMemberAccess(
     for (ScopeId interface_scope_id : struct_type->interface_scopes) {
       if (auto binding = scope_manager_.FindBindingFor(
               member_name.text, ScopeManager::Current, interface_scope_id)) {
-        CHECK_EQ(binding->kind, NamedBinding::Function);
+        CHECK_EQ(binding->kind, NamedBinding::Function);  // Only methods allowed
+        CHECK(!member_access.resolved)
+            << "MemberAccessExpression was previously resolved";
         member_access.resolved =
             ResolvedAccess{ResolvedAccess::Method{binding->GetSymbolId()}};
         return ExpressionResult::of_binding(*binding);
@@ -919,6 +940,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::HandleMemberAccess(
         return std::nullopt;
       }
 
+      CHECK(!member_access.resolved)
+          << "MemberAccessExpression was previously resolved";
       member_access.resolved =
           ResolvedAccess{ResolvedAccess::Function{binding->GetSymbolId()}};
 

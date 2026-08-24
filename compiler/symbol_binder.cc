@@ -39,7 +39,8 @@ void SymbolBinder::Process(const Block& block) {
         if (fn.function_kind == FunctionKind::StaticMethod) {
           // Intentionally not passing `self_id` for `static` methods.
           type_context_.DefineFunction(
-              NewFunction(fn, &struct_symbol->declaration));
+              NewFunction(fn, &struct_symbol->declaration),
+              /*self_id=*/std::nullopt, TypeContext::CheckFunctionBody::YES);
         }
       }
 
@@ -48,19 +49,21 @@ void SymbolBinder::Process(const Block& block) {
 
       if (binding.realized_type_id) {  // Templated structs have no TypeId yet
         // DefineStructType() depends on method symbols already being populated.
-        type_context_.DefineStructType(*binding.realized_type_id,
-                                       *binding.symbol_id, *struct_symbol,
-                                       /*template_arguments=*/{});
+        type_context_.DefineStructType(
+            *binding.realized_type_id, *binding.symbol_id, *struct_symbol,
+            /*template_arguments=*/{}, TypeContext::CheckFunctionBody::YES);
       } else {
         type_context_.GetTemplateOf(binding,
-                                    struct_symbol->template_variable_type_ids);
+                                    struct_symbol->template_variable_type_ids,
+                                    TypeContext::CheckFunctionBody::YES);
       }
     });
   }
   for (auto& statement : block.statements) {
     if (auto* declaration = std::get_if<FunctionDeclaration>(&statement->as)) {
       SymbolId symbol_id = NewFunction(*declaration);
-      type_context_.DefineFunction(symbol_id);
+      type_context_.DefineFunction(symbol_id, /*self_id=*/std::nullopt,
+                                   TypeContext::CheckFunctionBody::YES);
     }
   }
 }

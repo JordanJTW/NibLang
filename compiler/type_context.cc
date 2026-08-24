@@ -42,7 +42,8 @@ void TypeContext::DefineStructType(
     TypeId self_id,
     SymbolId symbol_id,
     StructSymbol& symbol,
-    const std::vector<TypeId>& template_arguments) {
+    const std::vector<TypeId>& template_arguments,
+    CheckFunctionBody check_function_body) {
   StructType struct_type(symbol.declaration);
   struct_type.template_arguments = template_arguments;
   struct_type.scope_id =
@@ -107,8 +108,10 @@ void TypeContext::DefineStructType(
             // TODO: `parent` should incorporate interface somehow for naming?
             SymbolId symbol_id =
                 type_registry_.NewFunctionSymbol(fn, &symbol.declaration);
-            if (auto binding = DefineFunction(symbol_id, self_id))
+            if (auto binding =
+                    DefineFunction(symbol_id, self_id, check_function_body)) {
               implementations.emplace(name.text, *binding);
+            }
           }
           struct_type.interface_scopes.push_back(
               scope_manager_.GetActiveScopeId());
@@ -148,11 +151,9 @@ void TypeContext::DefineStructType(
         continue;
       }
 
-      auto* interface_symbol =
-          type_registry_.GetSymbol<FunctionSymbol>(*binding.symbol_id);
-      CHECK(interface_symbol);
-      interface_symbol->implementations.emplace(
-          symbol_id, *implementations[binding.name.text].symbol_id);
+      type_registry_.GetSymbolChecked<FunctionSymbol>(*binding.symbol_id)
+          .implementations.emplace(
+              symbol_id, *implementations[binding.name.text].symbol_id);
     }
 
     struct_type.interface_types.insert(*type_id);
@@ -160,19 +161,20 @@ void TypeContext::DefineStructType(
 
   scope_manager_.ExitScope();
 
-  type_registry_.NewStructType(std::move(struct_type), self_id);
+  type_registry_.NewStructType(struct_type, self_id);
 
   scope_manager_.WithScope(struct_type.scope_id, [&]() {
-    for (auto& symbol_id : symbol.method_symbols) {
+    for (auto& method_id : symbol.method_symbols) {
       // Errors are logged from within `DefineFunction`.
-      DefineFunction(symbol_id, self_id);
+      DefineFunction(method_id, self_id, check_function_body);
     }
   });
 }
 
 std::optional<NamedBinding> TypeContext::DefineFunction(
     SymbolId symbol_id,
-    std::optional<TypeId> self_id) {
+    std::optional<TypeId> self_id,
+    CheckFunctionBody check_function_body) {
   FunctionSymbol* symbol = type_registry_.GetSymbol<FunctionSymbol>(symbol_id);
   CHECK(symbol) << "DefineFunction passed an invalid `symbol_id`";
 
@@ -180,7 +182,7 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
 
   std::optional<TypeInstance> instance;
   if (fn.template_arguments.empty()) {
-    if ((instance = DeclareFunctionType(fn, CheckFunctionBody::YES, self_id))) {
+    if ((instance = DeclareFunctionType(fn, check_function_body, self_id))) {
       std::vector<TypeId> instance_key =
           self_id ? std::vector<TypeId>{*self_id} : std::vector<TypeId>{};
       symbol->instances[std::move(instance_key)] = *instance;
@@ -197,7 +199,8 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
   fn.resolved = ResolvedFunction{.function_symbol = binding};
 
   if (!symbol->template_variable_type_ids.empty()) {
-    GetTemplateOf(binding, symbol->template_variable_type_ids);
+    GetTemplateOf(binding, symbol->template_variable_type_ids,
+                  check_function_body);
   }
 
   return binding;
@@ -571,7 +574,7 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
                       template_arguments[i].name, argument_type_ids[i]);
 
                 DefineStructType(self_id, *binding.symbol_id, *symbol,
-                                 argument_type_ids);
+                                 argument_type_ids, check_fn_body);
                 return self_id;
               });
         });
@@ -581,6 +584,18 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
           type_registry_.GetSymbol<FunctionSymbol>(*binding.symbol_id)) {
     if (auto it = symbol->instances.find(argument_type_ids);
         it != symbol->instances.end()) {
+      // It is possible when parsing a method signature, to recursively reparse
+      // the parent struct such that the call from `SymbolBinder` with
+      // `CheckFunctionBody::YES` follows a call with `CheckFunctionBody::NO`
+      // which results in the interned TypeId being returned here and the
+      // RealizedFunction never being added.
+      if (check_fn_body == CheckFunctionBody::YES) {
+        const auto& fn =
+            type_registry_.GetTypeChecked<FunctionType>(it->second.type_id);
+        realized_functions_.emplace_back(it->second.scope_id,
+                                         symbol->declaration, fn.return_type);
+      }
+
       return it->second.type_id;
     }
 

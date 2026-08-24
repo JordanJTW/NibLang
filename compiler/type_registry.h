@@ -161,10 +161,15 @@ class TypeRegistry {
   }
 
   template <typename T>
-  const T& GetSymbolChecked(SymbolId id) const {
-    const T* symbol = GetSymbol<T>(id);
+  T& GetSymbolChecked(SymbolId id) {
+    T* symbol = GetSymbol<T>(id);
     CHECK(symbol) << "Symbol expected for: " << id;
     return *symbol;
+  }
+
+  template <typename T>
+  const T& GetSymbolChecked(SymbolId id) const {
+    return const_cast<TypeRegistry*>(this)->GetSymbolChecked<T>(id);
   }
 
   const auto& symbol_table() const { return symbol_table_; }

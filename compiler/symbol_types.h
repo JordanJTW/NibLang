@@ -35,7 +35,7 @@ struct FunctionSymbol {
   // The lexical environment this symbol was declared in
   ScopeId environment_scope_id;
 
-  std::vector<TypeId> constrained_template_type_ids;
+  std::vector<TypeId> template_variable_type_ids;
   std::unordered_map<SymbolId, SymbolId> implementations;
   InstanceCache instances;
 
@@ -72,6 +72,6 @@ struct StructSymbol {
   ScopeId self_scope_id;
 
   std::vector<SymbolId> method_symbols;
-  std::vector<TypeId> constrained_template_type_ids;
+  std::vector<TypeId> template_variable_type_ids;
   InstanceCache instances;
 };

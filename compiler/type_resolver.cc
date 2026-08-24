@@ -197,6 +197,9 @@ bool TypeResolver::Resolve(TypeId pattern_type_id,
             NOTREACHED() << "concrete type MUST not have placeholders";
             return false;
           },
+          [&](const TemplateVariableType&, const TemplateVariableType&) {
+            return pattern_type_id == concrete_type_id;
+          },
           [&](const StructType& p, const StructType& c) {
             // Ensures the same base class by comparing the stable AST pointers.
             if (&p.declaration != &c.declaration)

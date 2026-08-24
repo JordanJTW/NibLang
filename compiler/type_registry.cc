@@ -140,6 +140,15 @@ TypeId TypeRegistry::NewPlaceholderType(SlotId idx) {
   return type_id;
 }
 
+TypeId TypeRegistry::NewTemplateVariableType(
+    SpannedText name,
+    std::optional<TypeId> constraint_type_id) {
+  TypeId type_id = NewTypeId();
+  type_table_[type_id] =
+      TemplateVariableType(std::move(name), constraint_type_id);
+  return type_id;
+}
+
 TypeId TypeRegistry::NewTypeId() {
   return next_type_id_++;
 }
@@ -198,6 +207,9 @@ std::string TypeRegistry::GetNameFromTypeId(TypeId type_id) const {
               ss << "]";
             }
             return ss.str();
+          },
+          [&](const TemplateVariableType& type) {
+            return "template variable '" + type.name.text;
           },
           [&](const UnionType& type) {
             std::stringstream ss;

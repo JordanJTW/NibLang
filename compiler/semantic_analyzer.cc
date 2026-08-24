@@ -625,7 +625,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             if (!result.has_value())
               return std::nullopt;
 
-            if (!result->binding.has_value() ||
+            if (!result->binding ||
                 (result->binding->kind != NamedBinding::Struct &&
                  result->binding->kind != NamedBinding::Function)) {
               error_collector_.Add(".of() used on non-templated type",
@@ -724,6 +724,19 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
     ExpressionResult callee_result,
     FunctionContext& context,
     Metadata debug_metadata) {
+  // Validate constructor calls BEFORE any type-deduction for better errors.
+  if (callee_result.binding &&
+      callee_result.binding->kind == NamedBinding::Struct) {
+    auto* struct_symbol = type_registry_.GetSymbol<StructSymbol>(
+        callee_result.binding->GetSymbolId());
+    if (struct_symbol->declaration.kind != StructDeclaration::Structure) {
+      error_collector_.Add(
+          "`opaque` or `interface` structs have no constructor",
+          debug_metadata);
+      return std::nullopt;
+    }
+  }
+
   // Ensure all arguments are type-checked regardless of the target.
   std::vector<std::optional<SpannedType>> argument_results;
   argument_results.reserve(call_expr.arguments.size());
@@ -763,17 +776,16 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
 
   if (const auto* const fn_type =
           type_registry_.GetType<FunctionType>(*callable_type_id)) {
-    if (callee_result.binding.has_value() &&
+    if (callee_result.binding &&
         callee_result.binding->kind == NamedBinding::Function) {
-      const FunctionSymbol& symbol = *type_registry_.GetSymbol<FunctionSymbol>(
-          *callee_result.binding->symbol_id);
-      call_expr.resolved = ResolvedCall{*callee_result.binding->symbol_id,
+      const auto& symbol = type_registry_.GetSymbolChecked<FunctionSymbol>(
+          callee_result.binding->GetSymbolId());
+      call_expr.resolved = ResolvedCall{callee_result.binding->GetSymbolId(),
                                         symbol.RequiresVirtualDispatch()
                                             ? FunctionKind::Virtual
                                             : symbol.declaration.function_kind};
     } else {
-      call_expr.resolved = ResolvedCall{*callee_result.binding->symbol_id,
-                                        FunctionKind::Anonymous};
+      call_expr.resolved = ResolvedCall{0, FunctionKind::Anonymous};
     }
 
     TypeCheckCallArguments(argument_results, fn_type->arg_types, debug_metadata,
@@ -786,17 +798,10 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
 
   if (const auto* const struct_type =
           type_registry_.GetType<StructType>(*callable_type_id)) {
-    if (struct_type->declaration.kind != StructDeclaration::Structure) {
-      error_collector_.Add(
-          "`opaque` or `interface` structs have no constructor",
-          debug_metadata);
-      return std::nullopt;
-    }
-
     TypeCheckCallArguments(argument_results, struct_type->field_types,
                            debug_metadata,
                            /*variadic_type=*/std::nullopt);
-    call_expr.resolved = ResolvedCall{*callee_result.binding->symbol_id,
+    call_expr.resolved = ResolvedCall{callee_result.binding->GetSymbolId(),
                                       struct_type->interface_types.empty()
                                           ? FunctionKind::Constructor
                                           : FunctionKind::ConstructorVirtual};
@@ -828,6 +833,21 @@ SemanticAnalyzer::Result SemanticAnalyzer::HandleMemberAccess(
   if (object_result->is_value() && object_result->has_type_id()) {
     TypeId type_id = *object_result->type_id;
 
+    if (auto* template_variable_type =
+            type_registry_.GetType<TemplateVariableType>(type_id)) {
+      if (!template_variable_type->constraint_type_id) {
+        error_collector_
+            .Add("no member '" + member_name.text +
+                     "' found on unconstrained template variable '" +
+                     template_variable_type->name.text + "'",
+                 member_access.object->meta)
+            .WithNote("defined here", template_variable_type->name.metadata);
+        return std::nullopt;
+      }
+
+      type_id = template_variable_type->constraint_type_id.value();
+    }
+
     // Member access is only supported on structs
     const auto* const struct_type = type_registry_.GetType<StructType>(type_id);
     if (!struct_type) {
@@ -848,7 +868,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::HandleMemberAccess(
       } else if (binding->kind == NamedBinding::Function) {
         CHECK(binding->symbol_id.has_value()) << "missing SymbolId on binding";
         member_access.resolved =
-            ResolvedAccess{ResolvedAccess::Method{binding->symbol_id.value()}};
+            ResolvedAccess{ResolvedAccess::Method{binding->GetSymbolId()}};
       }
       return ExpressionResult::of_binding(*binding);
     }
@@ -858,7 +878,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::HandleMemberAccess(
               member_name.text, ScopeManager::Current, interface_scope_id)) {
         CHECK_EQ(binding->kind, NamedBinding::Function);
         member_access.resolved =
-            ResolvedAccess{ResolvedAccess::Method{binding->symbol_id.value()}};
+            ResolvedAccess{ResolvedAccess::Method{binding->GetSymbolId()}};
         return ExpressionResult::of_binding(*binding);
       }
     }
@@ -873,8 +893,6 @@ SemanticAnalyzer::Result SemanticAnalyzer::HandleMemberAccess(
 
   if (object_result->is_type_ref() && object_result->binding &&
       object_result->binding->symbol_id) {
-    SymbolId symbol_id = *object_result->binding->symbol_id;
-
     if (object_result->binding->kind != NamedBinding::Struct) {
       std::stringstream ss;
       ss << "binding of kind " << object_result->binding->kind
@@ -883,37 +901,35 @@ SemanticAnalyzer::Result SemanticAnalyzer::HandleMemberAccess(
       return std::nullopt;
     }
 
-    const auto* const struct_symbol =
-        type_registry_.GetSymbol<StructSymbol>(symbol_id);
-    CHECK(struct_symbol) << "StructSymbol not registered for id: " << symbol_id;
+    const auto& struct_symbol = type_registry_.GetSymbolChecked<StructSymbol>(
+        object_result->binding->GetSymbolId());
 
     if (auto binding = scope_manager_.FindBindingFor(
             member_name.text, ScopeManager::Current,
-            struct_symbol->self_scope_id)) {
+            struct_symbol.self_scope_id)) {
       // Filters out non-static methods (those that require `self` with kind
       // `Method`) and fields which are only accessible on an instance.
       if (binding->kind != NamedBinding::Function) {
         std::stringstream ss;
         ss << "binding of type '" << binding->kind
            << "' can only be accessed on an instance of "
-           << struct_symbol->declaration.name.text;
+           << struct_symbol.declaration.name.text;
         error_collector_.Add(ss.str(), member_access.member_name.metadata)
             .WithNote("declared here", binding->name.metadata);
         return std::nullopt;
       }
 
-      CHECK(binding->symbol_id.has_value()) << "missing SymbolId on binding";
       member_access.resolved =
-          ResolvedAccess{ResolvedAccess::Function{binding->symbol_id.value()}};
+          ResolvedAccess{ResolvedAccess::Function{binding->GetSymbolId()}};
 
       return ExpressionResult::of_binding(*binding);
     }
 
     error_collector_
         .Add("no member '" + member_name.text + "' found on type `" +
-                 struct_symbol->declaration.name.text + "`",
+                 struct_symbol.declaration.name.text + "`",
              member_access.object->meta)
-        .WithNote("declared here", struct_symbol->declaration.name.metadata);
+        .WithNote("declared here", struct_symbol.declaration.name.metadata);
     return std::nullopt;
   }
 
@@ -931,7 +947,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::RequireConcreteValue(
 
   // Ensure it is an instance i.e. 123, x, fn foo().
   if (!result->is_value()) {
-    if (result->binding.has_value()) {
+    if (result->binding) {
       error_collector_
           .Add("expected value, but found '" + result->binding->name.text + "'",
                expression->meta)
@@ -951,7 +967,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::RequireConcreteValue(
 
   // Ensure that the instance is fully instantiated (handles fn foo[T]() refs).
   if (!result->has_type_id()) {
-    CHECK(result->binding.has_value()) << "MUST set TypeId and/or Binding";
+    CHECK(result->binding) << "MUST set TypeId and/or Binding";
     error_collector_
         .Add(result->binding->name.text +
                  " must be instantiated with template arguments "
@@ -976,7 +992,7 @@ std::ostream& operator<<(std::ostream& os, SemanticAnalyzer::Result result) {
   }
   os << ", type_id: "
      << (result->type_id.has_value() ? std::to_string(*result->type_id) : "_");
-  os << ", symbol_id: ";
+  os << ", binding: ";
   if (result->binding) {
     os << *result->binding;
   } else {

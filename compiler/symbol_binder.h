@@ -27,7 +27,7 @@ class SymbolBinder {
                        std::optional<const StructDeclaration*>
                            parent_declaration = std::nullopt);
 
-  std::vector<TypeId> BindTemplateVariableConstraints(
+  std::vector<TypeId> BindTemplateVariables(
       const std::vector<TemplateVariable>& template_variables);
 
   ScopeManager& scope_manager_;

@@ -16,6 +16,7 @@
 #include <variant>
 #include <vector>
 
+#include "compiler/logging.h"
 #include "compiler/parser/tokenizer.h"
 
 using SymbolId = size_t;
@@ -70,6 +71,12 @@ struct NamedBinding {
   inline bool IsValue() const {
     // Functions are effectively just variables referring to a code block
     return kind == Function || IsVariable();
+  }
+
+  inline SymbolId GetSymbolId() const {
+    CHECK(symbol_id.has_value()) << "NamedBinding '" << name.text << "' ("
+                                 << kind << ") missing expected symbol_id";
+    return *symbol_id;
   }
 
   // Used for function table resolution, struct field ordering, etc.

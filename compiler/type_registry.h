@@ -53,6 +53,12 @@ struct StructType {
   ScopeId scope_id;
 };
 
+struct TemplateVariableType {
+  SpannedText name;
+  // If `constraint_type_id` is not provided then only match self.
+  std::optional<TypeId> constraint_type_id;
+};
+
 struct UnionType {
   std::vector<TypeId> types;
 
@@ -69,6 +75,7 @@ using Type = std::variant<AliasType,
                           OptionalType,
                           PlaceholderType,
                           StructType,
+                          TemplateVariableType,
                           UnionType>;
 
 // A global registry of all Types/Symbols created during compilation.
@@ -100,9 +107,9 @@ class TypeRegistry {
   // Creates a new FunctionSymbol for `declaration` in the symbol table and adds
   // a NamedBinding to it in the current scope. `parent_declaration` MUST be set
   // for method FunctionSymbols and should point to the owning parent struct.
-  SymbolId NewFunctionSymbol(
-      FunctionDeclaration& declaration,
-      std::optional<const StructDeclaration*> parent_declaration = std::nullopt);
+  SymbolId NewFunctionSymbol(FunctionDeclaration& declaration,
+                             std::optional<const StructDeclaration*>
+                                 parent_declaration = std::nullopt);
 
   // Interns `type` into the registry as `self_id` (or a newly generated TypeId
   // if one is not provided). Returns the TypeId for `type`.
@@ -117,6 +124,8 @@ class TypeRegistry {
   // PlaceholderTypes are interned by their positional `idx` in a template so
   // that we do not end up with an explosion of Types.
   TypeId NewPlaceholderType(SlotId idx);
+  TypeId NewTemplateVariableType(SpannedText name,
+                                 std::optional<TypeId> constraint_type_id);
 
   // Creates an alias with `name` linking `self_id` to `target_id`.
   void NewAliasType(std::string_view name, TypeId self_id, TypeId target_id);
@@ -134,6 +143,13 @@ class TypeRegistry {
   }
 
   template <typename T>
+  const T& GetTypeChecked(TypeId type_id) const {
+    const T* type = GetType<T>(type_id);
+    CHECK(type) << "Type expected for: " << type_id;
+    return *type;
+  }
+
+  template <typename T>
   T* GetSymbol(SymbolId id) {
     auto it = symbol_table_.find(id);
     return it != symbol_table_.end() ? std::get_if<T>(&it->second) : nullptr;
@@ -142,6 +158,13 @@ class TypeRegistry {
   template <typename T>
   const T* GetSymbol(SymbolId id) const {
     return const_cast<TypeRegistry*>(this)->GetSymbol<T>(id);
+  }
+
+  template <typename T>
+  const T& GetSymbolChecked(SymbolId id) const {
+    const T* symbol = GetSymbol<T>(id);
+    CHECK(symbol) << "Symbol expected for: " << id;
+    return *symbol;
   }
 
   const auto& symbol_table() const { return symbol_table_; }

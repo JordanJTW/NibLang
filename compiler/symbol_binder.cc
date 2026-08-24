@@ -43,9 +43,8 @@ void SymbolBinder::Process(const Block& block) {
         }
       }
 
-      struct_symbol->constrained_template_type_ids =
-          BindTemplateVariableConstraints(
-              struct_symbol->declaration.template_variables);
+      struct_symbol->template_variable_type_ids =
+          BindTemplateVariables(struct_symbol->declaration.template_variables);
 
       if (binding.realized_type_id) {  // Templated structs have no TypeId yet
         // DefineStructType() depends on method symbols already being populated.
@@ -53,8 +52,8 @@ void SymbolBinder::Process(const Block& block) {
                                        *binding.symbol_id, *struct_symbol,
                                        /*template_arguments=*/{});
       } else {
-        type_context_.GetTemplateOf(
-            binding, struct_symbol->constrained_template_type_ids);
+        type_context_.GetTemplateOf(binding,
+                                    struct_symbol->template_variable_type_ids);
       }
     });
   }
@@ -104,8 +103,8 @@ SymbolId SymbolBinder::NewFunction(
 
   auto* symbol = type_registry_.GetSymbol<FunctionSymbol>(symbol_id);
   CHECK(symbol) << "FunctionSymbol not registered to: " << symbol_id;
-  symbol->constrained_template_type_ids =
-      BindTemplateVariableConstraints(symbol->declaration.template_arguments);
+  symbol->template_variable_type_ids =
+      BindTemplateVariables(symbol->declaration.template_arguments);
 
   if (symbol->IsMethodBodyRequired() && !declaration.body) {
     error_collector_.Add(
@@ -121,18 +120,25 @@ SymbolId SymbolBinder::NewFunction(
   return symbol_id;
 }
 
-std::vector<TypeId> SymbolBinder::BindTemplateVariableConstraints(
+std::vector<TypeId> SymbolBinder::BindTemplateVariables(
     const std::vector<TemplateVariable>& template_variables) {
-  std::vector<TypeId> template_constraint_types;
+  std::vector<TypeId> template_variable_type_ids;
+  template_variable_type_ids.reserve(template_variables.size());
+
   for (const auto& [name, default_type, constraint_type] : template_variables) {
-    TypeId constraint_type_id = TypeRegistry::Any;
+    std::optional<TypeId> constraint_type_id;
     if (constraint_type) {
-      if (auto type_id = type_context_.GetTypeIdFor(*constraint_type))
+      if (auto type_id = type_context_.GetTypeIdFor(
+              *constraint_type)) {  // Errors logged in `GetTypeIdFor`
         constraint_type_id = *type_id;
+      } else {
+        constraint_type_id = TypeRegistry::Error;
+      }
     }
-    template_constraint_types.push_back(constraint_type_id);
+    template_variable_type_ids.push_back(
+        type_registry_.NewTemplateVariableType(name, constraint_type_id));
   }
-  return template_constraint_types;
+  return template_variable_type_ids;
 }
 
 void SymbolBinder::BindTypeAlias(const TypeAliasStatement& alias) {

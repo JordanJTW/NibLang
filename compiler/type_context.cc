@@ -196,8 +196,8 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
       /*idx=*/std::nullopt, self_id);
   fn.resolved = ResolvedFunction{.function_symbol = binding};
 
-  if (!fn.template_arguments.empty()) {
-    GetTemplateOf(binding, symbol->constrained_template_type_ids);
+  if (!symbol->template_variable_type_ids.empty()) {
+    GetTemplateOf(binding, symbol->template_variable_type_ids);
   }
 
   return binding;

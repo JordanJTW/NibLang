@@ -30,16 +30,22 @@ void print_error(std::string_view path,
     line_end = contents.size();
 
   std::string_view line = contents.substr(line_start, line_end - line_start);
-  size_t relative_offset = metadata.column_range.start - line_start;
 
-  std::string kPrefix =
-      std::string(prefix) + ": " + std::string(path) + ":" +
-      std::to_string(metadata.line_range.start) + ":" +
-      std::to_string(metadata.column_range.start - line_start + 1) + ":";
-  std::cerr << kPrefix << std::endl
-            << line << std::endl
-            << std::setw(relative_offset) << " "
-            << "^ " << message << std::endl;
+  size_t relative_offset = metadata.column_range.start - line_start;
+  size_t span_length = metadata.column_range.end - metadata.column_range.start;
+
+  std::string header = std::string(prefix) + ": " + std::string(path) + ":" +
+                       std::to_string(metadata.line_range.start) + ":" +
+                       std::to_string(relative_offset + 1) + ":";
+
+  std::string underline_line(relative_offset, ' ');
+  underline_line.push_back('^');
+  if (span_length > 1)
+    underline_line.append(span_length - 1, '~');
+
+  std::cerr << header << "\n"
+            << line << "\n"
+            << underline_line << " " << message << "\n";
 }
 
 }  // namespace

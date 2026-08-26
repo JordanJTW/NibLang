@@ -418,29 +418,32 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             return type_check_result;
           },
           [&](AssignmentExpression& assign) -> SemanticAnalyzer::Result {
-            Result lhs = RequireConcreteValue(assign.lhs, context);
+            Result lhs = CheckExpression(assign.lhs, context);
             Result rhs = RequireConcreteValue(assign.rhs, context);
 
             if (!lhs.has_value() || !rhs.has_value())
               return std::nullopt;
 
-            if (!lhs->binding.has_value() ||
-                !(lhs->binding->kind == NamedBinding::Kind::Variable ||
-                  lhs->binding->kind == NamedBinding::Kind::Field ||
-                  lhs->binding->kind == NamedBinding::Kind::Narrowed ||
-                  lhs->binding->kind == NamedBinding::Kind::Argument)) {
-              error_collector_
-                  .Add("can not assign to '" + lhs->binding->name.text + "'",
-                       assign.lhs->meta)
-                  .WithNote("declared here", lhs->binding->name.metadata);
-              return std::nullopt;
+            if (!lhs->binding || !lhs->binding->IsVariable()) {
+              if (lhs->binding) {
+                error_collector_
+                    .Add("cannot assign to '" + lhs->binding->name.text + "'",
+                         assign.lhs->meta)
+                    .WithNote("declared here", lhs->binding->name.metadata);
+                return std::nullopt;
+              } else {
+                error_collector_.Add("cannot assign to this expression",
+                                     assign.lhs->meta);
+                return std::nullopt;
+              }
             }
 
             if (!type_context_.IsTypeSubsetOf(*rhs->type_id, *lhs->type_id)) {
               error_collector_.Add(
-                  "mismatched assignment: " +
+                  "expected " +
                       type_registry_.GetNameFromTypeId(*lhs->type_id) +
-                      " vs. " + type_registry_.GetNameFromTypeId(*rhs->type_id),
+                      ", but found " +
+                      type_registry_.GetNameFromTypeId(*rhs->type_id),
                   expression->meta);
               return std::nullopt;
             }

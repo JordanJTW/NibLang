@@ -10,6 +10,9 @@
 
 namespace core {
 namespace logging {
+
+static bool s_logging_enabled = true;
+
 namespace internal {
 namespace {
 
@@ -49,6 +52,9 @@ LogMessage::LogMessage(const char* filename,
 }
 
 LogMessage::~LogMessage() {
+  if (!s_logging_enabled)
+    return;
+
   fprintf(stderr, "%s\n", stream_.str().c_str());
   if (severity_ == FATAL) {
     ImmediateCrash();
@@ -56,5 +62,10 @@ LogMessage::~LogMessage() {
 }
 
 }  // namespace internal
+
+void DisableLogging() {
+  s_logging_enabled = false;
+}
+
 }  // namespace logging
 }  // namespace core

@@ -41,7 +41,7 @@ target_link_libraries(types PRIVATE logging)
 
 add_executable(compiler main.cc)
 target_include_directories(compiler PRIVATE ${PROJECT_SOURCE_DIR})
-target_link_libraries(compiler PRIVATE bytecode_generator parser program_builder scope_manager type_context type_registry)
+target_link_libraries(compiler PRIVATE bytecode_generator logging parser program_builder scope_manager type_context type_registry)
 
 include(GoogleTest)
 

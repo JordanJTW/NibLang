@@ -140,7 +140,9 @@ Options ParseArgs(int argc, char* argv[]) {
       opts.mode = OutputMode::Ast;
     } else if (arg == "--dump") {
       opts.mode = OutputMode::DumpImage;
-    } else if (arg == "--output" && i + 1 < argc) {
+    } else if (arg == "--disable-logging") {
+      core::logging::DisableLogging();
+    }else if (arg == "--output" && i + 1 < argc) {
       opts.output_path = argv[++i];
     } else if (arg == "--debug" && i + 1 < argc) {
       opts.debug_path = argv[++i];
@@ -150,7 +152,7 @@ Options ParseArgs(int argc, char* argv[]) {
   }
 
   if (opts.input_path.empty()) {
-    fprintf(stderr, "Usage: %s [--ast|--dump] <file>\n", argv[0]);
+    fprintf(stderr, "Usage: %s [--ast|--dump|--disable-logging|--output <path>|--debug <path>] <file>\n", argv[0]);
     exit(1);
   }
 

@@ -656,27 +656,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
               return std::nullopt;
             }
 
-            std::vector<TypeId> type_ids;
-            type_ids.reserve(template_expr.template_types.size());
-
-            bool encountered_type_error = false;
-            for (const auto& type : template_expr.template_types) {
-              if (auto type_id = type_context_.GetTypeIdFor(type)) {
-                type_ids.push_back(type_id.value());
-              } else {
-                // Keep parsing the rest of the types even if an error is
-                // encountered with one to give as many errors as possible.
-                std::stringstream ss;
-                ss << "unknown type used as template argument: " << type;
-                error_collector_.Add(ss.str(), type.metadata);
-                encountered_type_error = true;
-              }
-            }
-            if (encountered_type_error)
-              return std::nullopt;
-
-            if (auto type_id =
-                    type_context_.GetTemplateOf(*result->binding, type_ids)) {
+            if (auto type_id = type_context_.GetTemplateOf(
+                    *result->binding, template_expr.template_types)) {
               return ExpressionResult::with_type_override(*type_id,
                                                           *result->binding);
             }
@@ -773,15 +754,17 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
     TypeResolver resolver(type_registry_, type_context_, error_collector_);
 
     std::vector<TypeId> deduced_bindings;
+    std::vector<Metadata> resolved_spans;
     if (resolver.Resolve(*callee_result.binding, argument_results,
-                         deduced_bindings, call_expr.callee->meta)) {
+                         deduced_bindings, resolved_spans,
+                         call_expr.callee->meta)) {
       // // If there were no template variables to deduce then this Symbol is
       // // likely a method on a templated struct -- do not realize it here.
       // if (deduced_bindings.empty())
       //   return std::nullopt;
 
-      callable_type_id =
-          type_context_.GetTemplateOf(*callee_result.binding, deduced_bindings);
+      callable_type_id = type_context_.GetTemplateOf(
+          *callee_result.binding, deduced_bindings, resolved_spans);
     }
   }
 
@@ -859,20 +842,19 @@ SemanticAnalyzer::Result SemanticAnalyzer::HandleMemberAccess(
             .Add("no member '" + member_name.text +
                      "' found on unconstrained template variable '" +
                      template_variable_type->name.text + "'",
-                 member_access.object->meta)
+                 member_name.metadata)
             .WithNote("defined here", template_variable_type->name.metadata);
         return std::nullopt;
       }
 
-      type_id = template_variable_type->constraint_type_id.value();
+      type_id = template_variable_type->constraint_type_id->type_id;
     }
 
     // Member access is only supported on structs
     const auto* const struct_type = type_registry_.GetType<StructType>(type_id);
     if (!struct_type) {
-      error_collector_.Add("type `" +
-                               type_registry_.GetNameFromTypeId(type_id) +
-                               "` does not support member access",
+      error_collector_.Add("type " + type_registry_.GetNameFromTypeId(type_id) +
+                               " does not support member access",
                            member_access.object->meta);
       return std::nullopt;
     }
@@ -908,8 +890,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::HandleMemberAccess(
     }
 
     error_collector_
-        .Add("no member '" + member_name.text + "' found on instance of `" +
-                 type_registry_.GetNameFromTypeId(type_id) + "`",
+        .Add("no member '" + member_name.text + "' found on instance of " +
+                 type_registry_.GetNameFromTypeId(type_id),
              member_name.metadata)
         .WithNote("declared here", struct_type->declaration.name.metadata);
     return std::nullopt;
@@ -919,8 +901,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::HandleMemberAccess(
       object_result->binding->symbol_id) {
     if (object_result->binding->kind != NamedBinding::Struct) {
       std::stringstream ss;
-      ss << "binding of kind " << object_result->binding->kind
-         << " does not support member access";
+      ss << "binding of kind '" << object_result->binding->kind
+         << "' does not support member access";
       error_collector_.Add(ss.str(), member_access.object->meta);
       return std::nullopt;
     }
@@ -952,9 +934,9 @@ SemanticAnalyzer::Result SemanticAnalyzer::HandleMemberAccess(
     }
 
     error_collector_
-        .Add("no member '" + member_name.text + "' found on type `" +
-                 struct_symbol.declaration.name.text + "`",
-             member_access.object->meta)
+        .Add("no member '" + member_name.text + "' found on type '" +
+                 struct_symbol.declaration.name.text + "'",
+             member_name.metadata)
         .WithNote("declared here", struct_symbol.declaration.name.metadata);
     return std::nullopt;
   }

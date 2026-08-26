@@ -1,0 +1,22 @@
+Error: [[PATH]]:8:3:
+  123 = 456;
+  ^~~ cannot assign to this expression
+
+Error: [[PATH]]:10:3:
+  "Hello" = "World";
+  ^~~~~~~ cannot assign to this expression
+
+Error: [[PATH]]:12:3:
+  String = 456;
+  ^~~~~~ cannot assign to 'String'
+Note: [[PATH]]:4:8:
+struct String {}
+       ^~~~~~ declared here
+
+Error: [[PATH]]:14:3:
+  main = 456;
+  ^~~~ cannot assign to 'main'
+Note: [[PATH]]:6:4:
+fn main() {
+   ^~~~ declared here
+

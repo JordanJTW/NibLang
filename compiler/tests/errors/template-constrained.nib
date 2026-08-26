@@ -1,0 +1,39 @@
+// RUN: %compiler %s --disable-logging 2> %t.err || true
+// RUN: sed "s|%s|[[PATH]]|g" %t.err | diff -u %s.out -
+
+interface Hashable {
+  fn hash() -> i32;
+}
+
+interface Other {
+  fn hash() -> i32;
+}
+
+struct Foo {
+  implements Hashable {
+    fn hash() -> i32 { return 369; }
+  }
+
+  implements Other {
+    fn hash() -> i32 { return 3087; }
+  }
+}
+
+struct Bar {
+  implements Other {
+    fn hash() -> i32 { return 109; }
+  }
+}
+
+fn takes_hash[T: Hashable](value: T) -> i32 {
+  return value.hash();
+}
+
+fn chain_hash[J: Hashable](value: J) -> i32 {
+  return takes_hash(value);
+}
+
+fn main() -> i32 {
+  takes_hash(Foo());
+  takes_hash(Bar());
+}

@@ -214,8 +214,8 @@ TEST_F(TypeContextTest, GetTemplateOf_Struct) {
   ASSERT_FALSE(binding.realized_type_id.has_value());
   ASSERT_TRUE(binding.symbol_id.has_value());
 
-  std::optional<TypeId> type_id =
-      type_context.GetTemplateOf(binding, {LiteralType::Bool});
+  std::optional<TypeId> type_id = type_context.GetTemplateOf(
+      binding, {LiteralType::Bool}, /*argument_spans=*/{{}});
   ASSERT_TRUE(type_id.has_value());
 
   // Check that struct type is registered
@@ -252,7 +252,8 @@ TEST_F(TypeContextTest, GetTemplateOf_Function) {
   EXPECT_TRUE(binding->symbol_id.has_value());
 
   std::optional<TypeId> type_id = type_context.GetTemplateOf(
-      *binding, {LiteralType::Bool, LiteralType::i32});
+      *binding, {LiteralType::Bool, LiteralType::i32},
+      /*argument_spans=*/{{}, {}});
   ASSERT_TRUE(type_id.has_value());
 
   auto fn_info = type_registry.GetType<FunctionType>(*type_id);
@@ -323,13 +324,13 @@ TEST_F(TypeContextTest, GetTemplateOf_Nested) {
   ASSERT_TRUE(binding.has_value());
 
   // Instantiates: DoIt[i32](arg: Array[Box[i32]]) -> Array[i32];
-  std::optional<TypeId> fn_type_id =
-      type_context.GetTemplateOf(*binding, {LiteralType::i32});
+  std::optional<TypeId> fn_type_id = type_context.GetTemplateOf(
+      *binding, {LiteralType::i32}, /*argument_spans=*/{{}});
   ASSERT_TRUE(fn_type_id.has_value());
 
   // Instantiates: Array[Box[bool]]::Push[Array[Box[bool]]];
-  std::optional<TypeId> struct_type_id =
-      type_context.GetTemplateOf(array_binding, {LiteralType::Bool});
+  std::optional<TypeId> struct_type_id = type_context.GetTemplateOf(
+      array_binding, {LiteralType::Bool}, /*argument_spans=*/{{}});
   ASSERT_TRUE(struct_type_id.has_value());
 
   const auto* struct_type = type_registry.GetType<StructType>(*struct_type_id);
@@ -339,8 +340,8 @@ TEST_F(TypeContextTest, GetTemplateOf_Nested) {
       "Push", ScopeManager::Current, struct_type->scope_id);
   ASSERT_TRUE(push_binding.has_value());
 
-  std::optional<TypeId> push_type_id =
-      type_context.GetTemplateOf(*push_binding, {*struct_type_id});
+  std::optional<TypeId> push_type_id = type_context.GetTemplateOf(
+      *push_binding, {*struct_type_id}, /*argument_spans=*/{{}});
   ASSERT_TRUE(push_type_id.has_value());
 }
 

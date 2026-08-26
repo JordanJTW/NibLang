@@ -35,6 +35,11 @@ void SymbolBinder::Process(const Block& block) {
   // Errors are logged from within `DefineStructType` and `DefineFunction`.
   for (auto& [binding, struct_symbol] : struct_bindings) {
     scope_manager_.WithScope(struct_symbol->self_scope_id, [&]() {
+      // Ensure that `template_variable_type_ids` is bound before processing
+      // static methods as they may instantiate this template indirectly.
+      struct_symbol->template_variable_type_ids =
+          BindTemplateVariables(struct_symbol->declaration.template_variables);
+
       for (auto& fn : struct_symbol->declaration.methods | std::views::values) {
         if (fn.function_kind == FunctionKind::StaticMethod) {
           // Intentionally not passing `self_id` for `static` methods.
@@ -44,18 +49,14 @@ void SymbolBinder::Process(const Block& block) {
         }
       }
 
-      struct_symbol->template_variable_type_ids =
-          BindTemplateVariables(struct_symbol->declaration.template_variables);
-
       if (binding.realized_type_id) {  // Templated structs have no TypeId yet
         // DefineStructType() depends on method symbols already being populated.
         type_context_.DefineStructType(
             *binding.realized_type_id, *binding.symbol_id, *struct_symbol,
             /*template_arguments=*/{}, TypeContext::CheckFunctionBody::YES);
       } else {
-        type_context_.GetTemplateOf(binding,
-                                    struct_symbol->template_variable_type_ids,
-                                    TypeContext::CheckFunctionBody::YES);
+        type_context_.GetGenericTemplateOf(
+            binding, struct_symbol->template_variable_type_ids);
       }
     });
   }
@@ -129,17 +130,18 @@ std::vector<TypeId> SymbolBinder::BindTemplateVariables(
   template_variable_type_ids.reserve(template_variables.size());
 
   for (const auto& [name, default_type, constraint_type] : template_variables) {
-    std::optional<TypeId> constraint_type_id;
+    std::optional<SpannedType> constraint_span_type;
     if (constraint_type) {
       if (auto type_id = type_context_.GetTypeIdFor(
               *constraint_type)) {  // Errors logged in `GetTypeIdFor`
-        constraint_type_id = *type_id;
+        constraint_span_type = SpannedType{*type_id, constraint_type->metadata};
       } else {
-        constraint_type_id = TypeRegistry::Error;
+        constraint_span_type =
+            SpannedType{TypeRegistry::Error, constraint_type->metadata};
       }
     }
     template_variable_type_ids.push_back(
-        type_registry_.NewTemplateVariableType(name, constraint_type_id));
+        type_registry_.NewTemplateVariableType(name, constraint_span_type));
   }
   return template_variable_type_ids;
 }

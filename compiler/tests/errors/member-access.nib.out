@@ -1,0 +1,43 @@
+Error: [[PATH]]:11:7:
+  Foo.instance_method();
+      ^~~~~~~~~~~~~~~ no member 'instance_method' found on type 'Foo'
+Note: [[PATH]]:4:8:
+struct Foo {
+       ^~~ declared here
+
+Error: [[PATH]]:15:7:
+  foo.static_method();
+      ^~~~~~~~~~~~~ no member 'static_method' found on instance of 'Foo'
+Note: [[PATH]]:4:8:
+struct Foo {
+       ^~~ declared here
+
+Error: [[PATH]]:17:7:
+  Foo.x;
+      ^ no member 'x' found on type 'Foo'
+Note: [[PATH]]:4:8:
+struct Foo {
+       ^~~ declared here
+
+Error: [[PATH]]:18:7:
+  Foo.not_method();
+      ^~~~~~~~~~ no member 'not_method' found on type 'Foo'
+Note: [[PATH]]:4:8:
+struct Foo {
+       ^~~ declared here
+
+Error: [[PATH]]:19:7:
+  foo.not_method();
+      ^~~~~~~~~~ no member 'not_method' found on instance of 'Foo'
+Note: [[PATH]]:4:8:
+struct Foo {
+       ^~~ declared here
+
+Error: [[PATH]]:21:3:
+  main.name;
+  ^~~~ type 'fn () -> Unit' does not support member access
+
+Error: [[PATH]]:22:3:
+  main.name();
+  ^~~~ type 'fn () -> Unit' does not support member access
+

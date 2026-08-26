@@ -142,10 +142,9 @@ TypeId TypeRegistry::NewPlaceholderType(SlotId idx) {
 
 TypeId TypeRegistry::NewTemplateVariableType(
     SpannedText name,
-    std::optional<TypeId> constraint_type_id) {
+    std::optional<SpannedType> constraint_type) {
   TypeId type_id = NewTypeId();
-  type_table_[type_id] =
-      TemplateVariableType(std::move(name), constraint_type_id);
+  type_table_[type_id] = TemplateVariableType(std::move(name), constraint_type);
   return type_id;
 }
 
@@ -153,10 +152,11 @@ TypeId TypeRegistry::NewTypeId() {
   return next_type_id_++;
 }
 
-std::string TypeRegistry::GetNameFromTypeId(TypeId type_id) const {
+std::string TypeRegistry::GetNameFromTypeId(TypeId type_id,
+                                            FormatOptions options) const {
   auto it = type_table_.find(type_id);
   if (it == type_table_.end()) {
-    return "Unknown";
+    return options.is_embedded_type ? "Unknown" : "'Unknown'";
   }
 
   return std::visit(
@@ -174,58 +174,104 @@ std::string TypeRegistry::GetNameFromTypeId(TypeId type_id) const {
                     {LiteralType::Never, "never"},
                     {LiteralType::Nil, "Nil"},
                 };
-            return kBuiltInTypeNames.at(type_id);
+            if (options.is_embedded_type)
+              return kBuiltInTypeNames.at(type_id);
+
+            return "'" + kBuiltInTypeNames.at(type_id) + "'";
           },
           [&](const FunctionType& type) {
             std::stringstream ss;
+
+            bool must_include_final_quote = false;
+            if (!options.is_embedded_type) {
+              must_include_final_quote = true;
+              ss << "'";
+            }
+
             ss << "fn (";
+            options.is_embedded_type = true;
             for (size_t i = 0; i < type.arg_types.size(); ++i) {
               if (i > 0)
                 ss << ", ";
-              ss << GetNameFromTypeId(type.arg_types[i]);
+              ss << GetNameFromTypeId(type.arg_types[i], options);
             }
             if (type.variadic_type) {
               if (!type.arg_types.empty())
                 ss << ", ";
-              ss << "..." << GetNameFromTypeId(*type.variadic_type);
+              ss << "..." << GetNameFromTypeId(*type.variadic_type, options);
             }
-            ss << ") -> " << GetNameFromTypeId(type.return_type);
+            ss << ") -> " << GetNameFromTypeId(type.return_type, options);
+            if (must_include_final_quote)
+              ss << "'";
             return ss.str();
           },
           [&](const StructType& type) {
             std::stringstream ss;
-            if (type.template_arguments.empty()) {
+
+            bool must_include_final_quote = false;
+            if (options.use_debug_names) {
               ss << type.declaration.kind << " " << type.declaration.name.text;
+            } else if (options.is_embedded_type) {
+              ss << type.declaration.name.text;
             } else {
-              ss << type.declaration.kind << " " << type.declaration.name.text
-                 << "[";
+              ss << "'" + type.declaration.name.text;
+              must_include_final_quote = true;
+            }
+
+            if (!type.template_arguments.empty()) {
+              ss << "[";
               for (size_t i = 0; i < type.template_arguments.size(); ++i) {
                 if (i > 0)
                   ss << ", ";
-                ss << GetNameFromTypeId(type.template_arguments[i]);
+                options.is_embedded_type = true;
+                ss << GetNameFromTypeId(type.template_arguments[i], options);
               }
               ss << "]";
             }
+
+            if (must_include_final_quote)
+              ss << "'";
             return ss.str();
           },
           [&](const TemplateVariableType& type) {
-            return "template variable '" + type.name.text;
+            if (options.is_embedded_type) {
+              return type.name.text;
+            }
+            if (options.use_debug_names) {
+              return "$" + type.name.text;
+            }
+            return "template variable '" + type.name.text + "'";
           },
           [&](const UnionType& type) {
             std::stringstream ss;
-            ss << "Union[";
+            ss << (options.use_debug_names ? "Union[" : "[");
+            options.is_embedded_type = true;
             for (size_t i = 0; i < type.types.size(); ++i) {
               if (i > 0)
                 ss << ", ";
-              ss << GetNameFromTypeId(type.types[i]);
+              ss << GetNameFromTypeId(type.types[i], options);
             }
             ss << "]";
             return ss.str();
           },
           [&](const OptionalType& type) {
-            return GetNameFromTypeId(type.wrapped_type) + "?";
+            bool should_quote = !options.is_embedded_type;
+            options.is_embedded_type = true;
+
+            if (should_quote)
+              return "'" + GetNameFromTypeId(type.wrapped_type, options) + "?'";
+
+            return GetNameFromTypeId(type.wrapped_type, options) + "?";
           },
-          [&](const AliasType& type) { return "Alias[" + type.name + "]"; },
+          [&](const AliasType& type) {
+            if (options.is_embedded_type) {
+              return type.name;
+            }
+            if (options.use_debug_names) {
+              return "Alias[" + type.name + "]";
+            }
+            return "alias '" + type.name + "'";
+          },
           [&](const PlaceholderType& type) {
             return "$" + std::to_string(type.idx);
           }},

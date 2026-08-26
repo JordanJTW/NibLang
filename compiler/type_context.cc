@@ -77,26 +77,8 @@ void TypeContext::DefineStructType(
     }
 
     std::optional<TypeId> type_id = binding->realized_type_id;
-    if (!type_id.has_value()) {
-      std::vector<TypeId> template_arguments;
-      bool encountered_type_error = false;
-      for (const auto& type : implementation.template_types) {
-        if (auto argument_type_id = GetTypeIdFor(type)) {
-          template_arguments.push_back(*argument_type_id);
-        } else {
-          // Keep parsing the rest of the types even if an error is
-          // encountered with one to give as many errors as possible.
-          std::stringstream ss;
-          ss << "unknown type used as template argument: " << type;
-          error_collector_.Add(ss.str(), type.metadata);
-          encountered_type_error = true;
-        }
-      }
-      if (encountered_type_error)
-        continue;
-
-      type_id = GetTemplateOf(*binding, template_arguments);
-    }
+    if (!type_id.has_value() && !implementation.template_types.empty())
+      type_id = GetTemplateOf(*binding, implementation.template_types);
 
     if (!type_id.has_value())
       continue;  // Errors will have already been logged by `GetTemplateOf`
@@ -199,8 +181,7 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
   fn.resolved = ResolvedFunction{.function_symbol = binding};
 
   if (!symbol->template_variable_type_ids.empty()) {
-    GetTemplateOf(binding, symbol->template_variable_type_ids,
-                  check_function_body);
+    GetGenericTemplateOf(binding, symbol->template_variable_type_ids);
   }
 
   return binding;
@@ -316,17 +297,8 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
               return std::nullopt;
             }
 
-            std::vector<TypeId> argument_type_ids;
-            for (const auto& parsed_type : parameterized_type.parameters) {
-              if (auto type_id = GetTypeIdFor(parsed_type)) {
-                argument_type_ids.push_back(type_id.value());
-              } else {
-                return std::nullopt;
-              }
-            }
-
-            return GetTemplateOf(binding.value(), argument_type_ids,
-                                 CheckFunctionBody::NO);
+            return GetTemplateOf(binding.value(),
+                                 parameterized_type.parameters);
           }},
       type.type);
 }
@@ -503,15 +475,80 @@ bool TypeContext::IsTypeSubsetOf(TypeId sub_type_id,
     // Intentional fall-through
   }
 
+  // Handles `T` being passed from one generic function to another.
+  if (std::holds_alternative<TemplateVariableType>(sub_type) &&
+      std::holds_alternative<StructType>(super_type)) {
+    const auto& super = std::get<StructType>(super_type);
+    const auto& sub = std::get<TemplateVariableType>(sub_type);
+
+    if (super.declaration.IsInterface() && sub.constraint_type_id) {
+      return sub.constraint_type_id->type_id == super_type_id;
+    }
+    // Intentional fall-through
+  }
+
+  // Placeholders should _only_ be used during type inference in which case we
+  // do not want to trigger false errors when checking constraints, etc.
+  // TODO: Should PlaceholderType(s) contain the same constraints as their var?
+  if (std::holds_alternative<PlaceholderType>(sub_type))
+    return true;
+
   // Neither type is a union so they must be different concrete types.
   return false;
+}
+
+std::optional<TypeId> TypeContext::GetGenericTemplateOf(
+    NamedBinding binding,
+    const std::vector<TypeId>& template_type_ids) {
+  std::vector<Metadata> template_spans;
+  template_spans.reserve(template_type_ids.size());
+
+  for (const auto& type_id : template_type_ids) {
+    const auto& template_type =
+        type_registry_.GetTypeChecked<TemplateVariableType>(type_id);
+    template_spans.push_back(template_type.name.metadata);
+  }
+
+  return GetTemplateOf(std::move(binding), template_type_ids, template_spans,
+                       CheckFunctionBody::YES);
+}
+
+std::optional<TypeId> TypeContext::GetTemplateOf(
+    NamedBinding binding,
+    const std::vector<ParsedType>& argument_types) {
+  std::vector<TypeId> argument_type_ids;
+  std::vector<Metadata> argument_spans;
+  argument_type_ids.reserve(argument_types.size());
+  argument_spans.reserve(argument_types.size());
+
+  bool encountered_type_error = false;
+  for (const auto& type : argument_types) {
+    if (auto type_id = GetTypeIdFor(type)) {
+      argument_type_ids.push_back(type_id.value());
+      argument_spans.push_back(type.metadata);
+    } else {
+      // Keep parsing the rest of the types even if an error is
+      // encountered with one to give as many errors as possible.
+      std::stringstream ss;
+      ss << "unknown type used as template argument: " << type;
+      error_collector_.Add(ss.str(), type.metadata);
+      encountered_type_error = true;
+    }
+  }
+  if (encountered_type_error)
+    return std::nullopt;
+
+  return GetTemplateOf(std::move(binding), argument_type_ids, argument_spans,
+                       CheckFunctionBody::NO);
 }
 
 std::optional<TypeId> TypeContext::GetTemplateOf(
     NamedBinding binding,
     const std::vector<TypeId>& argument_type_ids,
+    const std::vector<Metadata>& argument_spans,
     CheckFunctionBody check_fn_body) {
   CHECK(binding.symbol_id) << "Provided binding is missing SymbolId";
+  CHECK_EQ(argument_type_ids.size(), argument_spans.size());
 
   std::stringstream ss;
   for (size_t i = 0; i < argument_type_ids.size(); ++i) {
@@ -522,19 +559,29 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
   }
 
   auto check_template_constraints =
-      [&](const std::vector<SpannedType>& constraint_types) -> bool {
+      [&](const std::vector<TypeId>& template_variable_type_ids) -> bool {
     bool violated_constraint = false;
     for (size_t i = 0; i < argument_type_ids.size(); ++i) {
-      if (i > constraint_types.size())
+      // TODO: Should this be a CHECK error? Can this happen normally?
+      if (i >= template_variable_type_ids.size())
         return false;
 
-      if (!IsTypeSubsetOf(argument_type_ids[i], constraint_types[i].type_id)) {
-        error_collector_.Add(
-            "`" + type_registry_.GetNameFromTypeId(argument_type_ids[i]) +
-                "` does not inherit from constraint `" +
-                type_registry_.GetNameFromTypeId(constraint_types[i].type_id) +
-                "`",
-            constraint_types[i].metadata);
+      const auto& template_variable_type =
+          type_registry_.GetTypeChecked<TemplateVariableType>(
+              template_variable_type_ids[i]);
+
+      if (!template_variable_type.constraint_type_id)  // Skip unconstrained 'T'
+        continue;
+
+      const auto& [constraint_type_id, constraint_span] =
+          *template_variable_type.constraint_type_id;
+      if (!IsTypeSubsetOf(argument_type_ids[i], constraint_type_id)) {
+        error_collector_
+            .Add(type_registry_.GetNameFromTypeId(argument_type_ids[i]) +
+                     " does not satisfy interface constraint " +
+                     type_registry_.GetNameFromTypeId(constraint_type_id),
+                 argument_spans[i])
+            .WithNote("constraint declared here", constraint_span);
         violated_constraint = true;
       }
     }
@@ -563,6 +610,9 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
           {});
       return std::nullopt;
     }
+
+    if (check_template_constraints(symbol->template_variable_type_ids))
+      return std::nullopt;
 
     return scope_manager_.WithScope(
         symbol->self_scope_id, [&]() -> std::optional<TypeId> {
@@ -610,6 +660,9 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
                            {});
       return std::nullopt;
     }
+
+    if (check_template_constraints(symbol->template_variable_type_ids))
+      return std::nullopt;
 
     std::optional<ScopeId> parent_scope_id;
     if (binding.parent_type_id) {

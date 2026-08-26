@@ -11,3 +11,4 @@ config.test_exec_root = os.path.join(config.my_obj_root, 'test')
 
 config.environment['NIB_PATH'] = os.path.join(config.my_src_root, "compiler");
 config.substitutions.append(('%compiler', os.path.join(config.my_obj_root, 'compiler/compiler')))
+config.substitutions.append(('%run', os.path.join(config.my_obj_root, 'src/run')))

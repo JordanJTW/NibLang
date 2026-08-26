@@ -1,0 +1,23 @@
+// RUN: %compiler %s --disable-logging 2> %t.err || true
+// RUN: sed "s|%s|[[PATH]]|g" %t.err | diff -u %s.out -
+
+struct Foo {
+  static fn static_method() {}
+  fn instance_method() {}
+}
+
+fn main() {
+  Foo.static_method();
+  Foo.instance_method();
+
+  let foo = Foo();
+  foo.instance_method();
+  foo.static_method();
+
+  Foo.x;
+  Foo.not_method();
+  foo.not_method();
+
+  main.name;
+  main.name();
+}

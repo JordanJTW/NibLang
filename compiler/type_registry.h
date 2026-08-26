@@ -56,7 +56,7 @@ struct StructType {
 struct TemplateVariableType {
   SpannedText name;
   // If `constraint_type_id` is not provided then only match self.
-  std::optional<TypeId> constraint_type_id;
+  std::optional<SpannedType> constraint_type_id;
 };
 
 struct UnionType {
@@ -125,7 +125,7 @@ class TypeRegistry {
   // that we do not end up with an explosion of Types.
   TypeId NewPlaceholderType(SlotId idx);
   TypeId NewTemplateVariableType(SpannedText name,
-                                 std::optional<TypeId> constraint_type_id);
+                                 std::optional<SpannedType> constraint_type);
 
   // Creates an alias with `name` linking `self_id` to `target_id`.
   void NewAliasType(std::string_view name, TypeId self_id, TypeId target_id);
@@ -133,8 +133,14 @@ class TypeRegistry {
   // Vends a new TypeId. The TypeId MUST be used (i.e. registered promptly).
   TypeId NewTypeId();
 
+  struct FormatOptions {
+    bool is_embedded_type;
+    bool use_debug_names;
+  };
+
   // Returns a human-readable representation of an interned `type_id`.
-  std::string GetNameFromTypeId(TypeId type_id) const;
+  std::string GetNameFromTypeId(TypeId type_id,
+                                FormatOptions options = {}) const;
 
   template <typename T>
   const T* GetType(TypeId type_id) const {

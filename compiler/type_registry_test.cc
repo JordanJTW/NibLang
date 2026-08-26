@@ -139,17 +139,17 @@ TEST_F(TypeRegistryTest, NewOptionalType) {
 }
 
 TEST_F(TypeRegistryTest, GetNameFromTypeId_BuiltIns) {
-  EXPECT_EQ(type_registry.GetNameFromTypeId(LiteralType::Unit), "Unit");
-  EXPECT_EQ(type_registry.GetNameFromTypeId(LiteralType::i32), "i32");
-  EXPECT_EQ(type_registry.GetNameFromTypeId(LiteralType::f32), "f32");
+  EXPECT_EQ(type_registry.GetNameFromTypeId(LiteralType::Unit), "'Unit'");
+  EXPECT_EQ(type_registry.GetNameFromTypeId(LiteralType::i32), "'i32'");
+  EXPECT_EQ(type_registry.GetNameFromTypeId(LiteralType::f32), "'f32'");
   EXPECT_EQ(type_registry.GetNameFromTypeId(LiteralType::Codepoint),
-            "Codepoint");
-  EXPECT_EQ(type_registry.GetNameFromTypeId(LiteralType::Bool), "bool");
-  EXPECT_EQ(type_registry.GetNameFromTypeId(LiteralType::Any), "any");
-  EXPECT_EQ(type_registry.GetNameFromTypeId(LiteralType::Never), "never");
+            "'Codepoint'");
+  EXPECT_EQ(type_registry.GetNameFromTypeId(LiteralType::Bool), "'bool'");
+  EXPECT_EQ(type_registry.GetNameFromTypeId(LiteralType::Any), "'any'");
+  EXPECT_EQ(type_registry.GetNameFromTypeId(LiteralType::Never), "'never'");
   // Nil is special (an intrinsic type for a value) and should never be a part
-  // of a Type definition but it is convenient to still allow printing it.
-  EXPECT_EQ(type_registry.GetNameFromTypeId(LiteralType::Nil), "Nil");
+  // of a Type definition, but it is convenient to still allow printing it.
+  EXPECT_EQ(type_registry.GetNameFromTypeId(LiteralType::Nil), "'Nil'");
 }
 
 TEST_F(TypeRegistryTest, GetNameFromTypeId_FunctionType) {
@@ -158,7 +158,8 @@ TEST_F(TypeRegistryTest, GetNameFromTypeId_FunctionType) {
                     /*variadic_type=*/std::nullopt};
 
   TypeId type_id = type_registry.NewFunctionType(std::move(type));
-  EXPECT_EQ(type_registry.GetNameFromTypeId(type_id), "fn (i32, bool) -> f32");
+  EXPECT_EQ(type_registry.GetNameFromTypeId(type_id),
+            "'fn (i32, bool) -> f32'");
 }
 
 TEST_F(TypeRegistryTest, GetNameFromTypeId_FunctionTypeWithVariadic) {
@@ -168,10 +169,10 @@ TEST_F(TypeRegistryTest, GetNameFromTypeId_FunctionTypeWithVariadic) {
 
   TypeId type_id = type_registry.NewFunctionType(std::move(type));
   EXPECT_EQ(type_registry.GetNameFromTypeId(type_id),
-            "fn (i32, bool, ...i32) -> f32");
+            "'fn (i32, bool, ...i32) -> f32'");
 }
 
-TEST_F(TypeRegistryTest, GetNameFromTypeId_StructType) {
+TEST_F(TypeRegistryTest, GetNameFromTypeId_StructType_Production) {
   StructDeclaration declaration = {SpannedText{"Foo"},
                                    /*template_arguments=*/{},
                                    /*fields=*/{},
@@ -183,10 +184,26 @@ TEST_F(TypeRegistryTest, GetNameFromTypeId_StructType) {
   TypeId type_id = type_registry.NewTypeId();
   type_registry.NewStructType(std::move(type), type_id);
 
-  EXPECT_EQ(type_registry.GetNameFromTypeId(type_id), "struct Foo");
+  EXPECT_EQ(type_registry.GetNameFromTypeId(type_id), "'Foo'");
 }
 
-TEST_F(TypeRegistryTest, GetNameFromTypeId_StructTypeWithTemplate) {
+TEST_F(TypeRegistryTest, GetNameFromTypeId_StructType_Debug) {
+  StructDeclaration declaration = {SpannedText{"Foo"},
+                                   /*template_arguments=*/{},
+                                   /*fields=*/{},
+                                   /*methods=*/{},
+                                   /*interfaces=*/{},
+                                   /*kind=*/StructDeclaration::Structure};
+  StructType type{declaration};
+
+  TypeId type_id = type_registry.NewTypeId();
+  type_registry.NewStructType(std::move(type), type_id);
+
+  TypeRegistry::FormatOptions options{.use_debug_names = true};
+  EXPECT_EQ(type_registry.GetNameFromTypeId(type_id, options), "struct Foo");
+}
+
+TEST_F(TypeRegistryTest, GetNameFromTypeId_StructTypeWithTemplate_Production) {
   StructDeclaration declaration = {SpannedText{"Foo"},
                                    /*template_arguments=*/{},
                                    /*fields=*/{},
@@ -203,36 +220,77 @@ TEST_F(TypeRegistryTest, GetNameFromTypeId_StructTypeWithTemplate) {
   TypeId type_id = type_registry.NewTypeId();
   type_registry.NewStructType(type, type_id);
 
-  EXPECT_EQ(type_registry.GetNameFromTypeId(type_id), "struct Foo[i32, bool]");
+  EXPECT_EQ(type_registry.GetNameFromTypeId(type_id), "'Foo[i32, bool]'");
 }
 
-TEST_F(TypeRegistryTest, GetNameFromTypeId_UnionType) {
+TEST_F(TypeRegistryTest, GetNameFromTypeId_StructTypeWithTemplate_Debug) {
+  StructDeclaration declaration = {SpannedText{"Foo"},
+                                   /*template_arguments=*/{},
+                                   /*fields=*/{},
+                                   /*methods=*/{},
+                                   /*interfaces=*/{},
+                                   /*kind=*/StructDeclaration::Interface};
+  StructType type{declaration,
+                  /*field_types=*/{},
+                  /*template_arguments=*/{LiteralType::i32, LiteralType::Bool},
+                  /*interface_types=*/{},
+                  /*interface_scopes=*/{},
+                  /*scope_id*/ 0};
+
+  TypeId type_id = type_registry.NewTypeId();
+  type_registry.NewStructType(type, type_id);
+
+  TypeRegistry::FormatOptions options{.use_debug_names = true};
+  EXPECT_EQ(type_registry.GetNameFromTypeId(type_id, options),
+            "interface Foo[i32, bool]");
+}
+
+TEST_F(TypeRegistryTest, GetNameFromTypeId_UnionType_Production) {
   UnionType type{
       /*names=*/{LiteralType::Bool, LiteralType::i32, LiteralType::Codepoint}};
 
   TypeId type_id = type_registry.NewUnionType(std::move(type));
 
-  EXPECT_EQ(type_registry.GetNameFromTypeId(type_id),
+  EXPECT_EQ(type_registry.GetNameFromTypeId(type_id), "[bool, i32, Codepoint]");
+}
+
+TEST_F(TypeRegistryTest, GetNameFromTypeId_UnionType_Debug) {
+  UnionType type{
+      /*names=*/{LiteralType::Bool, LiteralType::i32, LiteralType::Codepoint}};
+
+  TypeId type_id = type_registry.NewUnionType(std::move(type));
+
+  TypeRegistry::FormatOptions options{.use_debug_names = true};
+  EXPECT_EQ(type_registry.GetNameFromTypeId(type_id, options),
             "Union[bool, i32, Codepoint]");
 }
 
 TEST_F(TypeRegistryTest, GetNameFromTypeId_OptionalType) {
   TypeId type_id = type_registry.NewOptionalType(LiteralType::Codepoint);
 
-  EXPECT_EQ(type_registry.GetNameFromTypeId(type_id), "Codepoint?");
+  EXPECT_EQ(type_registry.GetNameFromTypeId(type_id), "'Codepoint?'");
 }
 
-TEST_F(TypeRegistryTest, GetNameFromTypeId_AliasType) {
+TEST_F(TypeRegistryTest, GetNameFromTypeId_AliasType_Production) {
   TypeId self_id = type_registry.NewTypeId();
   type_registry.NewAliasType("foo", self_id,
                              /*target_id=*/LiteralType::Codepoint);
 
-  EXPECT_EQ(type_registry.GetNameFromTypeId(self_id), "Alias[foo]");
+  EXPECT_EQ(type_registry.GetNameFromTypeId(self_id), "alias 'foo'");
+}
+
+TEST_F(TypeRegistryTest, GetNameFromTypeId_AliasType_Debug) {
+  TypeId self_id = type_registry.NewTypeId();
+  type_registry.NewAliasType("foo", self_id,
+                             /*target_id=*/LiteralType::Codepoint);
+
+  TypeRegistry::FormatOptions options{.use_debug_names = true};
+  EXPECT_EQ(type_registry.GetNameFromTypeId(self_id, options), "Alias[foo]");
 }
 
 TEST_F(TypeRegistryTest, GetNameFromTypeId_Unknown) {
   TypeId unassigned_id = type_registry.NewTypeId();
-  EXPECT_EQ(type_registry.GetNameFromTypeId(unassigned_id), "Unknown");
+  EXPECT_EQ(type_registry.GetNameFromTypeId(unassigned_id), "'Unknown'");
 }
 
 TEST_F(TypeRegistryTest, FunctionType_OperatorEqual) {

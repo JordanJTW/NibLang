@@ -15,7 +15,7 @@
 
 class TypeResolver {
  public:
-  using Bindings = std::unordered_map<SlotId, TypeId>;
+  using Bindings = std::unordered_map<SlotId, SpannedType>;
 
   explicit TypeResolver(TypeRegistry& type_registry,
                         TypeContext& type_context,
@@ -28,7 +28,10 @@ class TypeResolver {
   // If a conflicting Type is resolved for an existing template parameter in
   // `bindings` then false will be returned (and an error logged).
   // Array[Box[i32]] + Array[T] => { T: Box[i32] }
-  bool Resolve(TypeId pattern_type, TypeId concrete_type, Bindings& bindings);
+  bool Resolve(TypeId pattern_type,
+               TypeId concrete_type,
+               Metadata resolution_span,
+               Bindings& bindings);
 
   // Attempts to deduce all required types to instantiate `binding` (which
   // represents a struct or function) given the `argument_types` used at a call-
@@ -39,6 +42,7 @@ class TypeResolver {
   bool Resolve(NamedBinding binding,
                const CallArguments& argument_types,
                std::vector<TypeId>& bindings,
+               std::vector<Metadata>& bound_spans,
                Metadata expression_metadata);
 
  private:

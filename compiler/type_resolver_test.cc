@@ -87,9 +87,10 @@ TEST_F(TypeResolverTest, BindToPrimaryType) {
   auto pattern = NewType(ParsedType{"T"}, {"T"});
   auto concrete = NewType(ParsedType{"i32"});
 
-  EXPECT_TRUE(type_resolver.Resolve(pattern, concrete, bindings));
+  EXPECT_TRUE(
+      type_resolver.Resolve(pattern, concrete, /*metadata*/ {}, bindings));
   EXPECT_EQ(bindings.size(), 1u);
-  EXPECT_EQ(bindings[0], LiteralType::i32);
+  EXPECT_EQ(bindings[0].type_id, LiteralType::i32);
 }
 
 TEST_F(TypeResolverTest, ResolveConcreteTypes) {
@@ -97,7 +98,8 @@ TEST_F(TypeResolverTest, ResolveConcreteTypes) {
   auto pattern = NewType(MakeParameterized("Array", {{"i32"}}));
   auto concrete = NewType(MakeParameterized("Array", {{"f32"}}));
 
-  EXPECT_FALSE(type_resolver.Resolve(pattern, concrete, bindings));
+  EXPECT_FALSE(
+      type_resolver.Resolve(pattern, concrete, /*metadata*/ {}, bindings));
 }
 
 TEST_F(TypeResolverTest, BindNestedTemplateParameters) {
@@ -107,8 +109,9 @@ TEST_F(TypeResolverTest, BindNestedTemplateParameters) {
   auto concrete = NewType(
       MakeParameterized("Array", {MakeParameterized("Array", {{"bool"}})}));
 
-  EXPECT_TRUE(type_resolver.Resolve(pattern, concrete, bindings));
-  EXPECT_EQ(bindings[0], LiteralType::Bool);
+  EXPECT_TRUE(
+      type_resolver.Resolve(pattern, concrete, /*metadata*/ {}, bindings));
+  EXPECT_EQ(bindings[0].type_id, LiteralType::Bool);
 }
 
 TEST_F(TypeResolverTest, ConsistencyCheckMultiAppearance) {
@@ -116,8 +119,9 @@ TEST_F(TypeResolverTest, ConsistencyCheckMultiAppearance) {
   auto pattern = NewType(MakeFunction({{"T"}, {"T"}}, {"bool"}), {"T"});
   auto concrete = NewType(MakeFunction({{"i32"}, {"i32"}}, {"bool"}));
 
-  EXPECT_TRUE(type_resolver.Resolve(pattern, concrete, bindings));
-  EXPECT_EQ(bindings[0], LiteralType::i32);
+  EXPECT_TRUE(
+      type_resolver.Resolve(pattern, concrete, /*metadata*/ {}, bindings));
+  EXPECT_EQ(bindings[0].type_id, LiteralType::i32);
 }
 
 TEST_F(TypeResolverTest, FailsOnInconsistentBindings) {
@@ -125,7 +129,8 @@ TEST_F(TypeResolverTest, FailsOnInconsistentBindings) {
   auto pattern = NewType(MakeFunction({{"T"}, {"T"}}, {"bool"}), {"T"});
   auto concrete = NewType(MakeFunction({{"i32"}, {"f32"}}, {"bool"}));
 
-  EXPECT_FALSE(type_resolver.Resolve(pattern, concrete, bindings));
+  EXPECT_FALSE(
+      type_resolver.Resolve(pattern, concrete, /*metadata*/ {}, bindings));
 }
 
 // It is valid to make the type more specific i.e. narrowed from Optional.
@@ -135,8 +140,9 @@ TEST_F(TypeResolverTest, ImplicitOptionalPromotion) {
   auto pattern = NewType(MakeOptional({"T"}), {"T"});
   auto concrete = NewType(MakeParameterized("Array", {{"f32"}}));
 
-  EXPECT_TRUE(type_resolver.Resolve(pattern, concrete, bindings));
-  EXPECT_EQ(bindings[0], concrete);
+  EXPECT_TRUE(
+      type_resolver.Resolve(pattern, concrete, /*metadata*/ {}, bindings));
+  EXPECT_EQ(bindings[0].type_id, concrete);
 }
 
 TEST_F(TypeResolverTest, FunctionReturnMatch) {
@@ -145,8 +151,9 @@ TEST_F(TypeResolverTest, FunctionReturnMatch) {
   auto return_type = MakeParameterized("Array", {{"f32"}});
   auto concrete = NewType(MakeFunction({{"i32"}}, return_type));
 
-  EXPECT_TRUE(type_resolver.Resolve(pattern, concrete, bindings));
-  EXPECT_EQ(bindings[0], NewType(return_type));
+  EXPECT_TRUE(
+      type_resolver.Resolve(pattern, concrete, /*metadata*/ {}, bindings));
+  EXPECT_EQ(bindings[0].type_id, NewType(return_type));
 }
 
 TEST_F(TypeResolverTest, FunctionWithTemplateArgAndReturn) {
@@ -154,9 +161,10 @@ TEST_F(TypeResolverTest, FunctionWithTemplateArgAndReturn) {
   auto pattern = NewType(MakeFunction({{"T"}}, {"RT"}), {"T", "RT"});
   auto concrete = NewType(MakeFunction({{"i32"}}, {"bool"}));
 
-  EXPECT_TRUE(type_resolver.Resolve(pattern, concrete, bindings));
-  EXPECT_EQ(bindings[0], LiteralType::i32);
-  EXPECT_EQ(bindings[1], LiteralType::Bool);
+  EXPECT_TRUE(
+      type_resolver.Resolve(pattern, concrete, /*metadata*/ {}, bindings));
+  EXPECT_EQ(bindings[0].type_id, LiteralType::i32);
+  EXPECT_EQ(bindings[1].type_id, LiteralType::Bool);
 }
 
 TEST_F(TypeResolverTest, OptionalWithNil) {
@@ -164,8 +172,9 @@ TEST_F(TypeResolverTest, OptionalWithNil) {
   auto pattern = NewType(MakeOptional({"T"}), {"T"});
   auto concrete = LiteralType::Nil;
 
-  EXPECT_TRUE(type_resolver.Resolve(pattern, concrete, bindings));
-  EXPECT_EQ(bindings[0], LiteralType::Nil);
+  EXPECT_TRUE(
+      type_resolver.Resolve(pattern, concrete, /*metadata*/ {}, bindings));
+  EXPECT_EQ(bindings[0].type_id, LiteralType::Nil);
 }
 
 TEST_F(TypeResolverTest, ResolveConstructor) {
@@ -180,9 +189,10 @@ TEST_F(TypeResolverTest, ResolveConstructor) {
   const auto& [binding, symbol] = symbol_binder.BindStruct(declaration);
 
   std::vector<TypeId> deduced_bindings;
+  std::vector<Metadata> resolved_spans;
   EXPECT_TRUE(type_resolver.Resolve(
       binding, {SpannedType{LiteralType::f32}, SpannedType{LiteralType::Bool}},
-      deduced_bindings, /*expression_metadata=*/{}));
+      deduced_bindings, resolved_spans, /*expression_metadata=*/{}));
 
   EXPECT_THAT(deduced_bindings,
               ElementsAre(LiteralType::f32, LiteralType::Bool));
@@ -200,15 +210,17 @@ TEST_F(TypeResolverTest, ResolveConstructorWithMissingArgument) {
   const auto& [binding, symbol] = symbol_binder.BindStruct(declaration);
 
   std::vector<TypeId> deduced_bindings;
+  std::vector<Metadata> resolved_spans;
   EXPECT_TRUE(type_resolver.Resolve(
       binding, {std::nullopt, SpannedType{LiteralType::f32}}, deduced_bindings,
+      resolved_spans,
       /*expression_metadata=*/{}));
 
   EXPECT_THAT(deduced_bindings, ElementsAre(LiteralType::f32));
 
   deduced_bindings.clear();  // Ensure we get fresh bindings :^)
   EXPECT_TRUE(type_resolver.Resolve(binding, {SpannedType{LiteralType::Bool}},
-                                    deduced_bindings,
+                                    deduced_bindings, resolved_spans,
                                     /*expression_metadata=*/{}));
 
   EXPECT_THAT(deduced_bindings, ElementsAre(LiteralType::Bool));

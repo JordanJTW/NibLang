@@ -30,15 +30,20 @@ bool TypeResolver::Resolve(
     NamedBinding binding,
     const std::vector<std::optional<SpannedType>>& call_argument_types,
     std::vector<TypeId>& bindings,
+    std::vector<Metadata>& bound_spans,
     Metadata expression_metadata) {
   auto create_pattern_type =
       [this,
        &binding](const std::vector<TemplateVariable>& template_variables) {
         std::vector<TypeId> placeholder_type_ids(template_variables.size(), 0);
+        std::vector<Metadata> placeholder_metadata;
+        placeholder_metadata.reserve(template_variables.size());
         for (size_t idx = 0; idx < template_variables.size(); ++idx) {
           placeholder_type_ids[idx] = type_registry_.NewPlaceholderType(idx);
+          placeholder_metadata.push_back(template_variables[idx].name.metadata);
         }
         return type_context_.GetTemplateOf(binding, placeholder_type_ids,
+                                           placeholder_metadata,
                                            TypeContext::CheckFunctionBody::NO);
       };
 
@@ -61,7 +66,7 @@ bool TypeResolver::Resolve(
           continue;
 
         Resolve(pattern_type->arg_types[i], call_argument_types[i]->type_id,
-                deduced_bindings);
+                call_argument_types[i]->metadata, deduced_bindings);
       }
 
       if (pattern_type->variadic_type) {
@@ -71,17 +76,19 @@ bool TypeResolver::Resolve(
             continue;
 
           Resolve(*pattern_type->variadic_type, call_argument_types[i]->type_id,
-                  deduced_bindings);
+                  call_argument_types[i]->metadata, deduced_bindings);
         }
       }
 
       // Ensure `bindings` is sized correctly and cleared
       bindings.assign(variables.size(), 0);
+      bound_spans.assign(variables.size(), {});
 
       bool bound_all_variables = true;
       for (size_t idx = 0; idx < variables.size(); ++idx) {
         if (deduced_bindings.contains(idx)) {
-          bindings[idx] = deduced_bindings[idx];
+          bindings[idx] = deduced_bindings[idx].type_id;
+          bound_spans[idx] = deduced_bindings[idx].metadata;
           continue;
         }
 
@@ -112,16 +119,18 @@ bool TypeResolver::Resolve(
           continue;
 
         Resolve(pattern_type->field_types[i], call_argument_types[i]->type_id,
-                deduced_bindings);
+                call_argument_types[i]->metadata, deduced_bindings);
       }
-
-      bool bound_all_variables = true;
 
       // Ensure `bindings` is sized correctly and cleared
       bindings.assign(variables.size(), 0);
+      bound_spans.assign(variables.size(), {});
+
+      bool bound_all_variables = true;
       for (size_t idx = 0; idx < variables.size(); ++idx) {
         if (deduced_bindings.contains(idx)) {
-          bindings[idx] = deduced_bindings[idx];
+          bindings[idx] = deduced_bindings[idx].type_id;
+          bound_spans[idx] = deduced_bindings[idx].metadata;
           continue;
         }
 
@@ -146,20 +155,21 @@ bool TypeResolver::Resolve(
 
 bool TypeResolver::Resolve(TypeId pattern_type_id,
                            TypeId concrete_type_id,
+                           Metadata resolution_span,
                            Bindings& bindings) {
   const Type& pattern_type = type_registry_.type_table().at(pattern_type_id);
   const Type& concrete_type = type_registry_.type_table().at(concrete_type_id);
 
   if (const auto* placeholder = std::get_if<PlaceholderType>(&pattern_type)) {
     if (bindings.contains(placeholder->idx)) {
-      if (concrete_type_id == bindings.at(placeholder->idx))
+      if (concrete_type_id == bindings.at(placeholder->idx).type_id)
         return true;
 
       LOG(ERROR) << "Binding already set for $" << placeholder->idx;
       return false;
     }
 
-    bindings[placeholder->idx] = concrete_type_id;
+    bindings[placeholder->idx] = SpannedType{concrete_type_id, resolution_span};
     return true;
   }
 
@@ -167,7 +177,7 @@ bool TypeResolver::Resolve(TypeId pattern_type_id,
   if (std::holds_alternative<OptionalType>(pattern_type) &&
       !std::holds_alternative<OptionalType>(concrete_type)) {
     return Resolve(std::get<OptionalType>(pattern_type).wrapped_type,
-                   concrete_type_id, bindings);
+                   concrete_type_id, resolution_span, bindings);
   }
 
   if (pattern_type.index() != concrete_type.index())
@@ -176,7 +186,8 @@ bool TypeResolver::Resolve(TypeId pattern_type_id,
   return std::visit(
       Overloaded{
           [&](const AliasType& p, const AliasType& c) {
-            return Resolve(p.target_type_id, c.target_type_id, bindings);
+            return Resolve(p.target_type_id, c.target_type_id, resolution_span,
+                           bindings);
           },
           [&](const BuiltInType&, const BuiltInType&) {
             return pattern_type_id == concrete_type_id;
@@ -185,13 +196,16 @@ bool TypeResolver::Resolve(TypeId pattern_type_id,
             if (p.arg_types.size() != c.arg_types.size())
               return false;
             for (size_t i = 0; i < p.arg_types.size(); ++i) {
-              if (!Resolve(p.arg_types[i], c.arg_types[i], bindings))
+              if (!Resolve(p.arg_types[i], c.arg_types[i], resolution_span,
+                           bindings))
                 return false;
             }
-            return Resolve(p.return_type, c.return_type, bindings);
+            return Resolve(p.return_type, c.return_type, resolution_span,
+                           bindings);
           },
           [&](const OptionalType& p, const OptionalType& c) {
-            return Resolve(p.wrapped_type, c.wrapped_type, bindings);
+            return Resolve(p.wrapped_type, c.wrapped_type, resolution_span,
+                           bindings);
           },
           [&](const PlaceholderType&, const PlaceholderType&) {
             NOTREACHED() << "concrete type MUST not have placeholders";
@@ -210,7 +224,7 @@ bool TypeResolver::Resolve(TypeId pattern_type_id,
 
             for (size_t i = 0; i < p.template_arguments.size(); ++i) {
               if (!Resolve(p.template_arguments[i], c.template_arguments[i],
-                           bindings)) {
+                           resolution_span, bindings)) {
                 return false;
               }
             }
@@ -222,7 +236,7 @@ bool TypeResolver::Resolve(TypeId pattern_type_id,
             }
             // TODO: Ensure the ordering is consistent when interning
             for (size_t i = 0; i < p.types.size(); ++i) {
-              if (!Resolve(p.types[i], c.types[i], bindings))
+              if (!Resolve(p.types[i], c.types[i], resolution_span, bindings))
                 return false;
             }
             return true;

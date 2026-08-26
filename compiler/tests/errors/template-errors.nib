@@ -1,0 +1,25 @@
+// RUN: %compiler %s --disable-logging 2> %t.err || true
+// RUN: sed "s|%s|[[PATH]]|g" %t.err | diff -u %s.out -
+
+fn bad[T](value: T) {
+  value.next();
+}
+
+struct Foo[T] {
+  value: T;
+
+  fn bar() {
+    value = 456;
+  }
+
+  fn goo[N](value: N) {
+    self.value = Foo.of(N)(value);
+  }
+}
+
+fn main() {
+  bad(123);
+
+  let x = Foo.of(i32)(123);
+  x = Foo.of(bool)(true);
+}

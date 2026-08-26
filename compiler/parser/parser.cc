@@ -931,7 +931,6 @@ std::unique_ptr<Expression> Parser::ParsePrimary() {
 
 std::unique_ptr<Expression> Parser::ParseCall(
     std::unique_ptr<Expression> callee) {
-  Token start_token = current_token_;
   AdvanceToken();  // consume '('
 
   std::vector<std::unique_ptr<Expression>> arguments;
@@ -971,12 +970,17 @@ std::unique_ptr<Expression> Parser::ParseCall(
     }
   }
 
+  Token end_token = current_token_;  // Span should only come up to the last ')'
   CHECK(
       ConsumeToken(TokenKind::kCloseParen, "expected ')' to close arguments"));
 
-  return std::make_unique<Expression>(
-      Expression{CallExpression{std::move(callee), std::move(arguments)},
-                 Metadata::fromTokens(start_token, current_token_)});
+  // Ensure the CallExpression span includes the callee!
+  Metadata span = callee->meta;
+  span.column_range.end = end_token.meta.column_range.end;
+  span.line_range.end = end_token.meta.line_range.end;
+
+  return std::make_unique<Expression>(Expression{
+      CallExpression{std::move(callee), std::move(arguments)}, span});
 }
 
 std::optional<ParsedType> Parser::ParseType() {

@@ -56,7 +56,8 @@ void SymbolBinder::Process(const Block& block) {
             /*template_arguments=*/{}, TypeContext::CheckFunctionBody::YES);
       } else {
         type_context_.GetGenericTemplateOf(
-            binding, struct_symbol->template_variable_type_ids);
+            binding, struct_symbol->template_variable_type_ids,
+            TypeContext::CheckFunctionBody::YES);
       }
     });
   }

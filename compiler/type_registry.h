@@ -62,7 +62,7 @@ struct TemplateVariableType {
 struct UnionType {
   std::vector<TypeId> types;
 
-  bool operator==(const UnionType other) const;
+  bool operator==(const UnionType& other) const;
 
   struct Hash {
     size_t operator()(const UnionType& key) const;

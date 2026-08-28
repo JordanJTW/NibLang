@@ -16,7 +16,7 @@ struct Overloaded : Ts... {
 template <class... Ts>
 Overloaded(Ts...) -> Overloaded<Ts...>;
 
-inline void ComputeHash(size_t& seed, TypeId value) {
+void ComputeHash(size_t& seed, TypeId value) {
   seed ^= std::hash<TypeId>{}(value) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 }
 
@@ -42,7 +42,7 @@ size_t FunctionType::Hash::operator()(const FunctionType& key) const {
   return hash;
 }
 
-bool UnionType::operator==(const UnionType other) const {
+bool UnionType::operator==(const UnionType& other) const {
   return other.types == types;
 }
 

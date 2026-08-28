@@ -181,7 +181,8 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
   fn.resolved = ResolvedFunction{.function_symbol = binding};
 
   if (!symbol->template_variable_type_ids.empty()) {
-    GetGenericTemplateOf(binding, symbol->template_variable_type_ids);
+    GetGenericTemplateOf(binding, symbol->template_variable_type_ids,
+                         check_function_body);
   }
 
   return binding;
@@ -499,7 +500,8 @@ bool TypeContext::IsTypeSubsetOf(TypeId sub_type_id,
 
 std::optional<TypeId> TypeContext::GetGenericTemplateOf(
     NamedBinding binding,
-    const std::vector<TypeId>& template_type_ids) {
+    const std::vector<TypeId>& template_type_ids,
+    CheckFunctionBody check_function_body) {
   std::vector<Metadata> template_spans;
   template_spans.reserve(template_type_ids.size());
 
@@ -510,7 +512,7 @@ std::optional<TypeId> TypeContext::GetGenericTemplateOf(
   }
 
   return GetTemplateOf(std::move(binding), template_type_ids, template_spans,
-                       CheckFunctionBody::YES);
+                       check_function_body);
 }
 
 std::optional<TypeId> TypeContext::GetTemplateOf(
@@ -555,7 +557,8 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
     if (i > 0)
       ss << ", ";
 
-    ss << type_registry_.GetNameFromTypeId(argument_type_ids[i]);
+    TypeRegistry::FormatOptions options{.is_embedded_type = true};
+    ss << type_registry_.GetNameFromTypeId(argument_type_ids[i], options);
   }
 
   auto check_template_constraints =

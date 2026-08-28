@@ -6,10 +6,6 @@ Error: [[PATH]]:16:5:
     self.value = Foo.of(N)(value);
     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~ expected template variable 'T', but found 'Foo[N]'
 
-Error: [[PATH]]:16:5:
-    self.value = Foo.of(N)(value);
-    ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~ expected template variable 'T', but found 'Foo[N]'
-
 Error: [[PATH]]:5:9:
   value.next();
         ^~~~ no member 'next' found on unconstrained template variable 'T'
@@ -20,12 +16,4 @@ fn bad[T](value: T) {
 Error: [[PATH]]:24:3:
   x = Foo.of(bool)(true);
   ^~~~~~~~~~~~~~~~~~~~~~ expected 'Foo[i32]', but found 'Foo[bool]'
-
-Error: [[PATH]]:16:5:
-    self.value = Foo.of(N)(value);
-    ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~ expected template variable 'T', but found 'Foo[N]'
-
-Error: [[PATH]]:16:5:
-    self.value = Foo.of(N)(value);
-    ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~ expected template variable 'T', but found 'Foo[N]'
 

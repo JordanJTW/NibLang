@@ -77,13 +77,14 @@ class TypeContext {
 
   std::optional<TypeId> GetGenericTemplateOf(
       NamedBinding binding,
-      const std::vector<TypeId>& template_type_ids);
+      const std::vector<TypeId>& template_type_ids,
+      CheckFunctionBody check_fn_body = CheckFunctionBody::NO);
 
   std::optional<TypeId> GetTemplateOf(
       NamedBinding binding,
       const std::vector<ParsedType>& argument_types);
 
-  // Returns if TypeId if Nil or could be Nil i.e. Nil + Optional.
+  // Returns if TypeId is Nil or could be Nil i.e. Nil + Optional.
   bool IsTypeNilable(TypeId type_id) const;
 
   // Returns true if `sub_type_id` is a subset of `super_type_id` (i.e. can be

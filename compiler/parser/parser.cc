@@ -586,7 +586,7 @@ std::unique_ptr<Expression> Parser::ParseLogical() {
 std::unique_ptr<Expression> Parser::ParseComparison() {
   Token start_token = current_token_;
 
-  auto lhs = ParseAdditive();
+  auto lhs = ParseBitwise();
   if (!lhs)
     return nullptr;
 
@@ -599,6 +599,28 @@ std::unique_ptr<Expression> Parser::ParseComparison() {
     Token op = current_token_;
     AdvanceToken();
 
+    auto rhs = ParseBitwise();
+    if (!rhs)
+      return nullptr;
+
+    lhs = std::make_unique<Expression>(
+        Expression{BinaryExpression{op.kind, std::move(lhs), std::move(rhs)},
+                   Metadata::fromTokens(start_token, current_token_)});
+  }
+  return lhs;
+}
+
+std::unique_ptr<Expression> Parser::ParseBitwise() {
+  Token start_token = current_token_;
+
+  auto lhs = ParseAdditive();
+  if (!lhs)
+    return nullptr;
+
+  while (current_token_.kind == TokenKind::kAnd) {
+    Token op = current_token_;
+    AdvanceToken();
+
     auto rhs = ParseAdditive();
     if (!rhs)
       return nullptr;
@@ -607,6 +629,7 @@ std::unique_ptr<Expression> Parser::ParseComparison() {
         Expression{BinaryExpression{op.kind, std::move(lhs), std::move(rhs)},
                    Metadata::fromTokens(start_token, current_token_)});
   }
+
   return lhs;
 }
 
@@ -642,7 +665,8 @@ std::unique_ptr<Expression> Parser::ParseMultiplicative() {
     return nullptr;
 
   while (current_token_.kind == TokenKind::kMultiply ||
-         current_token_.kind == TokenKind::kDivide) {
+         current_token_.kind == TokenKind::kDivide ||
+         current_token_.kind == TokenKind::kPercent) {
     Token op = current_token_;
     AdvanceToken();
 

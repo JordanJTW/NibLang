@@ -44,6 +44,8 @@ typedef enum {
   OP_NOT,
   OP_INC,
   OP_CONCAT,
+  OP_BITWISE_AND,
+  OP_MODULO,
   // Comparisons
   OP_LESS_THAN,
   OP_LESS_OR_EQ,

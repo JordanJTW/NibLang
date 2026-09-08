@@ -486,6 +486,13 @@ void ByteCodeGenerator::EmitOp(const Token& op, bool is_string) {
     case TokenKind::kDivide:
       bytecode_.Divide();
       break;
+    case TokenKind::kPercent:
+      bytecode_.Modulo();
+      break;
+    case TokenKind::kAnd: {
+      bytecode_.BitwiseAnd();
+      break;
+    }
     case TokenKind::kCompareEq:
       bytecode_.Compare(OP_EQUAL);
       break;

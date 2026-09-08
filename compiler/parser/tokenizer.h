@@ -67,6 +67,8 @@ enum class TokenKind {
   kSkinnyArrow,       // ->
   kAndAnd,            // &&
   kOrOr,              // ||
+  kAnd,               // &
+  kPercent,           // %
   kComment,           // // comment text
   kTokenError,        // Token containing an error message from tokenization
   kEndExpr,           // ;

@@ -36,6 +36,7 @@ class Parser {
   std::unique_ptr<Expression> ParseAssignment();
   std::unique_ptr<Expression> ParseLogical();
   std::unique_ptr<Expression> ParseComparison();
+  std::unique_ptr<Expression> ParseBitwise();
   std::unique_ptr<Expression> ParseAdditive();
   std::unique_ptr<Expression> ParseMultiplicative();
   std::unique_ptr<Expression> ParseUnary();

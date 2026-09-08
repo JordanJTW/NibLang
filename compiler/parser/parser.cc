@@ -1016,7 +1016,7 @@ std::optional<ParsedType> Parser::ParseUnionType() {
 
   std::vector<ParsedType> types;
 
-  auto type = ParsePrimaryType();
+  auto type = ParseIntersectionType();
   if (!type)
     return std::nullopt;
 
@@ -1024,6 +1024,34 @@ std::optional<ParsedType> Parser::ParseUnionType() {
 
   while (current_token_.kind == TokenKind::kPipe) {
     AdvanceToken();  // consume '|'
+
+    auto next = ParseIntersectionType();
+    if (!next)
+      return std::nullopt;
+
+    types.push_back(std::move(next.value()));
+  }
+
+  if (types.size() == 1)
+    return types.front();
+
+  return ParsedType{ParsedUnionType{std::move(types)},
+                    Metadata::fromTokens(start_token, current_token_)};
+}
+
+std::optional<ParsedType> Parser::ParseIntersectionType() {
+  Token start_token = current_token_;
+
+  std::vector<ParsedType> types;
+
+  auto type = ParsePrimaryType();
+  if (!type)
+    return std::nullopt;
+
+  types.push_back(std::move(type.value()));
+
+  while (current_token_.kind == TokenKind::kAnd) {
+    AdvanceToken();  // consume '&'
 
     auto next = ParsePrimaryType();
     if (!next)
@@ -1035,7 +1063,7 @@ std::optional<ParsedType> Parser::ParseUnionType() {
   if (types.size() == 1)
     return types.front();
 
-  return ParsedType{ParsedUnionType{std::move(types)},
+  return ParsedType{ParsedIntersectionType{std::move(types)},
                     Metadata::fromTokens(start_token, current_token_)};
 }
 

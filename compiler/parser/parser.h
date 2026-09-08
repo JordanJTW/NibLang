@@ -65,6 +65,7 @@ class Parser {
 
   std::optional<ParsedType> ParseType();
   std::optional<ParsedType> ParseUnionType();
+  std::optional<ParsedType> ParseIntersectionType();
   std::optional<ParsedType> ParseFunctionType();
   std::optional<ParsedType> ParsePrimaryType();
   std::vector<ParsedType> ParseTypeList(TokenKind end_of_list_token);

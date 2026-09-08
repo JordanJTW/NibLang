@@ -66,6 +66,9 @@ class TypeContext {
   // Returns the TypeId for the union of `types`.
   TypeId GetUnionOf(const std::vector<TypeId>& types);
 
+  // Returns the TypeId for the intersection of `types`.
+  TypeId GetIntersectionOf(const std::vector<TypeId>& types);
+
   // Realizes a template of a struct or function pointed to by `binding` into a
   // concrete TypeId using `argument_type_ids` as template arguments.
   // `binding` MUST have a `symbol_id` of the template Symbol to realize.
@@ -91,6 +94,9 @@ class TypeContext {
   // used in its place). This is used for function argument type checking, etc.
   bool IsTypeSubsetOf(TypeId sub_type, TypeId super_type) const;
 
+  // Returns true if `t1` and `t2` so not are completely unrelated.
+  bool AreDisjointTypes(TypeId t1, TypeId t2) const;
+
   struct RealizedFunction {
     ScopeId scope_id;
     FunctionDeclaration& declaration;
@@ -112,6 +118,9 @@ class TypeContext {
 
   // Consolidates subtypes in the set into their implemented base interfaces.
   void FlattenSubtypesUnion(std::set<TypeId>& types) const;
+
+  // Simplifies the intersection type set by removing redundant base types.
+  void FlattenSubtypesIntersection(std::set<TypeId>& types) const;
 
   std::optional<TypeInstance> DeclareFunctionType(
       FunctionDeclaration& decl,

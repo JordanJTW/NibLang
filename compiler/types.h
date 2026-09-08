@@ -229,6 +229,10 @@ struct ParsedUnionType {
   std::vector<ParsedType> names;
 };
 
+struct ParsedIntersectionType {
+  std::vector<ParsedType> names;
+};
+
 struct ParsedFunctionType {
   std::vector<ParsedType> arguments;
   std::shared_ptr<ParsedType> return_value;
@@ -246,6 +250,7 @@ struct ParsedParameterizedType {
 struct ParsedType {
   std::variant<std::string,
                ParsedUnionType,
+               ParsedIntersectionType,
                ParsedFunctionType,
                ParsedOptionalType,
                ParsedParameterizedType>

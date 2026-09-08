@@ -51,6 +51,15 @@ std::ostream& operator<<(std::ostream& os, const ParsedType& type) {
                      os << type.names[i];
                    }
                  },
+                 [&](const ParsedIntersectionType& type) {
+                   os << "#";
+                   for (size_t i = 0; i < type.names.size(); ++i) {
+                     if (i > 0) {
+                       os << "&";
+                     }
+                     os << type.names[i];
+                   }
+                 },
                  [&](const ParsedFunctionType& type) {
                    os << "#fn (";
                    for (size_t i = 0; i < type.arguments.size(); ++i) {

@@ -42,6 +42,17 @@ size_t FunctionType::Hash::operator()(const FunctionType& key) const {
   return hash;
 }
 
+bool IntersectionType::operator==(const IntersectionType& other) const {
+  return other.types == types;
+}
+
+size_t IntersectionType::Hash::operator()(const IntersectionType& key) const {
+  size_t hash = 0;
+  for (TypeId arg : key.types)
+    ComputeHash(hash, arg);
+  return hash;
+}
+
 bool UnionType::operator==(const UnionType& other) const {
   return other.types == types;
 }
@@ -124,6 +135,18 @@ TypeId TypeRegistry::NewUnionType(UnionType type) {
 
   TypeId type_id = NewTypeId();
   interned_union_type_[type] = type_id;
+  type_table_[type_id] = type;
+  return type_id;
+}
+
+TypeId TypeRegistry::NewIntersectionType(IntersectionType type) {
+  if (const auto& it = interned_intersection_type_.find(type);
+      it != interned_intersection_type_.end()) {
+    return it->second;
+  }
+
+  TypeId type_id = NewTypeId();
+  interned_intersection_type_[type] = type_id;
   type_table_[type_id] = type;
   return type_id;
 }
@@ -248,7 +271,19 @@ std::string TypeRegistry::GetNameFromTypeId(TypeId type_id,
             options.is_embedded_type = true;
             for (size_t i = 0; i < type.types.size(); ++i) {
               if (i > 0)
-                ss << ", ";
+                ss << "|";
+              ss << GetNameFromTypeId(type.types[i], options);
+            }
+            ss << "]";
+            return ss.str();
+          },
+          [&](const IntersectionType& type) {
+            std::stringstream ss;
+            ss << (options.use_debug_names ? "Intersect[" : "[");
+            options.is_embedded_type = true;
+            for (size_t i = 0; i < type.types.size(); ++i) {
+              if (i > 0)
+                ss << "&";
               ss << GetNameFromTypeId(type.types[i], options);
             }
             ss << "]";

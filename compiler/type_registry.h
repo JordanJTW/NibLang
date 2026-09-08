@@ -31,6 +31,16 @@ struct FunctionType {
   };
 };
 
+struct IntersectionType {
+  std::vector<TypeId> types;
+
+  bool operator==(const IntersectionType& other) const;
+
+  struct Hash {
+    size_t operator()(const IntersectionType& key) const;
+  };
+};
+
 struct OptionalType {
   TypeId wrapped_type;
 };
@@ -72,6 +82,7 @@ struct UnionType {
 using Type = std::variant<AliasType,
                           BuiltInType,
                           FunctionType,
+                          IntersectionType,
                           OptionalType,
                           PlaceholderType,
                           StructType,
@@ -118,6 +129,8 @@ class TypeRegistry {
   TypeId NewFunctionType(FunctionType type);
   // Interns `type` into the registry by members. Returns the TypeId.
   TypeId NewUnionType(UnionType type);
+  // Interns `type` into the registry by members. Returns the TypeId.
+  TypeId NewIntersectionType(IntersectionType type);
   // Creates an Optional type wrapping `type_id` and returns Optional[T]'s ID.
   TypeId NewOptionalType(TypeId type_id);
   // Creates a PlaceholderType representing template variable at position `idx`.
@@ -191,6 +204,8 @@ class TypeRegistry {
   std::unordered_map<FunctionType, TypeId, FunctionType::Hash>
       interned_fn_type_;
   std::unordered_map<UnionType, TypeId, UnionType::Hash> interned_union_type_;
+  std::unordered_map<IntersectionType, TypeId, IntersectionType::Hash>
+      interned_intersection_type_;
   // Maps a TypeId to the TypeId of Optional[TypeId]
   std::unordered_map<TypeId, TypeId> interned_optional_type_;
 

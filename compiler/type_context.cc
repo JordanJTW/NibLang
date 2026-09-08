@@ -252,6 +252,20 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
 
             return GetUnionOf(type_ids);
           },
+          [&](const ParsedIntersectionType& type) -> std::optional<TypeId> {
+            std::vector<TypeId> type_ids;
+            for (const auto& name : type.names) {
+              std::optional<TypeId> type_id = GetTypeIdFor(name);
+              if (!type_id.has_value())
+                return std::nullopt;
+
+              type_ids.push_back(type_id.value());
+            }
+            CHECK_GT(type_ids.size(), 1)
+                << "Parser returned a weird ParsedIntersectionType";
+
+            return GetIntersectionOf(type_ids);
+          },
           [&](const ParsedFunctionType& type) -> std::optional<TypeId> {
             std::vector<TypeId> arg_types;
             for (const auto& arg : type.arguments) {
@@ -358,6 +372,75 @@ TypeId TypeContext::GetUnionOf(const std::vector<TypeId>& types) {
   auto key = UnionType{{normalized_types.begin(), normalized_types.end()}};
   const TypeId type_id = type_registry_.NewUnionType(std::move(key));
   return wrap_in_optional ? GetOptionalOf(type_id) : type_id;
+}
+
+TypeId TypeContext::GetIntersectionOf(const std::vector<TypeId>& types) {
+  // Look-up member types and normalize (sort/dedupe/flatten).
+  std::set<TypeId> intersection_types;  // std::set sorts and dedupes
+  std::vector<std::vector<TypeId>> union_types;
+  for (const auto& type_id : types) {
+    // If the member itself is an intersection, flatten it.
+    if (auto* u = type_registry_.GetType<IntersectionType>(type_id)) {
+      intersection_types.insert(u->types.begin(), u->types.end());
+    } else if (auto* u = type_registry_.GetType<UnionType>(type_id)) {
+      union_types.push_back(u->types);
+    } else if (auto* o = type_registry_.GetType<OptionalType>(type_id)) {
+      // Optional type `T?` is a union: `T | Nil` (see GetUnionOf).
+      union_types.push_back({o->wrapped_type, LiteralType::Nil});
+    } else {
+      intersection_types.insert(type_id);
+    }
+  }
+
+  FlattenSubtypesIntersection(intersection_types);
+
+  // An intersection with `Never` immediately collapses to `Never`
+  if (intersection_types.contains(LiteralType::Never))
+    return LiteralType::Never;
+
+  // If no there are no union types to distribute/normalize less work!
+  if (union_types.empty()) {
+    if (intersection_types.empty())
+      return LiteralType::Never;
+    if (intersection_types.size() == 1)
+      return *intersection_types.begin();
+
+    auto key = IntersectionType{
+        {intersection_types.begin(), intersection_types.end()}};
+    return type_registry_.NewIntersectionType(std::move(key));
+  }
+
+  // Cartesian Product Expansion (Distributive Law):
+  // https://proofwiki.org/wiki/Cartesian_Product_Distributes_over_Union
+  // This ensures types are normalized to "Disjunctive normal form"
+  // https://en.wikipedia.org/wiki/Disjunctive_normal_form
+  std::vector<TypeId> resulting_intersection_types;
+  std::function<void(size_t, std::vector<TypeId>&)> generate_combinations =
+      [&](size_t union_index, std::vector<TypeId>& current_combination) {
+        if (union_index == union_types.size()) {
+          std::vector<TypeId> combination(intersection_types.begin(),
+                                          intersection_types.end());
+          combination.insert(combination.end(), current_combination.begin(),
+                             current_combination.end());
+
+          // Allows disjoint intersection to collapse to `Never`, etc.
+          resulting_intersection_types.push_back(
+              GetIntersectionOf(combination));
+          return;
+        }
+
+        for (auto member_id : union_types[union_index]) {
+          current_combination.push_back(member_id);
+          generate_combinations(union_index + 1, current_combination);
+          current_combination.pop_back();
+        }
+      };
+
+  std::vector<TypeId> initial_combination;
+  generate_combinations(0, initial_combination);
+
+  // Allows any of the products that collapsed to `Never` to be stripped
+  return GetUnionOf(resulting_intersection_types);
 }
 
 bool TypeContext::IsTypeNilable(TypeId type_id) const {
@@ -511,6 +594,37 @@ bool TypeContext::IsTypeSubsetOf(TypeId sub_type_id,
 
   // Neither type is a union so they must be different concrete types.
   return false;
+}
+
+bool TypeContext::AreDisjointTypes(TypeId t1, TypeId t2) const {
+  if (t1 == t2)  // T & T => T
+    return false;
+
+  auto* t1_type = type_registry_.GetType<StructType>(t1);
+  auto* t2_type = type_registry_.GetType<StructType>(t2);
+
+  bool t1_is_interface = t1_type && t1_type->declaration.IsInterface();
+  bool t2_is_interface = t2_type && t2_type->declaration.IsInterface();
+
+  if (t1_is_interface && t2_is_interface)  // i.e. Hashable & Printable
+    return false;
+
+  if (t1_is_interface && t2_type) {  // i.e. Hashable & Foo
+    for (auto implemented_id : t1_type->interface_types) {
+      if (implemented_id == t2)
+        return false;
+    }
+  }
+
+  if (t2_is_interface && t1_type) {  // i.e. Foo & Hashable
+    for (auto implemented_id : t2_type->interface_types) {
+      if (implemented_id == t1)
+        return false;
+    }
+  }
+
+  // Default fallback for primitives vs structs, etc.
+  return true;
 }
 
 std::optional<TypeId> TypeContext::GetGenericTemplateOf(
@@ -721,18 +835,69 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
 }
 
 void TypeContext::FlattenSubtypesUnion(std::set<TypeId>& types) const {
+  std::set<TypeId> non_intersection_types;
+  for (TypeId type_id : types) {
+    if (!type_registry_.GetType<IntersectionType>(type_id)) {
+      non_intersection_types.insert(type_id);
+    }
+  }
+
   std::set<TypeId> type_ids_to_remove;
   for (const auto& type_id : types) {
+    // Handle absorption: `A | (A & B) => A`
+    if (auto* i = type_registry_.GetType<IntersectionType>(type_id)) {
+      for (TypeId component : i->types) {
+        if (non_intersection_types.contains(component)) {
+          type_ids_to_remove.insert(type_id);
+          break;
+        }
+      }
+      continue;
+    }
+
+    // Handles `Foo | Hashable => Hashable` since `Foo` is one member of the
+    // "set" that is `Hashable` (assuming `Foo` implements `Hashable`).
+    // Union widens constraints to the broadest common supertype.
     if (const auto* struct_type = type_registry_.GetType<StructType>(type_id)) {
       for (const auto& potential_interface : types) {
         if (type_id == potential_interface)
           continue;
 
-        // Handles `Foo | Hashable => Hashable` since `Foo` is one member of the
-        // "set" that is `Hashable` (assuming `Foo` implements `Hashable`).
-        // Union widens constraints to the broadest common supertype.
-        if (struct_type->interface_types.contains(potential_interface))
+        if (struct_type->interface_types.contains(potential_interface)) {
           type_ids_to_remove.insert(type_id);
+          break;
+        }
+      }
+    }
+  }
+
+  if (type_ids_to_remove.empty())
+    return;
+
+  std::erase_if(types, [&](TypeId type_id) {
+    return type_ids_to_remove.contains(type_id);
+  });
+}
+
+void TypeContext::FlattenSubtypesIntersection(std::set<TypeId>& types) const {
+  std::set<TypeId> type_ids_to_remove;
+  for (const auto& type_id : types) {
+    for (const auto& potential_interface : types) {
+      if (type_id == potential_interface)
+        continue;
+
+      // `Foo & Hashable` => `Foo`
+      // NOTE: This implicitly handles the absorption rule `A & (A | B) => A`
+      // since IsTypeSubsetOf() treats a union as a supertype of its members.
+      if (IsTypeSubsetOf(type_id, potential_interface)) {
+        type_ids_to_remove.insert(potential_interface);
+        continue;
+      }
+
+      // If two types are disjoint the entire intersection collapses to `Never`.
+      if (AreDisjointTypes(type_id, potential_interface)) {
+        types = {LiteralType::Never};
+        return;
       }
     }
   }

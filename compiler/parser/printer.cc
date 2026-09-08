@@ -177,7 +177,8 @@ void Printer::Print(const Statement& stmt, size_t indent) {
           [&](const ReturnStatement& ret) {
             std::cout << std::string(indent, ' ')
                       << "ReturnStatement:" << std::endl;
-            Print(*ret.value, indent + 2);
+            if (ret.value)  // If NULL it represents `return;`
+              Print(*ret.value, indent + 2);
           },
           [&](const ThrowStatement& thr) {
             std::cout << std::string(indent, ' ')

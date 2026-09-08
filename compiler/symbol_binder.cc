@@ -112,9 +112,8 @@ SymbolId SymbolBinder::NewFunction(
       BindTemplateVariables(symbol->declaration.template_arguments);
 
   if (symbol->IsMethodBodyRequired() && !declaration.body) {
-    error_collector_.Add(
-        "non-extern functions MUST have a body: " + declaration.name.text,
-        declaration.name.metadata);
+    error_collector_.Add("non-extern functions MUST have a body",
+                         declaration.name.metadata);
   }
 
   if (!symbol->IsExtern() && declaration.variadic_type) {

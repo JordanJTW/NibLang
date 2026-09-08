@@ -1542,12 +1542,14 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
       if (!SynchronizeOnError(is_arguments)) {
         return std::nullopt;
       }
+      // Ensure there is a _some_ span for diagnostics later
+      function_name = SpannedText{"<undefined>", fn_token.meta};
     } else {
       function_name = SpannedText::FromToken(std::move(name_token));
       AdvanceToken();  // after function name
     }
 
-    // Optionally parse template paramters i.e. [T, U = i32]
+    // Optionally parse template parameters i.e. [T, U = i32]
     if (current_token_.kind == TokenKind::kSquareOpen) {
       auto result = ParseTemplateDeclarationList();
       if (!result)
@@ -1623,7 +1625,7 @@ Parser::ParseFunctionArgumentList() {
       return std::nullopt;
     }
     // We are still in the context of the function and can parse the return
-    // type and/or the function body so return an empty arugment list.
+    // type and/or the function body so return an empty argument list.
     return Parser::FunctionArgumentList{};
   }
 

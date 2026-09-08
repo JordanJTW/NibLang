@@ -322,6 +322,9 @@ TypeId TypeContext::GetUnionOf(const std::vector<TypeId>& types) {
     // If the member itself is a union, flatten it.
     if (auto* u = type_registry_.GetType<UnionType>(type_id)) {
       normalized_types.insert(u->types.begin(), u->types.end());
+    } else if (auto* o = type_registry_.GetType<OptionalType>(type_id)) {
+      normalized_types.insert(o->wrapped_type);
+      normalized_types.insert(LiteralType::Nil);
     } else {
       normalized_types.insert(type_id);
     }
@@ -329,20 +332,32 @@ TypeId TypeContext::GetUnionOf(const std::vector<TypeId>& types) {
 
   // Never represents an impossible value, so T | Never simplifies to T.
   normalized_types.erase(LiteralType::Never);
-  // If all members collapsed away, the result is Never.
+
+  bool wrap_in_optional = false;
+  if (normalized_types.contains(LiteralType::Nil)) {
+    normalized_types.erase(LiteralType::Nil);
+    wrap_in_optional = true;
+  }
+
+  // Handles `Hashable | Foo` => `Hashable`
+  FlattenSubtypesUnion(normalized_types);
+
+  // If all members collapsed away, the result is Never (or Nil).
   if (normalized_types.empty())
-    return LiteralType::Never;
+    return wrap_in_optional ? LiteralType::Nil : LiteralType::Never;
 
   // If after normalization the union is just a single type, then return it.
   if (normalized_types.size() == 1) {
-    return *normalized_types.begin();
+    const TypeId type_id = *normalized_types.begin();
+    return wrap_in_optional ? GetOptionalOf(type_id) : type_id;
   }
 
   // Intern unions structurally to a TypeId for faster comparisons.
   // UnionType stores the types as a std::vector instead of a std::set
-  // to take advatange of better cache-locality (due to contiguous memory).
+  // to take advantage of better cache-locality (due to contiguous memory).
   auto key = UnionType{{normalized_types.begin(), normalized_types.end()}};
-  return type_registry_.NewUnionType(std::move(key));
+  const TypeId type_id = type_registry_.NewUnionType(std::move(key));
+  return wrap_in_optional ? GetOptionalOf(type_id) : type_id;
 }
 
 bool TypeContext::IsTypeNilable(TypeId type_id) const {
@@ -703,4 +718,29 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
 
   NOTREACHED() << "Do not know how to realize binding: " << binding;
   return std::nullopt;
+}
+
+void TypeContext::FlattenSubtypesUnion(std::set<TypeId>& types) const {
+  std::set<TypeId> type_ids_to_remove;
+  for (const auto& type_id : types) {
+    if (const auto* struct_type = type_registry_.GetType<StructType>(type_id)) {
+      for (const auto& potential_interface : types) {
+        if (type_id == potential_interface)
+          continue;
+
+        // Handles `Foo | Hashable => Hashable` since `Foo` is one member of the
+        // "set" that is `Hashable` (assuming `Foo` implements `Hashable`).
+        // Union widens constraints to the broadest common supertype.
+        if (struct_type->interface_types.contains(potential_interface))
+          type_ids_to_remove.insert(type_id);
+      }
+    }
+  }
+
+  if (type_ids_to_remove.empty())
+    return;
+
+  std::erase_if(types, [&](TypeId type_id) {
+    return type_ids_to_remove.contains(type_id);
+  });
 }

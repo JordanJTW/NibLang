@@ -110,6 +110,9 @@ class TypeContext {
   TypeRegistry& type_registry_;
   ErrorCollector& error_collector_;
 
+  // Consolidates subtypes in the set into their implemented base interfaces.
+  void FlattenSubtypesUnion(std::set<TypeId>& types) const;
+
   std::optional<TypeInstance> DeclareFunctionType(
       FunctionDeclaration& decl,
       CheckFunctionBody check_fn_body,

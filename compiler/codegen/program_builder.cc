@@ -46,11 +46,11 @@ std::optional<NamedBinding::Idx> ProgramBuilder::LinkExternalCallIdx(
           {"Promise_new", VM_BUILTIN_PROMISE_NEW},
           {"Promise_reject", VM_BUILTIN_PROMISE_REJECT},
           {"Promise_then", VM_BUILTIN_PROMISE_THEN},
-          {"String_charAt", VM_BUILTIN_STRINGS_GET},
+          {"String_charAt", VM_BUILTIN_STRING_GET},
           {"String_length", VM_BUILTIN_STRING_LENGTH},
-          {"String_startsWith", VM_BUILTIN_STRINGS_STARTWITH},
-          {"String_substr", VM_BUILTIN_STRINGS_SUBSTRING},
-          {"String_valueOf", VM_BUILTIN_STRINGS_VALUEOF},
+          {"String_startsWith", VM_BUILTIN_STRING_STARTS_WITH},
+          {"String_substr", VM_BUILTIN_STRING_SUBSTRING},
+          {"String_valueOf", VM_BUILTIN_STRING_VALUE_OF},
       };
 
   // Since some built-in functions (i.e. Array_withSize) overload a single

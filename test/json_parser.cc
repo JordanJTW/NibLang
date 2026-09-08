@@ -87,7 +87,7 @@ int main() {
                             .PushLocal(0)  // $input
                             .PushLocal(1)  // $index
                             .DebugString("str[] from skip_ws")
-                            .Call(VM_BUILTIN_STRINGS_GET, 2)
+                            .Call(VM_BUILTIN_STRING_GET, 2)
                             .StoreLocal(2)  // temp char
 
                             .PushLocal(2)
@@ -112,7 +112,7 @@ int main() {
           .Label("string_loop")
               .PushLocal(0)
               .PushLocal(1)
-              .Call(VM_BUILTIN_STRINGS_GET, 2)
+              .Call(VM_BUILTIN_STRING_GET, 2)
               .PushInt32('"')
               .Compare(OP_EQUAL)
               .JumpIfFalse("advance_char")
@@ -122,7 +122,7 @@ int main() {
                   .PushLocal(0)
                   .PushLocal(2)      // start_index
                   .PushLocal(1)      // current index
-                  .Call(VM_BUILTIN_STRINGS_SUBSTRING, 3)
+                  .Call(VM_BUILTIN_STRING_SUBSTRING, 3)
                   .Increment(1)  // skip closing '"'
                   .PushLocal(1)
                   .Return()
@@ -210,7 +210,7 @@ int main() {
           // check empty object
           .PushLocal(0)
           .PushLocal(1)
-          .Call(VM_BUILTIN_STRINGS_GET, 2)
+          .Call(VM_BUILTIN_STRING_GET, 2)
           .PushInt32('}')
           .DebugString("check for empty object")
           .Compare(OP_EQUAL)
@@ -262,7 +262,7 @@ int main() {
               .DebugString("going to check for ,")
               .PushLocal(0)
               .PushLocal(1)
-              .Call(VM_BUILTIN_STRINGS_GET, 2)
+              .Call(VM_BUILTIN_STRING_GET, 2)
               .PushInt32(',')
               .Compare(OP_EQUAL)
               .DebugString("Checking for ,")
@@ -274,7 +274,7 @@ int main() {
               .DebugString("check_end_object")
               .PushLocal(0)
               .PushLocal(1)
-              .Call(VM_BUILTIN_STRINGS_GET, 2)
+              .Call(VM_BUILTIN_STRING_GET, 2)
               .PushInt32('}')
               .Compare(OP_EQUAL)
               .JumpIfFalse("object_loop")
@@ -290,7 +290,7 @@ int main() {
         .PushLocal(0)
         .PushConstRef(1)
         .PushLocal(1)
-        .Call(VM_BUILTIN_STRINGS_STARTWITH, 3)
+        .Call(VM_BUILTIN_STRING_STARTS_WITH, 3)
         .JumpIfFalse("check_false")
             .PushInt32(4)     // $idx += 4;
             .PushLocal(1)
@@ -304,7 +304,7 @@ int main() {
         .PushLocal(0)
         .PushConstRef(2)
         .PushLocal(1)
-        .Call(VM_BUILTIN_STRINGS_STARTWITH, 3)
+        .Call(VM_BUILTIN_STRING_STARTS_WITH, 3)
         .JumpIfFalse("check_null")
             .PushInt32(5)     // $idx += 5;
             .PushLocal(1)
@@ -318,7 +318,7 @@ int main() {
         .PushLocal(0)
         .PushConstRef(3)
         .PushLocal(1)
-        .Call(VM_BUILTIN_STRINGS_STARTWITH, 3)
+        .Call(VM_BUILTIN_STRING_STARTS_WITH, 3)
         .JumpIfFalse("not_handled")
             .PushInt32(4)     // $idx += 5;
             .PushLocal(1)
@@ -341,7 +341,7 @@ int main() {
 
           .PushLocal(0)
           .PushLocal(1)
-          .Call(VM_BUILTIN_STRINGS_GET, 2)
+          .Call(VM_BUILTIN_STRING_GET, 2)
           .StoreLocal(2)             // ch
 
           .PushLocal(2)
@@ -393,7 +393,7 @@ int main() {
       // if s[i] == '-'
       .PushLocal(0)
       .PushLocal(1)
-      .Call(VM_BUILTIN_STRINGS_GET, 2)
+      .Call(VM_BUILTIN_STRING_GET, 2)
       .PushInt32('-')
       .Compare(OP_EQUAL)
       .JumpIfFalse("parse_int")
@@ -409,7 +409,7 @@ int main() {
           // first digit
           .PushLocal(0)
           .PushLocal(1)
-          .Call(VM_BUILTIN_STRINGS_GET, 2)
+          .Call(VM_BUILTIN_STRING_GET, 2)
           .PushInt32('0')
           .Compare(OP_EQUAL)
           .JumpIfFalse("non_zero_int")
@@ -421,7 +421,7 @@ int main() {
           // must be 1–9
           .PushLocal(0)
           .PushLocal(1)
-          .Call(VM_BUILTIN_STRINGS_GET, 2)   
+          .Call(VM_BUILTIN_STRING_GET, 2)   
           .Call(FN_IS_DIGIT, 1)  // THIS IS WRONG AND SHOULD NOT INCLUDE 0
           .JumpIfFalse("error")
 
@@ -432,7 +432,7 @@ int main() {
 
           .PushLocal(0)
           .PushLocal(1)
-          .Call(VM_BUILTIN_STRINGS_GET, 2)
+          .Call(VM_BUILTIN_STRING_GET, 2)
           .PushInt32('0')
           .Subtract()
 
@@ -444,7 +444,7 @@ int main() {
           // while digit
           .PushLocal(0)
           .PushLocal(1)
-          .Call(VM_BUILTIN_STRINGS_GET, 2)
+          .Call(VM_BUILTIN_STRING_GET, 2)
           .Call(FN_IS_DIGIT, 1)
           .Not()
           .JumpIfFalse("int_loop")
@@ -453,7 +453,7 @@ int main() {
           // fraction?
           .PushLocal(0)
           .PushLocal(1)
-          .Call(VM_BUILTIN_STRINGS_GET, 2)
+          .Call(VM_BUILTIN_STRING_GET, 2)
           .PushInt32('.')
           .Compare(OP_EQUAL)
           .JumpIfFalse("finish")
@@ -467,14 +467,14 @@ int main() {
           .Label("frac_loop")
               .PushLocal(0)
               .PushLocal(1)
-              .Call(VM_BUILTIN_STRINGS_GET,2)
+              .Call(VM_BUILTIN_STRING_GET,2)
               .Call(FN_IS_DIGIT, 1)
               .JumpIfFalse("error")   // must have at least one digit
 
               .PushLocal(4)
               .PushLocal(0)
               .PushLocal(1)
-              .Call(VM_BUILTIN_STRINGS_GET, 2)
+              .Call(VM_BUILTIN_STRING_GET, 2)
               .PushInt32('0')
               .Subtract()
               .PushLocal(5)
@@ -491,7 +491,7 @@ int main() {
 
               .PushLocal(0)
               .PushLocal(1)
-              .Call(VM_BUILTIN_STRINGS_GET, 2)
+              .Call(VM_BUILTIN_STRING_GET, 2)
               .Call(FN_IS_DIGIT, 1)
               .Not()
               .JumpIfFalse("frac_loop")

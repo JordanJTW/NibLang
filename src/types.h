@@ -106,8 +106,8 @@ typedef struct vm_map_t {
 } Map;
 
 typedef enum {
+  VALUE_TYPE_NULL = 0,
   VALUE_TYPE_UNIT,
-  VALUE_TYPE_NULL,
   VALUE_TYPE_BOOL,
   VALUE_TYPE_INT,
   VALUE_TYPE_FLOAT,

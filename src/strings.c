@@ -82,7 +82,7 @@ vm_value_t vm_string_length(vm_value_t* argv, size_t argc, void* vm) {
   return (vm_value_t){.type = VALUE_TYPE_INT, .as.i32 = this.as.str->len};
 }
 
-vm_value_t vm_string_valueof(vm_value_t* argv, size_t argc, void* vm) {
+vm_value_t vm_string_value_of(vm_value_t* argv, size_t argc, void* vm) {
   assert(argc == 1);
 
   vm_value_t number = argv[0];
@@ -109,4 +109,32 @@ vm_value_t vm_string_valueof(vm_value_t* argv, size_t argc, void* vm) {
     default:
       return allocate_str_from_c("<non-primitive value>");
   }
+}
+
+vm_value_t vm_string_hash(vm_value_t* argv, size_t argc, void* vm) {
+  assert(argc == 1 && vm_is_string(&argv[0]) &&
+         "incorrect number of args or arg types");
+
+  RC_AUTOFREE vm_value_t value = argv[0];
+
+  uint32_t hash = 7;
+  for (size_t i = 0; i < value.as.str->len; i++) {
+    hash = hash * 31 + value.as.str->c_str[i];
+  }
+
+  return (vm_value_t){.type = VALUE_TYPE_INT, .as.i32 = hash};
+}
+
+vm_value_t vm_string_equals(vm_value_t* argv, size_t argc, void* vm) {
+  assert(argc == 2 && vm_is_string(&argv[0]) && vm_is_string(&argv[1]) &&
+         "incorrect number of args or arg types");
+  RC_AUTOFREE vm_value_t v1 = argv[0];
+  RC_AUTOFREE vm_value_t v2 = argv[1];
+
+  if (v1.as.str->len != v2.as.str->len) {
+    return (vm_value_t){.type = VALUE_TYPE_BOOL, .as.boolean = false};
+  }
+
+  int result = strcmp(v1.as.str->c_str, v2.as.str->c_str);
+  return (vm_value_t){.type = VALUE_TYPE_BOOL, .as.boolean = (result == 0)};
 }

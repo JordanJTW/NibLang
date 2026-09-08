@@ -33,7 +33,7 @@ static bool is_number_type(vm_value_t value) {
   return vm_is_i32(&value) || vm_is_f32(&value);
 }
 
-#define VM_BUILTIN_FUNCTION_COUNT 19
+#define VM_BUILTIN_FUNCTION_COUNT 21
 
 typedef struct vm_frame vm_frame_t;
 
@@ -972,7 +972,9 @@ static void install_builtins(vm_t* vm) {
   INSTALL(15, vm_array_push, 2);
   INSTALL(16, vm_map_get, 2);
   INSTALL(17, vm_array_length, 1);
-  INSTALL(18, vm_string_valueof, 1);
+  INSTALL(18, vm_string_value_of, 1);
+  INSTALL(19, vm_string_hash, 0);
+  INSTALL(20, vm_string_equals, 2);
 }
 
 static void free_closure(void* self, bool should_free) {

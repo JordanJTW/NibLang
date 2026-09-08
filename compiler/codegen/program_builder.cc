@@ -51,11 +51,13 @@ std::optional<NamedBinding::Idx> ProgramBuilder::LinkExternalCallIdx(
           {"String_startsWith", VM_BUILTIN_STRING_STARTS_WITH},
           {"String_substr", VM_BUILTIN_STRING_SUBSTRING},
           {"String_valueOf", VM_BUILTIN_STRING_VALUE_OF},
+          {"String_hash", VM_BUILTIN_STRING_HASH},
+          {"String_equals", VM_BUILTIN_STRING_EQUALS},
       };
 
   // Since some built-in functions (i.e. Array_withSize) overload a single
   // native function, this count can differ from `kBuiltInCallIdx.size()`.
-  static constexpr size_t kBuiltInCallCount = 19;
+  static constexpr size_t kBuiltInCallCount = 21;
 
   if (auto it = kBuiltInCallIdx.find(name); it != kBuiltInCallIdx.end())
     return it->second;

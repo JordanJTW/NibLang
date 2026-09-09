@@ -251,18 +251,17 @@ TEST_F(TypeRegistryTest, GetNameFromTypeId_UnionType_Production) {
 
   TypeId type_id = type_registry.NewUnionType(std::move(type));
 
-  EXPECT_EQ(type_registry.GetNameFromTypeId(type_id), "[bool, i32, Codepoint]");
+  EXPECT_EQ(type_registry.GetNameFromTypeId(type_id), "(bool|i32|Codepoint)");
 }
 
-TEST_F(TypeRegistryTest, GetNameFromTypeId_UnionType_Debug) {
-  UnionType type{
-      /*names=*/{LiteralType::Bool, LiteralType::i32, LiteralType::Codepoint}};
 
-  TypeId type_id = type_registry.NewUnionType(std::move(type));
+TEST_F(TypeRegistryTest, GetNameFromTypeId_IntersectionType_Production) {
+  IntersectionType type{
+    /*names=*/{LiteralType::Bool, LiteralType::i32, LiteralType::Codepoint}};
 
-  TypeRegistry::FormatOptions options{.use_debug_names = true};
-  EXPECT_EQ(type_registry.GetNameFromTypeId(type_id, options),
-            "Union[bool, i32, Codepoint]");
+  TypeId type_id = type_registry.NewIntersectionType(std::move(type));
+
+  EXPECT_EQ(type_registry.GetNameFromTypeId(type_id), "(bool&i32&Codepoint)");
 }
 
 TEST_F(TypeRegistryTest, GetNameFromTypeId_OptionalType) {

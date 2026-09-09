@@ -267,26 +267,26 @@ std::string TypeRegistry::GetNameFromTypeId(TypeId type_id,
           },
           [&](const UnionType& type) {
             std::stringstream ss;
-            ss << (options.use_debug_names ? "Union[" : "[");
+            ss << "(";
             options.is_embedded_type = true;
             for (size_t i = 0; i < type.types.size(); ++i) {
               if (i > 0)
                 ss << "|";
               ss << GetNameFromTypeId(type.types[i], options);
             }
-            ss << "]";
+            ss << ")";
             return ss.str();
           },
           [&](const IntersectionType& type) {
             std::stringstream ss;
-            ss << (options.use_debug_names ? "Intersect[" : "[");
+            ss << "(";
             options.is_embedded_type = true;
             for (size_t i = 0; i < type.types.size(); ++i) {
               if (i > 0)
                 ss << "&";
               ss << GetNameFromTypeId(type.types[i], options);
             }
-            ss << "]";
+            ss << ")";
             return ss.str();
           },
           [&](const OptionalType& type) {

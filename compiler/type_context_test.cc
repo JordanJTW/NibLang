@@ -36,7 +36,40 @@ class TypeContextTest : public ::testing::Test {
   TypeContext type_context{scope_manager, type_registry, error_collector};
   SymbolBinder symbol_binder{scope_manager, type_registry, type_context,
                              error_collector};
+
+  TypeId MakeStruct(std::string name,
+                    StructDeclaration::Kind kind,
+                    const std::vector<std::string>& implements = {});
+
+ private:
+  // std::deque ensures insertion do not invalidate pointers unlike std::vector
+  std::deque<StructDeclaration> nameable_declarations_;
 };
+
+TypeId TypeContextTest::MakeStruct(std::string name,
+                                   StructDeclaration::Kind kind,
+                                   const std::vector<std::string>& implements) {
+  StructDeclaration& declaration = nameable_declarations_.emplace_back();
+
+  declaration.name = SpannedText{std::move(name)};
+  declaration.kind = kind;
+
+  declaration.interfaces.reserve(implements.size());
+  for (const auto& impl_name : implements) {
+    auto impl_name_span = SpannedText{impl_name};
+    declaration.interfaces.emplace_back(
+        impl_name_span, ImplementsDeclaration{.name = impl_name_span});
+  }
+
+  const auto& [binding, symbol] = symbol_binder.BindStruct(declaration);
+  CHECK(binding.realized_type_id.has_value());
+  CHECK(binding.symbol_id.has_value());
+
+  type_context.DefineStructType(*binding.realized_type_id, *binding.symbol_id,
+                                *symbol,
+                                /*template_arguments=*/{});
+  return *binding.realized_type_id;
+}
 
 TEST_F(TypeContextTest, GetTypeIdFor_BuiltInType) {
   static const std::unordered_map<std::string, TypeId> kBuiltInTypes = {
@@ -493,6 +526,142 @@ TEST_F(TypeContextTest, GetTypeIdFor_Nil) {
   std::optional<TypeId> union_type_id = type_context.GetTypeIdFor(
       ParsedType{ParsedUnionType{{{"bool"}, {"Nil"}}}});
   EXPECT_FALSE(union_type_id.has_value());
+}
+
+TEST_F(TypeContextTest, GetIntersectionOf_Absorption) {
+  TypeId union_type =
+      type_context.GetUnionOf({LiteralType::i32, LiteralType::Bool});
+  TypeId intersection_type =
+      type_context.GetIntersectionOf({union_type, LiteralType::i32});
+
+  // Absorption Rule: (A & (A | B)) => A
+  EXPECT_EQ(intersection_type, LiteralType::i32);
+}
+
+TEST_F(TypeContextTest, GetUnionOf_Absorption) {
+  TypeId intersection_type =
+      type_context.GetIntersectionOf({LiteralType::i32, LiteralType::Bool});
+  TypeId union_type =
+      type_context.GetUnionOf({intersection_type, LiteralType::i32});
+
+  // Absorption Rule: (A | (A & B)) => A
+  EXPECT_EQ(union_type, LiteralType::i32);
+}
+
+TEST_F(TypeContextTest, GetIntersectionOf_Never) {
+  TypeId intersection_type =
+      type_context.GetIntersectionOf({LiteralType::i32, LiteralType::Never});
+
+  // Intersection with an empty set: `T & Never => Never`
+  EXPECT_EQ(intersection_type, LiteralType::Never);
+}
+
+TEST_F(TypeContextTest, GetUnionOf_Never) {
+  TypeId union_type =
+      type_context.GetUnionOf({LiteralType::i32, LiteralType::Never});
+
+  // Union with an empty set: `T | Never => T`
+  EXPECT_EQ(union_type, LiteralType::i32);
+}
+
+TEST_F(TypeContextTest, GetIntersectionOf_DisjointTypes) {
+  TypeId intersection_type =
+      type_context.GetIntersectionOf({LiteralType::i32, LiteralType::Bool});
+
+  // No overlap within the intersection
+  EXPECT_EQ(intersection_type, LiteralType::Never);
+}
+
+TEST_F(TypeContextTest, GetIntersectionOf_Interfaces) {
+  TypeId hashable_type = MakeStruct("Hashable", StructDeclaration::Interface);
+  TypeId printable_type = MakeStruct("Printable", StructDeclaration::Interface);
+
+  TypeId intersection_type =
+      type_context.GetIntersectionOf({hashable_type, printable_type});
+  // An intersection of interfaces results in a new type `Hashable&Printable`
+  EXPECT_NE(intersection_type, hashable_type);
+  EXPECT_NE(intersection_type, printable_type);
+  EXPECT_NE(intersection_type, LiteralType::Never);
+
+  EXPECT_EQ(type_registry.GetNameFromTypeId(intersection_type),
+            "(Hashable&Printable)");
+
+  // Absorption Rule: (A | (A & B)) => A
+  EXPECT_EQ(type_context.GetUnionOf({intersection_type, hashable_type}),
+            hashable_type);
+  EXPECT_EQ(type_context.GetUnionOf({intersection_type, printable_type}),
+            printable_type);
+
+  // Flatten
+  TypeId foo_type =
+      MakeStruct("Foo", StructDeclaration::Structure, {"Hashable"});
+  // Foo & Printable => Never
+  EXPECT_EQ(type_context.GetIntersectionOf({foo_type, printable_type}),
+            LiteralType::Never);
+  // Foo & Hashable => Foo
+  EXPECT_EQ(type_context.GetIntersectionOf({foo_type, hashable_type}),
+            foo_type);
+  // Hashable & Foo => Foo
+  EXPECT_EQ(type_context.GetIntersectionOf({hashable_type, foo_type}),
+            foo_type);
+  // Foo & (Hashable & Printable) => Never
+  EXPECT_EQ(type_context.GetIntersectionOf({foo_type, intersection_type}),
+            LiteralType::Never);
+
+  TypeId bar_type = MakeStruct("Bar", StructDeclaration::Structure,
+                               {"Hashable", "Printable"});
+  // Bar & Printable => Bar
+  EXPECT_EQ(type_context.GetIntersectionOf({bar_type, printable_type}),
+            bar_type);
+  // Bar & Hashable => Bar
+  EXPECT_EQ(type_context.GetIntersectionOf({bar_type, hashable_type}),
+            bar_type);
+  // Bar & (Hashable & Printable) => Bar
+  EXPECT_EQ(type_context.GetIntersectionOf({bar_type, intersection_type}),
+            bar_type);
+}
+
+TEST_F(TypeContextTest, GetUnionOf_Interfaces) {
+  TypeId hashable_type = MakeStruct("Hashable", StructDeclaration::Interface);
+  TypeId printable_type = MakeStruct("Printable", StructDeclaration::Interface);
+
+  TypeId union_type = type_context.GetUnionOf({hashable_type, printable_type});
+  // A union of interfaces results in a new type `Hashable|Printable`
+  EXPECT_NE(union_type, hashable_type);
+  EXPECT_NE(union_type, printable_type);
+  EXPECT_NE(union_type, LiteralType::Never);
+
+  EXPECT_EQ(type_registry.GetNameFromTypeId(union_type),
+            "(Hashable|Printable)");
+
+  // Absorption Rule: (A & (A | B)) => A
+  EXPECT_EQ(type_context.GetIntersectionOf({union_type, hashable_type}),
+            hashable_type);
+  EXPECT_EQ(type_context.GetIntersectionOf({union_type, printable_type}),
+            printable_type);
+
+  // Flatten
+  TypeId foo_type =
+      MakeStruct("Foo", StructDeclaration::Structure, {"Hashable"});
+  // Foo | Printable => Foo | Printable
+  EXPECT_EQ(type_registry.GetNameFromTypeId(
+                type_context.GetUnionOf({foo_type, printable_type})),
+            "(Printable|Foo)");
+  // Foo | Hashable => Hashable
+  EXPECT_EQ(type_context.GetUnionOf({foo_type, hashable_type}), hashable_type);
+  // Hashable | Foo => Hashable
+  EXPECT_EQ(type_context.GetUnionOf({hashable_type, foo_type}), hashable_type);
+  // Foo | (Hashable | Printable) => Hashable | Printable
+  EXPECT_EQ(type_context.GetUnionOf({foo_type, union_type}), union_type);
+
+  TypeId bar_type = MakeStruct("Bar", StructDeclaration::Structure,
+                               {"Hashable", "Printable"});
+  // Bar | Printable => Printable
+  EXPECT_EQ(type_context.GetUnionOf({bar_type, printable_type}), printable_type);
+  // Bar | Hashable => Hashable
+  EXPECT_EQ(type_context.GetUnionOf({bar_type, hashable_type}), hashable_type);
+  // Bar | Hashable | Printable => Hashable | Printable
+  EXPECT_EQ(type_context.GetUnionOf({bar_type, union_type}), union_type);
 }
 
 }  // namespace

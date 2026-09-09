@@ -610,15 +610,15 @@ bool TypeContext::AreDisjointTypes(TypeId t1, TypeId t2) const {
     return false;
 
   if (t1_is_interface && t2_type) {  // i.e. Hashable & Foo
-    for (auto implemented_id : t1_type->interface_types) {
-      if (implemented_id == t2)
+    for (auto implemented_id : t2_type->interface_types) {
+      if (implemented_id == t1)
         return false;
     }
   }
 
   if (t2_is_interface && t1_type) {  // i.e. Foo & Hashable
-    for (auto implemented_id : t2_type->interface_types) {
-      if (implemented_id == t1)
+    for (auto implemented_id : t1_type->interface_types) {
+      if (implemented_id == t2)
         return false;
     }
   }

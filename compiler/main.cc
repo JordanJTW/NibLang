@@ -26,10 +26,10 @@
 #include "compiler/codegen/bytecode_generator.h"
 #include "compiler/codegen/program_builder.h"
 #include "compiler/error_collector.h"
+#include "compiler/expression_checker.h"
 #include "compiler/file.h"
 #include "compiler/parser/parser.h"
 #include "compiler/parser/printer.h"
-#include "compiler/semantic_analyzer.h"
 #include "compiler/type_context.h"
 #include "compiler/types.h"
 
@@ -200,9 +200,9 @@ int main(int argc, char* argv[]) {
 
   for (File& file : files) {
     TypeContext type_context(scope_manager, type_registry, error_collector);
-    SemanticAnalyzer analyzer(type_context, scope_manager, error_collector,
+    ExpressionChecker analyzer(type_context, scope_manager, error_collector,
                               type_registry);
-    SemanticAnalyzer::FunctionContext context = {{}, TypeRegistry::Any};
+    ExpressionChecker::FunctionContext context = {{}, TypeRegistry::Any};
     analyzer.Check(file.root_block, context);
   }
 

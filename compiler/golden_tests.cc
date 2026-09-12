@@ -15,9 +15,9 @@
 #include "codegen/bytecode_generator.h"
 #include "codegen/program_builder.h"
 #include "compiler/error_collector.h"
+#include "compiler/expression_checker.h"
 #include "compiler/gtest_helpers.h"
 #include "compiler/parser/parser.h"
-#include "compiler/semantic_analyzer.h"
 #include "compiler/type_context.h"
 #include "compiler/types.h"
 #include "gmock/gmock.h"
@@ -96,8 +96,8 @@ class GoldenTest : public ::testing::Test {
         .file_id = 0,
     });
 
-    SemanticAnalyzer::FunctionContext context = {{}, TypeRegistry::Any};
-    SemanticAnalyzer{type_context_, scope_manager_, error_collector_,
+    ExpressionChecker::FunctionContext context = {{}, TypeRegistry::Any};
+    ExpressionChecker{type_context_, scope_manager_, error_collector_,
                      type_registry_}
         .Check(files[0].root_block, context);
 

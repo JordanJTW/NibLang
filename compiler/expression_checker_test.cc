@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause
 
-#include "compiler/semantic_analyzer.h"
+#include "compiler/expression_checker.h"
 
 #include <optional>
 #include <string>
@@ -19,7 +19,6 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
-using ::testing::_;
 using ::testing::ElementsAre;
 using ::testing::i32;
 using ::testing::ident;
@@ -35,7 +34,7 @@ class SemanticAnalyzerTest : public ::testing::Test {
   ScopeManager scope_manager{error_collector};
   TypeRegistry type_registry{scope_manager};
   TypeContext type_context{scope_manager, type_registry, error_collector};
-  SemanticAnalyzer semantic_analyzer{type_context, scope_manager,
+  ExpressionChecker semantic_analyzer{type_context, scope_manager,
                                      error_collector, type_registry};
 };
 
@@ -51,7 +50,7 @@ TEST_F(SemanticAnalyzerTest, Expression_PrimaryExpr_BuiltInValue) {
        kPrimaryExpressionToTypeId) {
     SCOPED_TRACE("Testing PrimaryExpression for: " + name);
     auto expr = std::make_unique<Expression>(Expression{primary_expr});
-    SemanticAnalyzer::FunctionContext context = {{}, LiteralType::Unit};
+    ExpressionChecker::FunctionContext context = {{}, LiteralType::Unit};
     auto result = semantic_analyzer.CheckExpression(expr, context);
 
     ASSERT_TRUE(result.has_value());

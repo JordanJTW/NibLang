@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause
 
-#include "compiler/semantic_analyzer.h"
+#include "compiler/expression_checker.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -45,16 +45,16 @@ using LiteralType = TypeRegistry::LiteralType;
 
 }  // namespace
 
-SemanticAnalyzer::SemanticAnalyzer(TypeContext& type_context,
-                                   ScopeManager& scope_manager,
-                                   ErrorCollector& error_collector,
-                                   TypeRegistry& type_registry)
+ExpressionChecker::ExpressionChecker(TypeContext& type_context,
+                                     ScopeManager& scope_manager,
+                                     ErrorCollector& error_collector,
+                                     TypeRegistry& type_registry)
     : type_context_(type_context),
       scope_manager_(scope_manager),
       error_collector_(error_collector),
       type_registry_(type_registry) {}
 
-void SemanticAnalyzer::Check(Block& block, FunctionContext& context) {
+void ExpressionChecker::Check(Block& block, FunctionContext& context) {
   SymbolBinder(scope_manager_, type_registry_, type_context_, error_collector_)
       .Process(block);
 
@@ -85,8 +85,8 @@ void SemanticAnalyzer::Check(Block& block, FunctionContext& context) {
   }
 }
 
-void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
-                                      FunctionContext& context) {
+void ExpressionChecker::CheckStatement(std::unique_ptr<Statement>& statement,
+                                       FunctionContext& context) {
   std::visit(
       Overloaded{
           [&](std::unique_ptr<Expression>& expr) {
@@ -97,7 +97,8 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
           },
           [&](ReturnStatement& ret) {
             if (ret.value) {
-              Result result = RequireConcreteValue(ret.value, context);
+              std::optional<ExpressionResult> result =
+                  RequireConcreteValue(ret.value, context);
 
               if (!result.has_value())
                 return;
@@ -127,7 +128,8 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
             RequireConcreteValue(thr.value, context);
           },
           [&](IfStatement& if_stmt) {
-            Result result = RequireConcreteValue(if_stmt.condition, context);
+            std::optional<ExpressionResult> result =
+                RequireConcreteValue(if_stmt.condition, context);
 
             const auto narrowing_info = result
                                             ? result->narrowing_info
@@ -153,7 +155,8 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
             }
           },
           [&](WhileStatement& while_stmt) {
-            Result result = RequireConcreteValue(while_stmt.condition, context);
+            std::optional<ExpressionResult> result =
+                RequireConcreteValue(while_stmt.condition, context);
 
             const auto narrowing_info = result
                                             ? result->narrowing_info
@@ -177,7 +180,8 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
               parsed_type_id = type_context_.GetTypeIdFor(*assign.type);
             }
 
-            Result result = RequireConcreteValue(assign.value, context);
+            std::optional<ExpressionResult> result =
+                RequireConcreteValue(assign.value, context);
             if (!result.has_value()) {
               NamedBinding binding = scope_manager_.DeclareVariableBinding(
                   assign.name, TypeRegistry::Error);
@@ -220,15 +224,16 @@ void SemanticAnalyzer::CheckStatement(std::unique_ptr<Statement>& statement,
       statement->as);
 }
 
-SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
+std::optional<ExpressionResult> ExpressionChecker::CheckExpression(
     std::unique_ptr<Expression>& expression,
     FunctionContext& context) {
-  Result result = std::visit(
+  std::optional<ExpressionResult> result = std::visit(
       Overloaded{
-          [&](PrimaryExpression& primary) -> SemanticAnalyzer::Result {
+          [&](PrimaryExpression& primary) -> std::optional<ExpressionResult> {
             return std::visit(
                 Overloaded{
-                    [&](const StringLiteral&) -> SemanticAnalyzer::Result {
+                    [&](const StringLiteral&)
+                        -> std::optional<ExpressionResult> {
                       if (auto binding = scope_manager_.FindBindingFor(
                               "String", ScopeManager::All)) {
                         return ExpressionResult(*binding->realized_type_id);
@@ -238,7 +243,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                                            expression->meta);
                       return std::nullopt;
                     },
-                    [&](Identifier& ident) -> SemanticAnalyzer::Result {
+                    [&](Identifier& ident) -> std::optional<ExpressionResult> {
                       if (ident.name == "Nil")
                         return ExpressionResult(TypeRegistry::Nil);
 
@@ -305,27 +310,27 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                                            expression->meta);
                       return std::nullopt;
                     },
-                    [&](int32_t) -> SemanticAnalyzer::Result {
+                    [&](int32_t) -> std::optional<ExpressionResult> {
                       return ExpressionResult(LiteralType::i32);
                     },
                     [&](const CodepointLiteral& codepoint)
-                        -> SemanticAnalyzer::Result {
+                        -> std::optional<ExpressionResult> {
                       return ExpressionResult(LiteralType::Codepoint);
                     },
-                    [&](float) -> SemanticAnalyzer::Result {
+                    [&](float) -> std::optional<ExpressionResult> {
                       return ExpressionResult(LiteralType::f32);
                     },
-                    [&](bool) -> SemanticAnalyzer::Result {
+                    [&](bool) -> std::optional<ExpressionResult> {
                       return ExpressionResult(LiteralType::Bool);
                     },
-                    [&](Nil) -> SemanticAnalyzer::Result {
+                    [&](Nil) -> std::optional<ExpressionResult> {
                       return ExpressionResult(LiteralType::Nil);
                     }},
                 primary.value);
           },
-          [&](BinaryExpression& binary) -> SemanticAnalyzer::Result {
-            Result lhs = RequireConcreteValue(binary.lhs, context);
-            Result rhs = RequireConcreteValue(binary.rhs, context);
+          [&](BinaryExpression& binary) -> std::optional<ExpressionResult> {
+            auto lhs = RequireConcreteValue(binary.lhs, context);
+            auto rhs = RequireConcreteValue(binary.rhs, context);
 
             if (!lhs || !rhs)
               return std::nullopt;
@@ -405,21 +410,21 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
 
             return ExpressionResult(*lhs->type_id);
           },
-          [&](CallExpression& call_expr) -> SemanticAnalyzer::Result {
-            Result callee_result = CheckExpression(call_expr.callee, context);
+          [&](CallExpression& call_expr) -> std::optional<ExpressionResult> {
+            auto callee_result = CheckExpression(call_expr.callee, context);
 
             // Short-circuit if the callee was invalid.
             if (!callee_result.has_value())
               return std::nullopt;
 
-            Result type_check_result = TypeCheckCallExpr(
+            auto type_check_result = TypeCheckCallExpr(
                 call_expr, callee_result.value(), context, expression->meta);
 
             return type_check_result;
           },
-          [&](AssignmentExpression& assign) -> SemanticAnalyzer::Result {
-            Result lhs = CheckExpression(assign.lhs, context);
-            Result rhs = RequireConcreteValue(assign.rhs, context);
+          [&](AssignmentExpression& assign) -> std::optional<ExpressionResult> {
+            auto lhs = CheckExpression(assign.lhs, context);
+            auto rhs = RequireConcreteValue(assign.rhs, context);
 
             if (!lhs.has_value() || !rhs.has_value())
               return std::nullopt;
@@ -452,9 +457,10 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
           [&](MemberAccessExpression& member_access) {
             return HandleMemberAccess(member_access, context);
           },
-          [&](ArrayAccessExpression& array_access) -> SemanticAnalyzer::Result {
-            Result object = RequireConcreteValue(array_access.array, context);
-            Result index = RequireConcreteValue(array_access.index, context);
+          [&](ArrayAccessExpression& array_access)
+              -> std::optional<ExpressionResult> {
+            auto object = RequireConcreteValue(array_access.array, context);
+            auto index = RequireConcreteValue(array_access.index, context);
 
             if (!object || !index)
               return std::nullopt;
@@ -470,9 +476,9 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             // FIXME: Once templates exist we can narrot the type here.
             return ExpressionResult{LiteralType::Any};
           },
-          [&](LogicExpression& logic) -> SemanticAnalyzer::Result {
-            Result lhs = RequireConcreteValue(logic.lhs, context);
-            Result rhs = RequireConcreteValue(logic.rhs, context);
+          [&](LogicExpression& logic) -> std::optional<ExpressionResult> {
+            auto lhs = RequireConcreteValue(logic.lhs, context);
+            auto rhs = RequireConcreteValue(logic.rhs, context);
 
             if (!lhs || !rhs)
               return std::nullopt;
@@ -501,7 +507,7 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             result.narrowing_info = std::move(narrowing_info);
             return result;
           },
-          [&](ClosureExpression& closure) -> SemanticAnalyzer::Result {
+          [&](ClosureExpression& closure) -> std::optional<ExpressionResult> {
             SymbolId symbol_id = type_registry_.NewFunctionSymbol(closure.fn);
             if (auto binding = type_context_.DefineFunction(
                     symbol_id, /*self_id=*/std::nullopt,
@@ -511,18 +517,20 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             CHECK(false) << "Failed to declare symbol for closure";
             return std::nullopt;
           },
-          [&](PrefixUnaryExpression& prefix) -> SemanticAnalyzer::Result {
-            Result operand = RequireConcreteValue(prefix.operand, context);
+          [&](PrefixUnaryExpression& prefix)
+              -> std::optional<ExpressionResult> {
+            auto operand = RequireConcreteValue(prefix.operand, context);
             // TODO: Check that `op` is valid for `operand`.
             return operand;
           },
-          [&](PostfixUnaryExpression& postfix) -> SemanticAnalyzer::Result {
-            Result operand = RequireConcreteValue(postfix.operand, context);
+          [&](PostfixUnaryExpression& postfix)
+              -> std::optional<ExpressionResult> {
+            auto operand = RequireConcreteValue(postfix.operand, context);
             // TODO: Check that `op` is valid for `operand`.
             return operand;
           },
-          [&](TypeCastExpression& cast) -> SemanticAnalyzer::Result {
-            Result result = RequireConcreteValue(cast.expr, context);
+          [&](TypeCastExpression& cast) -> std::optional<ExpressionResult> {
+            auto result = RequireConcreteValue(cast.expr, context);
             if (!result.has_value())
               return std::nullopt;
 
@@ -573,11 +581,12 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             return ExpressionResult::with_type_override(new_type_id,
                                                         result->binding);
           },
-          [&](OptionalChainExpression& optional_chain) -> Result {
+          [&](OptionalChainExpression& optional_chain)
+              -> std::optional<ExpressionResult> {
             // OptionalChainExpression is a "pseudo-AST node" which represents
             // the END of a chain of ?. accesses (i.e. where to jump to in case
             // of Nil) and resolves to the final type wrapped as an Optional.
-            Result result = RequireConcreteValue(optional_chain.root, context);
+            auto result = RequireConcreteValue(optional_chain.root, context);
             if (!result.has_value())
               return std::nullopt;
 
@@ -591,9 +600,10 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             new_result.narrowing_info = std::move(result->narrowing_info);
             return new_result;
           },
-          [&](NilCoalescingExpression& coalescing) -> Result {
-            Result lhs = RequireConcreteValue(coalescing.lhs, context);
-            Result rhs = RequireConcreteValue(coalescing.rhs, context);
+          [&](NilCoalescingExpression& coalescing)
+              -> std::optional<ExpressionResult> {
+            auto lhs = RequireConcreteValue(coalescing.lhs, context);
+            auto rhs = RequireConcreteValue(coalescing.rhs, context);
 
             if (!lhs || !rhs)
               return std::nullopt;
@@ -616,9 +626,9 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
             return ExpressionResult{
                 type_context_.GetUnionOf({*lhs_type_id, *rhs->type_id})};
           },
-          [&](OptionalAccessExpression& optional_access) -> Result {
-            Result result =
-                RequireConcreteValue(optional_access.target, context);
+          [&](OptionalAccessExpression& optional_access)
+              -> std::optional<ExpressionResult> {
+            auto result = RequireConcreteValue(optional_access.target, context);
 
             if (!result)
               return std::nullopt;
@@ -633,8 +643,9 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
                                  optional_access.target->meta);
             return std::nullopt;
           },
-          [&](TemplateInstantiationExpression& template_expr) -> Result {
-            Result result =
+          [&](TemplateInstantiationExpression& template_expr)
+              -> std::optional<ExpressionResult> {
+            auto result =
                 CheckExpression(template_expr.generic_target, context);
 
             if (!result.has_value())
@@ -673,12 +684,12 @@ SemanticAnalyzer::Result SemanticAnalyzer::CheckExpression(
   return result;
 }
 
-void SemanticAnalyzer::TypeCheckCallArguments(
-    const std::vector<std::optional<SpannedType>>& call_arugment_results,
+void ExpressionChecker::TypeCheckCallArguments(
+    const std::vector<std::optional<SpannedType>>& call_argument_results,
     const std::vector<TypeId>& expected_argument_types,
     const Metadata& debug_metadata,
     std::optional<TypeId> variadic_type) {
-  size_t supplied_argc = call_arugment_results.size();
+  size_t supplied_argc = call_argument_results.size();
   size_t expected_argc = expected_argument_types.size();
 
   if ((variadic_type && supplied_argc < expected_argc) ||
@@ -691,8 +702,8 @@ void SemanticAnalyzer::TypeCheckCallArguments(
   }
   // If more arguments are supplied than expected, this is a variadic function
   // and any additional args do not need to be checked ("any" type).
-  for (size_t i = 0; i < call_arugment_results.size(); ++i) {
-    const auto& argument_result = call_arugment_results[i];
+  for (size_t i = 0; i < call_argument_results.size(); ++i) {
+    const auto& argument_result = call_argument_results[i];
     const TypeId expected_type =
         (i < expected_argument_types.size() ? expected_argument_types[i]
                                             : *variadic_type);
@@ -715,7 +726,7 @@ void SemanticAnalyzer::TypeCheckCallArguments(
   }
 }
 
-SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
+std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
     CallExpression& call_expr,
     ExpressionResult callee_result,
     FunctionContext& context,
@@ -823,10 +834,10 @@ SemanticAnalyzer::Result SemanticAnalyzer::TypeCheckCallExpr(
   return std::nullopt;
 }
 
-SemanticAnalyzer::Result SemanticAnalyzer::HandleMemberAccess(
+std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
     MemberAccessExpression& member_access,
     FunctionContext& context) {
-  Result object_result = CheckExpression(member_access.object, context);
+  auto object_result = CheckExpression(member_access.object, context);
   if (!object_result)
     return std::nullopt;
 
@@ -880,7 +891,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::HandleMemberAccess(
     for (ScopeId interface_scope_id : struct_type->interface_scopes) {
       if (auto binding = scope_manager_.FindBindingFor(
               member_name.text, ScopeManager::Current, interface_scope_id)) {
-        CHECK_EQ(binding->kind, NamedBinding::Function);  // Only methods allowed
+        CHECK_EQ(binding->kind,
+                 NamedBinding::Function);  // Only methods allowed
         CHECK(!member_access.resolved)
             << "MemberAccessExpression was previously resolved";
         member_access.resolved =
@@ -945,10 +957,10 @@ SemanticAnalyzer::Result SemanticAnalyzer::HandleMemberAccess(
   return std::nullopt;
 }
 
-SemanticAnalyzer::Result SemanticAnalyzer::RequireConcreteValue(
+std::optional<ExpressionResult> ExpressionChecker::RequireConcreteValue(
     std::unique_ptr<Expression>& expression,
     FunctionContext& context) {
-  Result result = CheckExpression(expression, context);
+  auto result = CheckExpression(expression, context);
 
   if (!result)
     return std::nullopt;
@@ -988,7 +1000,8 @@ SemanticAnalyzer::Result SemanticAnalyzer::RequireConcreteValue(
   return result;
 }
 
-std::ostream& operator<<(std::ostream& os, SemanticAnalyzer::Result result) {
+std::ostream& operator<<(std::ostream& os,
+                         const std::optional<ExpressionResult>& result) {
   if (!result.has_value())
     return os << "_";
 

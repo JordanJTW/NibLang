@@ -14,7 +14,7 @@ target_include_directories(scope_manager PRIVATE ${PROJECT_SOURCE_DIR})
 target_link_libraries(scope_manager PRIVATE error_collector logging types)
 target_link_libraries(scope_manager PRIVATE nlohmann_json::nlohmann_json)
 
-add_library(semantic_analyzer semantic_analyzer.cc)
+add_library(semantic_analyzer expression_checker.cc)
 target_include_directories(semantic_analyzer PRIVATE ${PROJECT_SOURCE_DIR})
 target_link_libraries(semantic_analyzer PRIVATE error_collector logging printer scope_manager symbol_binder type_context type_registry type_resolver)
 
@@ -55,7 +55,7 @@ target_link_libraries(scope_manager_test PRIVATE gmock_main scope_manager types)
 target_include_directories(scope_manager_test PRIVATE ${PROJECT_SOURCE_DIR})
 gtest_discover_tests(scope_manager_test)
 
-add_executable(semantic_analyzer_test semantic_analyzer_test.cc)
+add_executable(semantic_analyzer_test expression_checker_test.cc)
 target_link_libraries(semantic_analyzer_test PRIVATE gmock_main semantic_analyzer types)
 target_include_directories(semantic_analyzer_test PRIVATE ${PROJECT_SOURCE_DIR})
 gtest_discover_tests(semantic_analyzer_test)

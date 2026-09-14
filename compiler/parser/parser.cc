@@ -437,10 +437,27 @@ std::unique_ptr<Expression> Parser::ParseValue() {
           current_token_.value.back() == 'f') {
         float f32 = std::stof(current_token_.value);
         return make_primary_expression(f32, current_token_);
-      } else {
-        int i32 = std::stoi(current_token_.value);
+      }
+
+      std::string prefix = current_token_.value.substr(0, 2);
+      if (prefix == "0x") {
+        size_t consumed = 0;
+        int32_t i32 = std::stoi(current_token_.value.substr(2), &consumed, 16);
+        CHECK_EQ(consumed + 2, current_token_.value.size());
         return make_primary_expression(i32, current_token_);
       }
+
+      if (prefix == "0b") {
+        size_t consumed = 0;
+        int32_t i32 = std::stoi(current_token_.value.substr(2), &consumed, 2);
+        CHECK_EQ(consumed + 2, current_token_.value.size());
+        return make_primary_expression(i32, current_token_);
+      }
+
+      size_t consumed = 0;
+      int i32 = std::stoi(current_token_.value, &consumed);
+      CHECK_EQ(consumed, current_token_.value.size());
+      return make_primary_expression(i32, current_token_);
     }
     case TokenKind::kIdent: {
       return make_primary_expression(Identifier{.name = current_token_.value},

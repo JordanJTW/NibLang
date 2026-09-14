@@ -160,6 +160,23 @@ Token Tokenizer::next() {
     return make_token(TokenKind::kIdent);
   }
 
+  // Number (hex/binary)
+  auto prefix = data_.substr(offset_, 2);
+  if (prefix == "0x") {
+    offset_ += 2;
+    while (offset_ < data_.size() && (std::isxdigit(data_[offset_])))
+      ++offset_;
+
+    return make_token(TokenKind::kNumber);
+  }
+  if (prefix == "0b") {
+    offset_ += 2;
+    while (offset_ < data_.size() &&
+           (data_[offset_] == '0' || data_[offset_] == '1'))
+      ++offset_;
+
+    return make_token(TokenKind::kNumber);
+  }
   // Number (must start with digit but can include '.')
   if (std::isdigit(ch)) {
     while (offset_ < data_.size() && (isnumber(data_[offset_])))

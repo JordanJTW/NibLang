@@ -177,7 +177,11 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
   NamedBinding binding = scope_manager_.InsertNameIntoScope(
       fn.name, NamedBinding::Function, type_id, symbol_id,
       /*idx=*/std::nullopt, self_id);
-  fn.resolved = ResolvedFunction{.function_symbol = binding};
+  // HACK: This occurs only during initial symbol binding (and when closures are
+  // defined) so it is used to ensure functions are resolved only once.
+  if (check_function_body == CheckFunctionBody::YES) {
+    fn.resolved = ResolvedFunction{.function_symbol = binding};
+  }
 
   if (!symbol.template_variable_type_ids.empty()) {
     GetGenericTemplateOf(binding, symbol.template_variable_type_ids,

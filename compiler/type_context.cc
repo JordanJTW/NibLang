@@ -157,17 +157,16 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
     SymbolId symbol_id,
     std::optional<TypeId> self_id,
     CheckFunctionBody check_function_body) {
-  FunctionSymbol* symbol = type_registry_.GetSymbol<FunctionSymbol>(symbol_id);
-  CHECK(symbol) << "DefineFunction passed an invalid `symbol_id`";
+  auto& symbol = type_registry_.GetSymbolChecked<FunctionSymbol>(symbol_id);
 
-  FunctionDeclaration& fn = symbol->declaration;
+  FunctionDeclaration& fn = symbol.declaration;
 
   std::optional<TypeInstance> instance;
   if (fn.template_arguments.empty()) {
     if ((instance = DeclareFunctionType(fn, check_function_body, self_id))) {
       std::vector<TypeId> instance_key =
           self_id ? std::vector<TypeId>{*self_id} : std::vector<TypeId>{};
-      symbol->instances[std::move(instance_key)] = *instance;
+      symbol.instances[std::move(instance_key)] = *instance;
     } else {
       // Errors logged in DeclareFunctionType()
       return std::nullopt;
@@ -180,8 +179,8 @@ std::optional<NamedBinding> TypeContext::DefineFunction(
       /*idx=*/std::nullopt, self_id);
   fn.resolved = ResolvedFunction{.function_symbol = binding};
 
-  if (!symbol->template_variable_type_ids.empty()) {
-    GetGenericTemplateOf(binding, symbol->template_variable_type_ids,
+  if (!symbol.template_variable_type_ids.empty()) {
+    GetGenericTemplateOf(binding, symbol.template_variable_type_ids,
                          check_function_body);
   }
 

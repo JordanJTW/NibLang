@@ -77,6 +77,9 @@ class ExpressionChecker {
       FunctionContext& context);
 
  private:
+  std::optional<ExpressionResult> HandlePrimary(PrimaryExpression&,
+                                                Metadata&,
+                                                FunctionContext&);
   std::optional<ExpressionResult> HandleMemberAccess(MemberAccessExpression&,
                                                      FunctionContext&);
 

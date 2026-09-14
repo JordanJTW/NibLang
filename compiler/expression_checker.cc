@@ -46,103 +46,7 @@ std::optional<ExpressionResult> ExpressionChecker::CheckExpression(
   std::optional<ExpressionResult> result = std::visit(
       Overloaded{
           [&](PrimaryExpression& primary) -> std::optional<ExpressionResult> {
-            return std::visit(
-                Overloaded{
-                    [&](const StringLiteral&)
-                        -> std::optional<ExpressionResult> {
-                      if (auto binding = scope_manager_.FindBindingFor(
-                              "String", ScopeManager::All)) {
-                        return ExpressionResult(*binding->realized_type_id);
-                      }
-
-                      error_collector_.Add("unknown identifier: String",
-                                           expression->meta);
-                      return std::nullopt;
-                    },
-                    [&](Identifier& ident) -> std::optional<ExpressionResult> {
-                      if (ident.name == "Nil")
-                        return ExpressionResult(TypeRegistry::Nil);
-
-                      // Search within the current function scope for value.
-                      auto binding = scope_manager_.FindBindingFor(
-                          ident.name, ScopeManager::Function);
-                      if (binding) {
-                        CHECK(!ident.resolved)
-                            << "Identifier was previously resolved";
-                        ident.resolved = ResolvedIdentifier{*binding};
-                        return ExpressionResult::of_binding(*binding);
-                      }
-
-                      // Fallback search to the parent function scope.
-                      binding = scope_manager_.FindBindingFor(
-                          ident.name, ScopeManager::Closure);
-                      if (binding) {
-                        // Any value symbols found now must be captured.
-                        if (binding->kind == NamedBinding::Variable ||
-                            binding->kind == NamedBinding::Capture) {
-                          context.required_captures.push_back(*binding);
-                          // Variables will ALWAYS have a realized TypeId.
-                          binding = scope_manager_.DeclareCaptureBinding(
-                              binding->name, *binding->realized_type_id);
-                        }
-
-                        CHECK(!ident.resolved)
-                            << "Identifier was previously resolved";
-                        ident.resolved = ResolvedIdentifier{*binding};
-                        return ExpressionResult::of_binding(*binding);
-                      }
-
-                      // Fallback search to ALL scopes for top-level
-                      // declarations i.e. functions, structs, interfaces,
-                      // alias.
-                      binding = scope_manager_.FindBindingFor(
-                          ident.name, ScopeManager::All);
-                      if (binding) {
-                        switch (binding->kind) {
-                          case NamedBinding::Function:
-                          case NamedBinding::Method:
-                          case NamedBinding::Struct:
-                          case NamedBinding::TypeAlias:
-                          case NamedBinding::Template:
-                          case NamedBinding::Interface:
-                            CHECK(!ident.resolved)
-                                << "Identifier was previously resolved";
-                            ident.resolved = ResolvedIdentifier{*binding};
-                            return ExpressionResult::of_binding(*binding);
-
-                          case NamedBinding::Argument:
-                          case NamedBinding::Capture:
-                          case NamedBinding::Field:
-                          case NamedBinding::Narrowed:
-                          case NamedBinding::Variable:
-                            error_collector_.Add(
-                                "refers to variable out of scope",
-                                expression->meta);
-                            return std::nullopt;
-                        }
-                      }
-
-                      error_collector_.Add("unknown identifier: " + ident.name,
-                                           expression->meta);
-                      return std::nullopt;
-                    },
-                    [&](int32_t) -> std::optional<ExpressionResult> {
-                      return ExpressionResult(LiteralType::i32);
-                    },
-                    [&](const CodepointLiteral& codepoint)
-                        -> std::optional<ExpressionResult> {
-                      return ExpressionResult(LiteralType::Codepoint);
-                    },
-                    [&](float) -> std::optional<ExpressionResult> {
-                      return ExpressionResult(LiteralType::f32);
-                    },
-                    [&](bool) -> std::optional<ExpressionResult> {
-                      return ExpressionResult(LiteralType::Bool);
-                    },
-                    [&](Nil) -> std::optional<ExpressionResult> {
-                      return ExpressionResult(LiteralType::Nil);
-                    }},
-                primary.value);
+            return HandlePrimary(primary, expression->meta, context);
           },
           [&](BinaryExpression& binary) -> std::optional<ExpressionResult> {
             auto lhs = RequireConcreteValue(binary.lhs, context);
@@ -648,6 +552,103 @@ std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
                            type_registry_.GetNameFromTypeId(*callable_type_id),
                        debug_metadata);
   return std::nullopt;
+}
+
+std::optional<ExpressionResult> ExpressionChecker::HandlePrimary(
+    PrimaryExpression& primary_expression,
+    Metadata& metadata,
+    FunctionContext& function_context) {
+  return std::visit(
+      Overloaded{
+          [&](const StringLiteral&) -> std::optional<ExpressionResult> {
+            if (auto binding = scope_manager_.FindBindingFor(
+                    "String", ScopeManager::All)) {
+              return ExpressionResult(*binding->realized_type_id);
+            }
+
+            error_collector_.Add("unknown identifier: String", metadata);
+            return std::nullopt;
+          },
+          [&](Identifier& ident) -> std::optional<ExpressionResult> {
+            if (ident.name == "Nil")
+              return ExpressionResult(TypeRegistry::Nil);
+
+            // Search within the current function scope for value.
+            auto binding = scope_manager_.FindBindingFor(
+                ident.name, ScopeManager::Function);
+            if (binding) {
+              CHECK(!ident.resolved) << "Identifier was previously resolved";
+              ident.resolved = ResolvedIdentifier{*binding};
+              return ExpressionResult::of_binding(*binding);
+            }
+
+            // Fallback search to the parent function scope.
+            binding = scope_manager_.FindBindingFor(ident.name,
+                                                    ScopeManager::Closure);
+            if (binding) {
+              // Any value symbols found now must be captured.
+              if (binding->kind == NamedBinding::Variable ||
+                  binding->kind == NamedBinding::Capture) {
+                function_context.required_captures.push_back(*binding);
+                // Variables will ALWAYS have a realized TypeId.
+                binding = scope_manager_.DeclareCaptureBinding(
+                    binding->name, *binding->realized_type_id);
+              }
+
+              CHECK(!ident.resolved) << "Identifier was previously resolved";
+              ident.resolved = ResolvedIdentifier{*binding};
+              return ExpressionResult::of_binding(*binding);
+            }
+
+            // Fallback search to ALL scopes for top-level
+            // declarations i.e. functions, structs, interfaces,
+            // alias.
+            binding =
+                scope_manager_.FindBindingFor(ident.name, ScopeManager::All);
+            if (binding) {
+              switch (binding->kind) {
+                case NamedBinding::Function:
+                case NamedBinding::Method:
+                case NamedBinding::Struct:
+                case NamedBinding::TypeAlias:
+                case NamedBinding::Template:
+                case NamedBinding::Interface:
+                  CHECK(!ident.resolved)
+                      << "Identifier was previously resolved";
+                  ident.resolved = ResolvedIdentifier{*binding};
+                  return ExpressionResult::of_binding(*binding);
+
+                case NamedBinding::Argument:
+                case NamedBinding::Capture:
+                case NamedBinding::Field:
+                case NamedBinding::Narrowed:
+                case NamedBinding::Variable:
+                  error_collector_.Add("refers to variable out of scope",
+                                       metadata);
+                  return std::nullopt;
+              }
+            }
+
+            error_collector_.Add("unknown identifier: " + ident.name, metadata);
+            return std::nullopt;
+          },
+          [&](int32_t) -> std::optional<ExpressionResult> {
+            return ExpressionResult(LiteralType::i32);
+          },
+          [&](const CodepointLiteral& codepoint)
+              -> std::optional<ExpressionResult> {
+            return ExpressionResult(LiteralType::Codepoint);
+          },
+          [&](float) -> std::optional<ExpressionResult> {
+            return ExpressionResult(LiteralType::f32);
+          },
+          [&](bool) -> std::optional<ExpressionResult> {
+            return ExpressionResult(LiteralType::Bool);
+          },
+          [&](Nil) -> std::optional<ExpressionResult> {
+            return ExpressionResult(LiteralType::Nil);
+          }},
+      primary_expression.value);
 }
 
 std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(

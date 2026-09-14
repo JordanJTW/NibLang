@@ -236,6 +236,7 @@ fn parse_object(input: String, parser: Parser) -> Map[String, JsonValue] {
     }
     ch = input.charAt(parser.idx);
   }
+  throw "invalid object";
 }
 
 fn parse_array(input: String, parser: Parser) -> Array[JsonValue] {

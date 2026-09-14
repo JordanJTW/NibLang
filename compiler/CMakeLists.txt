@@ -16,7 +16,7 @@ target_link_libraries(scope_manager PRIVATE nlohmann_json::nlohmann_json)
 
 add_library(semantic_analyzer expression_checker.cc semantic_analyzer.cc)
 target_include_directories(semantic_analyzer PRIVATE ${PROJECT_SOURCE_DIR})
-target_link_libraries(semantic_analyzer PRIVATE error_collector  logging printer scope_manager symbol_binder type_context type_registry type_resolver)
+target_link_libraries(semantic_analyzer PRIVATE error_collector logging printer scope_manager symbol_binder type_context type_registry type_resolver)
 
 add_library(symbol_binder symbol_binder.cc)
 target_include_directories(symbol_binder PRIVATE ${PROJECT_SOURCE_DIR})
@@ -46,7 +46,7 @@ target_link_libraries(compiler PRIVATE bytecode_generator logging parser program
 include(GoogleTest)
 
 add_executable(golden_tests golden_tests.cc)
-target_link_libraries(golden_tests PRIVATE gmock_main bytecode_generator parser program_builder type_context vm)
+target_link_libraries(golden_tests PRIVATE gmock_main bytecode_generator semantic_analyzer parser program_builder type_context vm)
 target_include_directories(golden_tests PRIVATE ${PROJECT_SOURCE_DIR})
 gtest_discover_tests(golden_tests)
 

@@ -59,8 +59,10 @@ ByteCodeGenerator::FunctionObject ByteCodeGenerator::Build(
   if (symbol.declaration.body)
     EmitBlock(*symbol.declaration.body);
 
-  bytecode_.PushUnit();
-  bytecode_.Return();
+  if (symbol.declaration.resolved->should_insert_unit_return) {
+    bytecode_.PushUnit();
+    bytecode_.Return();
+  }
 
   called_symbols = std::move(called_symbols_);
   return FunctionObject{&symbol, std::move(bytecode_), argument_count,
@@ -181,8 +183,7 @@ void ByteCodeGenerator::EmitExpression(
                                  break;
                                case NamedBinding::Argument:
                                case NamedBinding::Variable:
-                               case NamedBinding::Capture:
-                               case NamedBinding::Narrowed: {
+                               case NamedBinding::Capture: {
                                  PushSymbol(ident.resolved->symbol);
                                  break;
                                }

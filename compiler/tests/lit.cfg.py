@@ -1,7 +1,7 @@
 import lit.formats
 
 config.name = 'NibLang'
-config.test_format = lit.formats.ShTest(execute_external=True)
+config.test_format = lit.formats.ShTest()
 config.use_default_shell = True  # Allows `|` even if %compiler returns 1
 
 config.suffixes = ['.nib']

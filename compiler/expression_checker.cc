@@ -5,7 +5,6 @@
 #include "compiler/expression_checker.h"
 
 #include <algorithm>
-#include <cstddef>
 #include <iterator>
 #include <string>
 #include <string_view>
@@ -13,9 +12,9 @@
 #include <variant>
 
 #include "compiler/error_collector.h"
-#include "compiler/logging.h"
-#include "compiler/symbol_binder.h"
+#include "compiler/scope_manager.h"
 #include "compiler/type_context.h"
+#include "compiler/type_registry.h"
 #include "compiler/type_resolver.h"
 
 namespace {
@@ -27,30 +26,34 @@ struct Overloaded : Ts... {
 template <class... Ts>
 Overloaded(Ts...) -> Overloaded<Ts...>;
 
-using LiteralType = TypeRegistry::LiteralType;
+using LiteralType = ::TypeRegistry::LiteralType;
 
 }  // namespace
 
-ExpressionChecker::ExpressionChecker(TypeContext& type_context,
-                                     ScopeManager& scope_manager,
-                                     ErrorCollector& error_collector,
-                                     TypeRegistry& type_registry)
-    : type_context_(type_context),
-      scope_manager_(scope_manager),
-      error_collector_(error_collector),
-      type_registry_(type_registry) {}
+ExpressionChecker::ExpressionChecker(
+    ScopeManager& scope_manager,
+    TypeContext& type_context,
+    TypeRegistry& type_registry,
+    NarrowedBindings narrowed_bindings,
+    std::vector<NamedBinding>& required_captures,
+    ErrorCollector& error_collector)
+    : scope_manager_(scope_manager),
+      type_context_(type_context),
+      type_registry_(type_registry),
+      narrowed_bindings_(std::move(narrowed_bindings)),
+      required_captures_(required_captures),
+      error_collector_(error_collector) {}
 
-std::optional<ExpressionResult> ExpressionChecker::CheckExpression(
-    std::unique_ptr<Expression>& expression,
-    FunctionContext& context) {
+std::optional<ExpressionResult> ExpressionChecker::Check(
+    std::unique_ptr<Expression>& expression) {
   std::optional<ExpressionResult> result = std::visit(
       Overloaded{
           [&](PrimaryExpression& primary) -> std::optional<ExpressionResult> {
-            return HandlePrimary(primary, expression->meta, context);
+            return HandlePrimary(primary, expression->meta);
           },
           [&](BinaryExpression& binary) -> std::optional<ExpressionResult> {
-            auto lhs = RequireConcreteValue(binary.lhs, context);
-            auto rhs = RequireConcreteValue(binary.rhs, context);
+            auto lhs = RequireConcreteValue(binary.lhs);
+            auto rhs = RequireConcreteValue(binary.rhs);
 
             if (!lhs || !rhs)
               return std::nullopt;
@@ -74,7 +77,7 @@ std::optional<ExpressionResult> ExpressionChecker::CheckExpression(
             }
 
             ResolvedBinary resolved{ResolvedBinary::Specialization::Number};
-            std::vector<ScopeNarrowingInfo> narrowing_info;
+            NarrowedBindings true_bindings, false_bindings;
             if (lhs->type_id ==
                 type_context_.GetTypeIdFor(ParsedType{"String"})) {
               resolved.specialization = ResolvedBinary::Specialization::String;
@@ -106,9 +109,8 @@ std::optional<ExpressionResult> ExpressionChecker::CheckExpression(
                   std::swap(if_branch_type, else_branch_type);
                 }
 
-                narrowing_info.push_back(
-                    ScopeNarrowingInfo{symbol_to_narrow.value(), if_branch_type,
-                                       else_branch_type});
+                true_bindings[symbol_to_narrow->binding_id] = if_branch_type;
+                false_bindings[symbol_to_narrow->binding_id] = else_branch_type;
               }
             }
 
@@ -124,27 +126,28 @@ std::optional<ExpressionResult> ExpressionChecker::CheckExpression(
                 binary.op == TokenKind::kCompareEq ||
                 binary.op == TokenKind::kCompareNe) {
               ExpressionResult result(LiteralType::Bool);
-              result.narrowing_info = std::move(narrowing_info);
+              result.true_bindings = std::move(true_bindings);
+              result.false_bindings = std::move(false_bindings);
               return result;
             }
 
             return ExpressionResult(*lhs->type_id);
           },
           [&](CallExpression& call_expr) -> std::optional<ExpressionResult> {
-            auto callee_result = CheckExpression(call_expr.callee, context);
+            auto callee_result = Check(call_expr.callee);
 
             // Short-circuit if the callee was invalid.
             if (!callee_result.has_value())
               return std::nullopt;
 
             auto type_check_result = TypeCheckCallExpr(
-                call_expr, callee_result.value(), context, expression->meta);
+                call_expr, callee_result.value(), expression->meta);
 
             return type_check_result;
           },
           [&](AssignmentExpression& assign) -> std::optional<ExpressionResult> {
-            auto lhs = CheckExpression(assign.lhs, context);
-            auto rhs = RequireConcreteValue(assign.rhs, context);
+            auto lhs = Check(assign.lhs);
+            auto rhs = RequireConcreteValue(assign.rhs);
 
             if (!lhs.has_value() || !rhs.has_value())
               return std::nullopt;
@@ -156,31 +159,39 @@ std::optional<ExpressionResult> ExpressionChecker::CheckExpression(
                          assign.lhs->meta)
                     .WithNote("declared here", lhs->binding->name.metadata);
                 return std::nullopt;
-              } else {
-                error_collector_.Add("cannot assign to this expression",
-                                     assign.lhs->meta);
-                return std::nullopt;
               }
+
+              error_collector_.Add("cannot assign to this expression",
+                                   assign.lhs->meta);
+              return std::nullopt;
             }
 
-            if (!type_context_.IsTypeSubsetOf(*rhs->type_id, *lhs->type_id)) {
+            // Always use the `binding` type directly since it describes the
+            // type of the slot and not whatever it might have been narrowed to.
+            CHECK(lhs->binding->realized_type_id) << "MUST have TypeId";
+            if (!type_context_.IsTypeSubsetOf(
+                    *rhs->type_id, *lhs->binding->realized_type_id)) {
               error_collector_.Add(
                   "expected " +
-                      type_registry_.GetNameFromTypeId(*lhs->type_id) +
+                      type_registry_.GetNameFromTypeId(
+                          *lhs->binding->realized_type_id) +
                       ", but found " +
                       type_registry_.GetNameFromTypeId(*rhs->type_id),
                   expression->meta);
               return std::nullopt;
             }
+            if (*lhs->binding->realized_type_id != *rhs->type_id) {
+              rhs->true_bindings[lhs->binding->binding_id] = *rhs->type_id;
+            }
             return rhs;
           },
           [&](MemberAccessExpression& member_access) {
-            return HandleMemberAccess(member_access, context);
+            return HandleMemberAccess(member_access);
           },
           [&](ArrayAccessExpression& array_access)
               -> std::optional<ExpressionResult> {
-            auto object = RequireConcreteValue(array_access.array, context);
-            auto index = RequireConcreteValue(array_access.index, context);
+            auto object = RequireConcreteValue(array_access.array);
+            auto index = RequireConcreteValue(array_access.index);
 
             if (!object || !index)
               return std::nullopt;
@@ -197,8 +208,8 @@ std::optional<ExpressionResult> ExpressionChecker::CheckExpression(
             return ExpressionResult{LiteralType::Any};
           },
           [&](LogicExpression& logic) -> std::optional<ExpressionResult> {
-            auto lhs = RequireConcreteValue(logic.lhs, context);
-            auto rhs = RequireConcreteValue(logic.rhs, context);
+            auto lhs = RequireConcreteValue(logic.lhs);
+            auto rhs = RequireConcreteValue(logic.rhs);
 
             if (!lhs || !rhs)
               return std::nullopt;
@@ -215,16 +226,65 @@ std::optional<ExpressionResult> ExpressionChecker::CheckExpression(
               return std::nullopt;
             }
 
-            std::vector<ScopeNarrowingInfo> narrowing_info;
+            NarrowedBindings true_bindings, false_bindings;
+            // AND requires both sides to be true. `true_bindings` uses the
+            // union of keys (all are known to be correct), and the intersection
+            // of types for any overlapping keys to satisfy both constraints
+            // simultaneously. `false_bindings` use the opposite.
             if (logic.kind == LogicExpression::Kind::AND) {
-              narrowing_info = lhs->narrowing_info;
-              narrowing_info.insert(narrowing_info.end(),
-                                    rhs->narrowing_info.begin(),
-                                    rhs->narrowing_info.end());
+              true_bindings = lhs->true_bindings;  // Conflicts overwritten
+              for (const auto& [id, type_id] : rhs->true_bindings) {
+                if (lhs->true_bindings.contains(id)) {
+                  LOG(INFO)
+                      << "Intersect: "
+                      << type_registry_.GetNameFromTypeId(type_id) << " & "
+                      << type_registry_.GetNameFromTypeId(
+                             lhs->true_bindings[id]);
+                  true_bindings[id] = type_context_.GetIntersectionOf(
+                      {type_id, lhs->true_bindings[id]});
+                  LOG(INFO)
+                      << "Result: "
+                      << type_registry_.GetNameFromTypeId(true_bindings[id]);
+                } else {
+                  true_bindings[id] = type_id;
+                }
+              }
+
+              for (const auto& [id, type_id] : lhs->false_bindings) {
+                if (rhs->false_bindings.contains(id)) {
+                  false_bindings[id] = type_context_.GetUnionOf(
+                      {type_id, rhs->false_bindings[id]});
+                }
+              }
+            }
+            // OR requires at least one side to succeed. `true_bindings` uses
+            // the intersection of keys (since we don't know which branch
+            // executed), and the union of types for overlapping keys (as either
+            // type may be valid). `false_bindings` use the opposite.
+            else if (logic.kind == LogicExpression::Kind::OR) {
+              for (const auto& [id, type_id] : lhs->true_bindings) {
+                if (rhs->true_bindings.contains(id)) {
+                  true_bindings[id] = type_context_.GetUnionOf(
+                      {type_id, rhs->true_bindings[id]});
+                }
+              }
+
+              false_bindings = lhs->true_bindings;  // Conflicts overwritten
+              for (const auto& [id, type_id] : rhs->false_bindings) {
+                if (lhs->false_bindings.contains(id)) {
+                  false_bindings[id] = type_context_.GetIntersectionOf(
+                      {type_id, lhs->false_bindings[id]});
+                } else {
+                  false_bindings[id] = type_id;
+                }
+              }
+            } else {
+              NOTREACHED() << "Unhandled logic expression!";
             }
 
             ExpressionResult result(LiteralType::Bool);
-            result.narrowing_info = std::move(narrowing_info);
+            result.true_bindings = std::move(true_bindings);
+            result.false_bindings = std::move(false_bindings);
             return result;
           },
           [&](ClosureExpression& closure) -> std::optional<ExpressionResult> {
@@ -239,18 +299,18 @@ std::optional<ExpressionResult> ExpressionChecker::CheckExpression(
           },
           [&](PrefixUnaryExpression& prefix)
               -> std::optional<ExpressionResult> {
-            auto operand = RequireConcreteValue(prefix.operand, context);
+            auto operand = RequireConcreteValue(prefix.operand);
             // TODO: Check that `op` is valid for `operand`.
             return operand;
           },
           [&](PostfixUnaryExpression& postfix)
               -> std::optional<ExpressionResult> {
-            auto operand = RequireConcreteValue(postfix.operand, context);
+            auto operand = RequireConcreteValue(postfix.operand);
             // TODO: Check that `op` is valid for `operand`.
             return operand;
           },
           [&](TypeCastExpression& cast) -> std::optional<ExpressionResult> {
-            auto result = RequireConcreteValue(cast.expr, context);
+            auto result = RequireConcreteValue(cast.expr);
             if (!result.has_value())
               return std::nullopt;
 
@@ -306,7 +366,7 @@ std::optional<ExpressionResult> ExpressionChecker::CheckExpression(
             // OptionalChainExpression is a "pseudo-AST node" which represents
             // the END of a chain of ?. accesses (i.e. where to jump to in case
             // of Nil) and resolves to the final type wrapped as an Optional.
-            auto result = RequireConcreteValue(optional_chain.root, context);
+            auto result = RequireConcreteValue(optional_chain.root);
             if (!result.has_value())
               return std::nullopt;
 
@@ -315,15 +375,13 @@ std::optional<ExpressionResult> ExpressionChecker::CheckExpression(
               result_type_id = type_context_.GetOptionalOf(result_type_id);
             }
 
-            ExpressionResult new_result = ExpressionResult::with_type_override(
-                result_type_id, result->binding);
-            new_result.narrowing_info = std::move(result->narrowing_info);
-            return new_result;
+            return ExpressionResult::with_type_override(result_type_id,
+                                                        result->binding);
           },
           [&](NilCoalescingExpression& coalescing)
               -> std::optional<ExpressionResult> {
-            auto lhs = RequireConcreteValue(coalescing.lhs, context);
-            auto rhs = RequireConcreteValue(coalescing.rhs, context);
+            auto lhs = RequireConcreteValue(coalescing.lhs);
+            auto rhs = RequireConcreteValue(coalescing.rhs);
 
             if (!lhs || !rhs)
               return std::nullopt;
@@ -348,7 +406,7 @@ std::optional<ExpressionResult> ExpressionChecker::CheckExpression(
           },
           [&](OptionalAccessExpression& optional_access)
               -> std::optional<ExpressionResult> {
-            auto result = RequireConcreteValue(optional_access.target, context);
+            auto result = RequireConcreteValue(optional_access.target);
 
             if (!result)
               return std::nullopt;
@@ -365,8 +423,7 @@ std::optional<ExpressionResult> ExpressionChecker::CheckExpression(
           },
           [&](TemplateInstantiationExpression& template_expr)
               -> std::optional<ExpressionResult> {
-            auto result =
-                CheckExpression(template_expr.generic_target, context);
+            auto result = Check(template_expr.generic_target);
 
             if (!result.has_value())
               return std::nullopt;
@@ -405,11 +462,11 @@ std::optional<ExpressionResult> ExpressionChecker::CheckExpression(
 }
 
 void ExpressionChecker::TypeCheckCallArguments(
-    const std::vector<std::optional<SpannedType>>& call_argument_results,
+    const std::vector<std::optional<SpannedType>>& call_arugment_results,
     const std::vector<TypeId>& expected_argument_types,
     const Metadata& debug_metadata,
     std::optional<TypeId> variadic_type) {
-  size_t supplied_argc = call_argument_results.size();
+  size_t supplied_argc = call_arugment_results.size();
   size_t expected_argc = expected_argument_types.size();
 
   if ((variadic_type && supplied_argc < expected_argc) ||
@@ -422,8 +479,8 @@ void ExpressionChecker::TypeCheckCallArguments(
   }
   // If more arguments are supplied than expected, this is a variadic function
   // and any additional args do not need to be checked ("any" type).
-  for (size_t i = 0; i < call_argument_results.size(); ++i) {
-    const auto& argument_result = call_argument_results[i];
+  for (size_t i = 0; i < call_arugment_results.size(); ++i) {
+    const auto& argument_result = call_arugment_results[i];
     const TypeId expected_type =
         (i < expected_argument_types.size() ? expected_argument_types[i]
                                             : *variadic_type);
@@ -449,7 +506,6 @@ void ExpressionChecker::TypeCheckCallArguments(
 std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
     CallExpression& call_expr,
     ExpressionResult callee_result,
-    FunctionContext& context,
     Metadata debug_metadata) {
   // Validate constructor calls BEFORE any type-deduction for better errors.
   if (callee_result.binding &&
@@ -471,7 +527,7 @@ std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
       call_expr.arguments.begin(), call_expr.arguments.end(),
       std::back_inserter(argument_results),
       [&](std::unique_ptr<Expression>& expr) -> std::optional<SpannedType> {
-        if (auto result = RequireConcreteValue(expr, context))
+        if (auto result = RequireConcreteValue(expr))
           return SpannedType{*result->type_id, expr->meta};
         return std::nullopt;
       });
@@ -545,7 +601,7 @@ std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
           type_registry_.GetType<AliasType>(*callable_type_id)) {
     return TypeCheckCallExpr(call_expr,
                              ExpressionResult{alias_type->target_type_id},
-                             context, debug_metadata);
+                             debug_metadata);
   }
 
   error_collector_.Add("type is not callable: " +
@@ -556,8 +612,7 @@ std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
 
 std::optional<ExpressionResult> ExpressionChecker::HandlePrimary(
     PrimaryExpression& primary_expression,
-    Metadata& metadata,
-    FunctionContext& function_context) {
+    Metadata metadata) {
   return std::visit(
       Overloaded{
           [&](const StringLiteral&) -> std::optional<ExpressionResult> {
@@ -571,7 +626,7 @@ std::optional<ExpressionResult> ExpressionChecker::HandlePrimary(
           },
           [&](Identifier& ident) -> std::optional<ExpressionResult> {
             if (ident.name == "Nil")
-              return ExpressionResult(TypeRegistry::Nil);
+              return ExpressionResult(LiteralType::Nil);
 
             // Search within the current function scope for value.
             auto binding = scope_manager_.FindBindingFor(
@@ -579,6 +634,10 @@ std::optional<ExpressionResult> ExpressionChecker::HandlePrimary(
             if (binding) {
               CHECK(!ident.resolved) << "Identifier was previously resolved";
               ident.resolved = ResolvedIdentifier{*binding};
+              if (narrowed_bindings_.contains(binding->binding_id)) {
+                return ExpressionResult::with_type_override(
+                    narrowed_bindings_.at(binding->binding_id), binding);
+              }
               return ExpressionResult::of_binding(*binding);
             }
 
@@ -589,7 +648,7 @@ std::optional<ExpressionResult> ExpressionChecker::HandlePrimary(
               // Any value symbols found now must be captured.
               if (binding->kind == NamedBinding::Variable ||
                   binding->kind == NamedBinding::Capture) {
-                function_context.required_captures.push_back(*binding);
+                required_captures_.push_back(*binding);
                 // Variables will ALWAYS have a realized TypeId.
                 binding = scope_manager_.DeclareCaptureBinding(
                     binding->name, *binding->realized_type_id);
@@ -597,12 +656,14 @@ std::optional<ExpressionResult> ExpressionChecker::HandlePrimary(
 
               CHECK(!ident.resolved) << "Identifier was previously resolved";
               ident.resolved = ResolvedIdentifier{*binding};
+              if (narrowed_bindings_.contains(binding->binding_id))
+                return ExpressionResult::with_type_override(
+                    narrowed_bindings_.at(binding->binding_id), binding);
               return ExpressionResult::of_binding(*binding);
             }
 
-            // Fallback search to ALL scopes for top-level
-            // declarations i.e. functions, structs, interfaces,
-            // alias.
+            // Fallback search to ALL scopes for top-level  declarations i.e.
+            // functions, structs, interfaces, alias.
             binding =
                 scope_manager_.FindBindingFor(ident.name, ScopeManager::All);
             if (binding) {
@@ -621,7 +682,6 @@ std::optional<ExpressionResult> ExpressionChecker::HandlePrimary(
                 case NamedBinding::Argument:
                 case NamedBinding::Capture:
                 case NamedBinding::Field:
-                case NamedBinding::Narrowed:
                 case NamedBinding::Variable:
                   error_collector_.Add("refers to variable out of scope",
                                        metadata);
@@ -635,8 +695,7 @@ std::optional<ExpressionResult> ExpressionChecker::HandlePrimary(
           [&](int32_t) -> std::optional<ExpressionResult> {
             return ExpressionResult(LiteralType::i32);
           },
-          [&](const CodepointLiteral& codepoint)
-              -> std::optional<ExpressionResult> {
+          [&](const CodepointLiteral&) -> std::optional<ExpressionResult> {
             return ExpressionResult(LiteralType::Codepoint);
           },
           [&](float) -> std::optional<ExpressionResult> {
@@ -652,9 +711,8 @@ std::optional<ExpressionResult> ExpressionChecker::HandlePrimary(
 }
 
 std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
-    MemberAccessExpression& member_access,
-    FunctionContext& context) {
-  auto object_result = CheckExpression(member_access.object, context);
+    MemberAccessExpression& member_access) {
+  auto object_result = Check(member_access.object);
   if (!object_result)
     return std::nullopt;
 
@@ -676,6 +734,16 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
       }
 
       type_id = template_variable_type->constraint_type_id->type_id;
+    }
+
+    if (auto* optional_type = type_registry_.GetType<OptionalType>(type_id)) {
+      error_collector_.Add("optional type " +
+                               type_registry_.GetNameFromTypeId(type_id) +
+                               " must be unwrapped",
+                           member_access.object->meta);
+
+      // Proceed with the unwrapped type to collect any further errors
+      type_id = optional_type->wrapped_type;
     }
 
     // Member access is only supported on structs
@@ -775,9 +843,8 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
 }
 
 std::optional<ExpressionResult> ExpressionChecker::RequireConcreteValue(
-    std::unique_ptr<Expression>& expression,
-    FunctionContext& context) {
-  auto result = CheckExpression(expression, context);
+    std::unique_ptr<Expression>& expression) {
+  auto result = Check(expression);
 
   if (!result)
     return std::nullopt;

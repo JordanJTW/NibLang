@@ -33,7 +33,7 @@ fn chain_hash[J: Hashable](value: J) -> i32 {
   return takes_hash(value);
 }
 
-fn main() -> i32 {
+fn main() {
   takes_hash(Foo());
   takes_hash(Bar());
 }

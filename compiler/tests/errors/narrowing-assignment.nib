@@ -1,0 +1,13 @@
+// RUN: %compiler %s --disable-logging 2> %t.err
+
+@import "std/types.nib"
+
+fn foo() -> i32? { return 0; }
+
+fn main() -> i32 {
+  let x: i32? = foo();
+  if (x == Nil) {
+    x = 42;
+  }
+  return x;
+}

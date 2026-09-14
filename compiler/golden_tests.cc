@@ -15,14 +15,13 @@
 #include "codegen/bytecode_generator.h"
 #include "codegen/program_builder.h"
 #include "compiler/error_collector.h"
-#include "compiler/expression_checker.h"
 #include "compiler/gtest_helpers.h"
 #include "compiler/parser/parser.h"
+#include "compiler/semantic_analyzer.h"
 #include "compiler/type_context.h"
 #include "compiler/types.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "semantic_analyzer.h"
 #include "src/types.h"
 #include "src/vm.h"
 #include "test/gtest_helpers.h"
@@ -98,9 +97,10 @@ class GoldenTest : public ::testing::Test {
     });
 
     FunctionContext context = {{}, TypeRegistry::Any};
+    NarrowedBindings narrowed_bindings;
     SemanticAnalyzer{type_context_, scope_manager_, error_collector_,
                      type_registry_}
-        .Check(files[0].root_block, context);
+        .Check(files[0].root_block, context, narrowed_bindings);
 
     if (error_collector_.HasErrors()) {
       error_collector_.PrintAllErrors(files);

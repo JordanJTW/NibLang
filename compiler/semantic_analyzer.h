@@ -6,12 +6,31 @@
 
 #include <memory>
 #include <optional>
+#include <vector>
 
 #include "compiler/error_collector.h"
 #include "compiler/expression_checker.h"
 #include "compiler/type_context.h"
-#include "compiler/type_registry.h"
 #include "compiler/types.h"
+
+struct FlowResult {
+  enum class Status { Terminate, Fallthrough } status;
+  std::optional<NarrowedBindings> narrowed_bindings = std::nullopt;
+
+  bool is_terminated() const { return status == Status::Terminate; }
+  bool is_fallthrough() const { return status == Status::Fallthrough; }
+};
+
+struct FunctionContext {
+  std::vector<NamedBinding> required_captures;
+  const TypeId return_type_id;
+};
+
+struct LoopContext {
+  NarrowedBindings initial_bindings;
+  std::optional<NarrowedBindings> break_bindings;
+  bool contains_break = false;
+};
 
 class SemanticAnalyzer {
  public:
@@ -20,11 +39,20 @@ class SemanticAnalyzer {
                             ErrorCollector& error_collector,
                             TypeRegistry& type_registry);
 
-  void Check(Block& block, FunctionContext& context);
+  FlowResult Check(Block& block,
+                   FunctionContext& context,
+                   const NarrowedBindings& narrowed_bindings,
+                   std::optional<LoopContext*> loop_context = std::nullopt);
 
  private:
-  void CheckStatement(std::unique_ptr<Statement>& statement,
-                      FunctionContext& context);
+  FlowResult Check(const std::unique_ptr<Statement>& statement,
+                   FunctionContext& function_context,
+                   const NarrowedBindings& existing_bindings,
+                   std::optional<LoopContext*> loop_context = std::nullopt);
+
+  NarrowedBindings UnionBindings(const NarrowedBindings& left,
+                                 const NarrowedBindings& right,
+                                 const NarrowedBindings& base);
 
   TypeContext& type_context_;
   ScopeManager& scope_manager_;

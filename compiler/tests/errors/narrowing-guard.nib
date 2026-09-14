@@ -1,0 +1,19 @@
+// RUN: %compiler %s --disable-logging 2> %t.err
+
+@import "std/types.nib"
+
+fn GetWord() -> String? {
+  return "Jordan";
+}
+
+fn test_guard() -> i32 {
+  let x: String? = GetWord();
+
+  if (x == Nil) {
+    return 0;
+  }
+
+  // x should be automatically narrowed to String here without another check
+  let s: String = x;
+  return s.length();
+}

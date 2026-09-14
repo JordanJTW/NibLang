@@ -107,8 +107,6 @@ std::ostream& operator<<(std::ostream& os, NamedBinding::Kind kind) {
       return os << "Variable";
     case NamedBinding::Capture:
       return os << "Capture";
-    case NamedBinding::Narrowed:
-      return os << "Narrowed";
     case NamedBinding::Template:
       return os << "Template";
     case NamedBinding::TypeAlias:

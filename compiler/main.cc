@@ -26,13 +26,12 @@
 #include "compiler/codegen/bytecode_generator.h"
 #include "compiler/codegen/program_builder.h"
 #include "compiler/error_collector.h"
-#include "compiler/expression_checker.h"
 #include "compiler/file.h"
 #include "compiler/parser/parser.h"
 #include "compiler/parser/printer.h"
+#include "compiler/semantic_analyzer.h"
 #include "compiler/type_context.h"
 #include "compiler/types.h"
-#include "semantic_analyzer.h"
 
 std::string OpenFileWithFallback(std::ifstream& file,
                                  std::string_view path,
@@ -207,7 +206,7 @@ int main(int argc, char* argv[]) {
     SemanticAnalyzer analyzer(type_context, scope_manager, error_collector,
                               type_registry);
     FunctionContext context = {{}, TypeRegistry::Any};
-    analyzer.Check(file.root_block, context);
+    analyzer.Check(file.root_block, context, NarrowedBindings{});
   }
 
   if (error_collector.HasErrors()) {
@@ -252,7 +251,8 @@ int main(int argc, char* argv[]) {
     }
 
     if (symbol.RequiresVirtualDispatch()) {
-      for (const auto& [self_id, symbol_id] : symbol.implementations) {
+      for (const auto& symbol_id :
+           symbol.implementations | std::views::values) {
         symbols_to_process.push_back(symbol_id);
         virtual_objects.insert(&symbol);
       }

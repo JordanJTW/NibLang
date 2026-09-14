@@ -1,0 +1,4 @@
+Error: [[PATH]]:20:15:
+      let s4: String = b;
+              ^~~~~~ expected 'String', but found 'Nil'
+

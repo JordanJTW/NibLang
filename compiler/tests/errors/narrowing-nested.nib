@@ -1,0 +1,24 @@
+// RUN: %compiler %s --disable-logging 2> %t.err || true
+// RUN: sed "s|%s|[[PATH]]|g" %t.err | diff -u %s.out -
+
+@import "std/types.nib"
+
+fn GetWord() -> String? {
+  return "Jordan";
+}
+
+fn test_nested() -> i32 {
+  let a: String? = GetWord();
+  let b: String? = GetWord();
+
+  if (a != Nil) {
+    if (b != Nil) {
+      let s1: String = a;
+      let s2: String = b;
+    } else {
+      let s3: String = a;
+      let s4: String = b;
+    }
+  }
+  return 0;
+}

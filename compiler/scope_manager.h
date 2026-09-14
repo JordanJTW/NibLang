@@ -53,9 +53,6 @@ class ScopeManager {
   NamedBinding DeclareArgumentBinding(SpannedText name, TypeId type_id);
   // Returns a NamedBinding of Kind::Capture declared in the current scope.
   NamedBinding DeclareCaptureBinding(SpannedText name, TypeId type_id);
-  // Returns a NamedBinding of Kind::Narrowed declared in the current scope.
-  NamedBinding DeclareNarrowedBinding(NamedBinding binding_to_narrow,
-                                      TypeId narrowed_type);
   // Returns a NamedBinding to Kind::Template declared in the current scope.
   NamedBinding DeclareTemplateBinding(SpannedText name, TypeId type_id);
 
@@ -128,6 +125,7 @@ class ScopeManager {
   std::vector<Scope> scopes_;
   ScopeId active_scope_id_{0};
   ScopeId function_scope_id_{0};
+  BindingId next_binding_id_{0};
 };
 
 std::ostream& operator<<(std::ostream&, const ScopeManager&);

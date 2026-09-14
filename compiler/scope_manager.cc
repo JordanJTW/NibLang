@@ -98,12 +98,6 @@ NamedBinding ScopeManager::InsertNameIntoScope(
     std::optional<SymbolId> symbol_id,
     std::optional<NamedBinding::Idx> idx,
     std::optional<TypeId> parent_type_id) {
-  NamedBinding binding = {.name = name,
-                          .kind = kind,
-                          .realized_type_id = std::move(type_id),
-                          .symbol_id = std::move(symbol_id),
-                          .idx = std::move(idx),
-                          .parent_type_id = std::move(parent_type_id)};
   if (auto existing_binding =
           FindBindingFor(name.text, ScopeToCheck::Current)) {
     error_collector_
@@ -113,6 +107,17 @@ NamedBinding ScopeManager::InsertNameIntoScope(
                   existing_binding->name.metadata);
     return *existing_binding;
   }
+
+  NamedBinding binding = {
+      .name = name,
+      .kind = kind,
+      .realized_type_id = type_id,
+      .symbol_id = symbol_id,
+      .idx = idx,
+      .parent_type_id = parent_type_id,
+      .binding_id = next_binding_id_++,
+  };
+
   auto& scope = scopes_[active_scope_id_];
   size_t binding_idx = scope.bindings_for_scope.size();
   scope.binding_lookup[name.text] = binding_idx;
@@ -139,15 +144,6 @@ NamedBinding ScopeManager::DeclareCaptureBinding(SpannedText name,
   return InsertNameIntoScope(std::move(name), NamedBinding::Capture, type_id,
                              /*symbol_id=*/std::nullopt,
                              scopes_[function_scope_id_].next_symbol_idx++);
-}
-
-NamedBinding ScopeManager::DeclareNarrowedBinding(
-    NamedBinding binding_to_narrow,
-    TypeId narrowed_type) {
-  // Narrowed symbols shadow existing symbols, so assign the same index.
-  return InsertNameIntoScope(binding_to_narrow.name, NamedBinding::Narrowed,
-                             narrowed_type, binding_to_narrow.symbol_id,
-                             binding_to_narrow.idx);
 }
 
 NamedBinding ScopeManager::DeclareTemplateBinding(SpannedText name,

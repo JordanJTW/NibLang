@@ -22,6 +22,7 @@
 using SymbolId = size_t;
 using ScopeId = size_t;
 using TypeId = size_t;
+using BindingId = size_t;
 
 struct FunctionDeclaration;
 struct StructDeclaration;
@@ -52,7 +53,6 @@ struct NamedBinding {
     Argument,
     Variable,
     Capture,
-    Narrowed,
     Template,  // template variable i.e. T
     TypeAlias,
   } kind;
@@ -66,7 +66,7 @@ struct NamedBinding {
   inline bool IsVariable() const {
     // A variable by any other name is just as sweet...
     return kind == Field || kind == Argument || kind == Variable ||
-           kind == Capture || kind == Narrowed;
+           kind == Capture;
   }
   inline bool IsValue() const {
     // Functions are effectively just variables referring to a code block
@@ -81,8 +81,8 @@ struct NamedBinding {
 
   // Used for function table resolution, struct field ordering, etc.
   std::optional<Idx> idx;
-
   std::optional<TypeId> parent_type_id;
+  BindingId binding_id;
 
   inline bool operator==(const NamedBinding& other) const {
     return kind == other.kind && realized_type_id == other.realized_type_id &&
@@ -292,6 +292,7 @@ struct ResolvedFunction {
   NamedBinding function_symbol;
 
   std::vector<NamedBinding> required_captures;
+  bool should_insert_unit_return = false;
 };
 
 struct TemplateVariable {

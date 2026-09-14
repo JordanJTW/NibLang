@@ -4,25 +4,18 @@
 
 #pragma once
 
-#include <memory>
 #include <optional>
+#include <unordered_map>
 #include <vector>
 
 #include "compiler/error_collector.h"
 #include "compiler/parser/tokenizer.h"
+#include "compiler/scope_manager.h"
 #include "compiler/type_context.h"
+#include "compiler/type_registry.h"
 #include "compiler/types.h"
 
-struct FunctionContext {
-  std::vector<NamedBinding> required_captures;
-  const TypeId return_type_id;
-};
-
-struct ScopeNarrowingInfo {
-  NamedBinding symbol;
-  TypeId if_branch_type;
-  TypeId else_branch_type;
-};
+using NarrowedBindings = std::unordered_map<BindingId, TypeId>;
 
 struct ExpressionResult {
   explicit ExpressionResult(TypeId type_id) : type_id(type_id) {}
@@ -40,7 +33,7 @@ struct ExpressionResult {
     if (!binding)
       return ExpressionResult(type_id);
 
-    ExpressionResult result = ExpressionResult::of_binding(*binding);
+    ExpressionResult result = of_binding(std::move(*binding));
     result.type_id = type_id;
     return result;
   }
@@ -54,8 +47,9 @@ struct ExpressionResult {
 
   std::optional<TypeId> type_id;
   std::optional<NamedBinding> binding;
-  bool should_curry_method_self = false;
-  std::vector<ScopeNarrowingInfo> narrowing_info = {};
+
+  NarrowedBindings true_bindings;
+  NarrowedBindings false_bindings;
 
  private:
   ExpressionResult() = default;
@@ -63,25 +57,19 @@ struct ExpressionResult {
 
 class ExpressionChecker {
  public:
-  explicit ExpressionChecker(TypeContext& type_context,
-                             ScopeManager& scope_manager,
-                             ErrorCollector& error_collector,
-                             TypeRegistry& type_registry);
-
-  std::optional<ExpressionResult> CheckExpression(
-      std::unique_ptr<Expression>& expression,
-      FunctionContext& context);
+  explicit ExpressionChecker(ScopeManager& scope_manager,
+                             TypeContext& type_context,
+                             TypeRegistry& type_registry,
+                             NarrowedBindings narrowed_bindings,
+                             std::vector<NamedBinding>& required_captures,
+                             ErrorCollector& error_collector);
 
   std::optional<ExpressionResult> RequireConcreteValue(
-      std::unique_ptr<Expression>& expression,
-      FunctionContext& context);
+      std::unique_ptr<Expression>& expression);
 
  private:
-  std::optional<ExpressionResult> HandlePrimary(PrimaryExpression&,
-                                                Metadata&,
-                                                FunctionContext&);
-  std::optional<ExpressionResult> HandleMemberAccess(MemberAccessExpression&,
-                                                     FunctionContext&);
+  std::optional<ExpressionResult> HandlePrimary(PrimaryExpression&, Metadata);
+  std::optional<ExpressionResult> HandleMemberAccess(MemberAccessExpression&);
 
   struct ArgumentResult {
     std::optional<ExpressionResult> result;
@@ -97,13 +85,17 @@ class ExpressionChecker {
   std::optional<ExpressionResult> TypeCheckCallExpr(
       CallExpression& call_expr,
       ExpressionResult callee_result,
-      FunctionContext& context,
       Metadata debug_metadata);
 
-  TypeContext& type_context_;
+  std::optional<ExpressionResult> Check(
+      std::unique_ptr<Expression>& expression);
+
   ScopeManager& scope_manager_;
-  ErrorCollector& error_collector_;
+  TypeContext& type_context_;
   TypeRegistry& type_registry_;
+  const NarrowedBindings narrowed_bindings_;
+  std::vector<NamedBinding>& required_captures_;
+  ErrorCollector& error_collector_;
 };
 
 std::ostream& operator<<(std::ostream& os,

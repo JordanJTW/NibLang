@@ -32,6 +32,7 @@
 #include "compiler/parser/printer.h"
 #include "compiler/type_context.h"
 #include "compiler/types.h"
+#include "semantic_analyzer.h"
 
 std::string OpenFileWithFallback(std::ifstream& file,
                                  std::string_view path,
@@ -142,7 +143,7 @@ Options ParseArgs(int argc, char* argv[]) {
       opts.mode = OutputMode::DumpImage;
     } else if (arg == "--disable-logging") {
       core::logging::DisableLogging();
-    }else if (arg == "--output" && i + 1 < argc) {
+    } else if (arg == "--output" && i + 1 < argc) {
       opts.output_path = argv[++i];
     } else if (arg == "--debug" && i + 1 < argc) {
       opts.debug_path = argv[++i];
@@ -152,7 +153,10 @@ Options ParseArgs(int argc, char* argv[]) {
   }
 
   if (opts.input_path.empty()) {
-    fprintf(stderr, "Usage: %s [--ast|--dump|--disable-logging|--output <path>|--debug <path>] <file>\n", argv[0]);
+    fprintf(stderr,
+            "Usage: %s [--ast|--dump|--disable-logging|--output <path>|--debug "
+            "<path>] <file>\n",
+            argv[0]);
     exit(1);
   }
 
@@ -200,9 +204,9 @@ int main(int argc, char* argv[]) {
 
   for (File& file : files) {
     TypeContext type_context(scope_manager, type_registry, error_collector);
-    ExpressionChecker analyzer(type_context, scope_manager, error_collector,
+    SemanticAnalyzer analyzer(type_context, scope_manager, error_collector,
                               type_registry);
-    ExpressionChecker::FunctionContext context = {{}, TypeRegistry::Any};
+    FunctionContext context = {{}, TypeRegistry::Any};
     analyzer.Check(file.root_block, context);
   }
 

@@ -13,6 +13,11 @@
 #include "compiler/type_context.h"
 #include "compiler/types.h"
 
+struct FunctionContext {
+  std::vector<NamedBinding> required_captures;
+  const TypeId return_type_id;
+};
+
 struct ScopeNarrowingInfo {
   NamedBinding symbol;
   TypeId if_branch_type;
@@ -63,21 +68,15 @@ class ExpressionChecker {
                              ErrorCollector& error_collector,
                              TypeRegistry& type_registry);
 
-  struct FunctionContext {
-    std::vector<NamedBinding> required_captures;
-    const TypeId return_type_id;
-  };
-
-  void Check(Block& block, FunctionContext& context);
-
   std::optional<ExpressionResult> CheckExpression(
       std::unique_ptr<Expression>& expression,
       FunctionContext& context);
 
- private:
-  void CheckStatement(std::unique_ptr<Statement>& statement,
-                      FunctionContext& context);
+  std::optional<ExpressionResult> RequireConcreteValue(
+      std::unique_ptr<Expression>& expression,
+      FunctionContext& context);
 
+ private:
   std::optional<ExpressionResult> HandleMemberAccess(MemberAccessExpression&,
                                                      FunctionContext&);
 
@@ -97,10 +96,6 @@ class ExpressionChecker {
       ExpressionResult callee_result,
       FunctionContext& context,
       Metadata debug_metadata);
-
-  std::optional<ExpressionResult> RequireConcreteValue(
-      std::unique_ptr<Expression>& expression,
-      FunctionContext& context);
 
   TypeContext& type_context_;
   ScopeManager& scope_manager_;

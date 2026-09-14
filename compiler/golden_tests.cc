@@ -22,6 +22,7 @@
 #include "compiler/types.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "semantic_analyzer.h"
 #include "src/types.h"
 #include "src/vm.h"
 #include "test/gtest_helpers.h"
@@ -96,8 +97,8 @@ class GoldenTest : public ::testing::Test {
         .file_id = 0,
     });
 
-    ExpressionChecker::FunctionContext context = {{}, TypeRegistry::Any};
-    ExpressionChecker{type_context_, scope_manager_, error_collector_,
+    FunctionContext context = {{}, TypeRegistry::Any};
+    SemanticAnalyzer{type_context_, scope_manager_, error_collector_,
                      type_registry_}
         .Check(files[0].root_block, context);
 

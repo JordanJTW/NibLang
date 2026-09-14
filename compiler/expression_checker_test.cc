@@ -34,8 +34,8 @@ class SemanticAnalyzerTest : public ::testing::Test {
   ScopeManager scope_manager{error_collector};
   TypeRegistry type_registry{scope_manager};
   TypeContext type_context{scope_manager, type_registry, error_collector};
-  ExpressionChecker semantic_analyzer{type_context, scope_manager,
-                                     error_collector, type_registry};
+  ExpressionChecker expression_checker{type_context, scope_manager,
+                                      error_collector, type_registry};
 };
 
 TEST_F(SemanticAnalyzerTest, Expression_PrimaryExpr_BuiltInValue) {
@@ -50,8 +50,8 @@ TEST_F(SemanticAnalyzerTest, Expression_PrimaryExpr_BuiltInValue) {
        kPrimaryExpressionToTypeId) {
     SCOPED_TRACE("Testing PrimaryExpression for: " + name);
     auto expr = std::make_unique<Expression>(Expression{primary_expr});
-    ExpressionChecker::FunctionContext context = {{}, LiteralType::Unit};
-    auto result = semantic_analyzer.CheckExpression(expr, context);
+    FunctionContext context = {{}, LiteralType::Unit};
+    auto result = expression_checker.CheckExpression(expr, context);
 
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(result->type_id, expected_type_id);

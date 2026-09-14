@@ -95,4 +95,7 @@ extern struct String {
   fn charAt(idx: i32) -> Codepoint;
   fn substr(start: i32, end: i32) -> String;
   fn startsWith(prefix: String, idx: i32) -> bool;
+
+  static fn hash(value: String) -> i32;
+  static fn equals(v1: String, v2: String) -> bool;
 }

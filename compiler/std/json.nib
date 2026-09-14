@@ -2,10 +2,11 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause
 
+@import "std/hashmap.nib"
 @import "std/types.nib"
 
 alias JsonValue =
-    (bool | i32 | f32 | String | Array[JsonValue] | Map[String, JsonValue]);
+    (bool | i32 | f32 | String | Array[JsonValue] | HashMap[String, JsonValue]);
 
 struct Parser {
   idx: i32;
@@ -203,10 +204,12 @@ fn parse_number(input: String, parser: Parser) -> i32 | f32 {
   return value;
 }
 
-fn parse_object(input: String, parser: Parser) -> Map[String, JsonValue] {
+fn parse_object(input: String, parser: Parser) -> HashMap[String, JsonValue] {
   parser.idx = parser.idx + 1;
   skip_whitespace(input, parser);
-  let obj = Map.new.of(String, JsonValue)();
+  let obj = HashMap.new.of(String, JsonValue)(
+    String.equals, String.hash,
+  );
 
   if (parser.idx >= input.length()) {
     throw "unterminated obj";

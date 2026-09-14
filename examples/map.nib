@@ -1,0 +1,17 @@
+@import "std/hashmap.nib"
+
+fn main() -> String? {
+    let x = HashMap.new.of(i32, String)(
+        fn (v1: i32, v2: i32) -> bool { return v1 == v2; },
+        fn (value: i32) -> i32 { return value; }
+    );
+    x.set(34, "Jordan");
+    x.set(42, "KitKat");
+    x.set(22, "Rabbit");
+
+    let y = HashMap.new.of(String, i32)(String.equals, String.hash);
+    y.set("Jordan", 34);
+    y.set("Howdy", 42);
+    y.set("Jordan", 22);
+    return x.get(34);
+}

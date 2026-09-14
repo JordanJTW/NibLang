@@ -1,0 +1,51 @@
+@import "std/types.nib"
+
+struct MapNode[Key, Value] {
+    key: Key;
+    value: Value;
+    next: MapNode[Key, Value]?;
+}
+
+struct HashMap[Key, Value] {
+    buckets: Array[MapNode[Key, Value]?];
+    size: i32;
+    equalsFn: fn (Key, Key) -> bool;
+    hashFn: fn (Key) -> i32;
+
+    static fn new[Key, Value](
+        equalsFn: fn (Key, Key) -> bool,
+        hashFn: fn (Key) -> i32,
+    ) -> HashMap[Key, Value] {
+        return HashMap(Array.withSize.of(MapNode[Key, Value]?)(13), 0, equalsFn, hashFn);
+    }
+
+    fn get(key: Key) -> Value? {
+        return self.find_node(key)?.value;
+    }
+
+    fn set(key: Key, value: Value) {
+        let existing = self.find_node(key);
+        if (existing != Nil) {
+            existing.value = value;
+            return;
+        }
+
+        let bucket_idx = (self.hashFn(key) & 0x7FFFFFFF) % self.buckets.length();
+        let head = self.buckets.get(bucket_idx);
+
+        self.buckets.set(bucket_idx, MapNode(key, value, head));
+        self.size = self.size + 1;
+    }
+
+    fn find_node(key: Key) -> MapNode[Key, Value]? {
+        let bucket_idx = (self.hashFn(key) & 0x7FFFFFFF) % self.buckets.length();
+        let node = self.buckets.get(bucket_idx);
+        while (node != Nil) {
+            if (self.equalsFn(node.key, key)) {
+                return node;
+            }
+            node = node.next;
+        }
+        return Nil;
+    }
+}

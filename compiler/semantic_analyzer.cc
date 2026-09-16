@@ -159,17 +159,17 @@ FlowResult SemanticAnalyzer::Check(const std::unique_ptr<Statement>& statement,
           },
           [&](ReturnStatement& ret) {
             if (ret.value) {
-              auto result = check_expression(ret.value);
-
-              if (!type_context_.IsTypeSubsetOf(
-                      *result->type_id, function_context.return_type_id)) {
-                error_collector_.Add(
-                    "Returning " +
-                        type_registry_.GetNameFromTypeId(*result->type_id) +
-                        " from function with return type " +
-                        type_registry_.GetNameFromTypeId(
-                            function_context.return_type_id),
-                    statement->meta);
+              if (auto result = check_expression(ret.value)) {
+                if (!type_context_.IsTypeSubsetOf(
+                        *result->type_id, function_context.return_type_id)) {
+                  error_collector_.Add(
+                      "Returning " +
+                          type_registry_.GetNameFromTypeId(*result->type_id) +
+                          " from function with return type " +
+                          type_registry_.GetNameFromTypeId(
+                              function_context.return_type_id),
+                      statement->meta);
+                }
               }
             } else {
               if (!type_context_.IsTypeSubsetOf(

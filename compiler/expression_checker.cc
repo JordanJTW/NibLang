@@ -45,7 +45,8 @@ ExpressionChecker::ExpressionChecker(
       error_collector_(error_collector) {}
 
 std::optional<ExpressionResult> ExpressionChecker::Check(
-    std::unique_ptr<Expression>& expression) {
+    std::unique_ptr<Expression>& expression,
+    std::optional<SpannedType> hint_return_type) {
   std::optional<ExpressionResult> result = std::visit(
       Overloaded{
           [&](PrimaryExpression& primary) -> std::optional<ExpressionResult> {
@@ -140,8 +141,9 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
             if (!callee_result.has_value())
               return std::nullopt;
 
-            auto type_check_result = TypeCheckCallExpr(
-                call_expr, callee_result.value(), expression->meta);
+            auto type_check_result =
+                TypeCheckCallExpr(call_expr, callee_result.value(),
+                                  hint_return_type, expression->meta);
 
             return type_check_result;
           },
@@ -506,6 +508,7 @@ void ExpressionChecker::TypeCheckCallArguments(
 std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
     CallExpression& call_expr,
     ExpressionResult callee_result,
+    std::optional<SpannedType> hint_return_type,
     Metadata debug_metadata) {
   // Validate constructor calls BEFORE any type-deduction for better errors.
   if (callee_result.binding &&
@@ -543,7 +546,7 @@ std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
     std::vector<TypeId> deduced_bindings;
     std::vector<Metadata> resolved_spans;
     if (resolver.Resolve(*callee_result.binding, argument_results,
-                         deduced_bindings, resolved_spans,
+                         hint_return_type, deduced_bindings, resolved_spans,
                          call_expr.callee->meta)) {
       // // If there were no template variables to deduce then this Symbol is
       // // likely a method on a templated struct -- do not realize it here.
@@ -601,7 +604,7 @@ std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
           type_registry_.GetType<AliasType>(*callable_type_id)) {
     return TypeCheckCallExpr(call_expr,
                              ExpressionResult{alias_type->target_type_id},
-                             debug_metadata);
+                             hint_return_type, debug_metadata);
   }
 
   error_collector_.Add("type is not callable: " +
@@ -843,8 +846,9 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
 }
 
 std::optional<ExpressionResult> ExpressionChecker::RequireConcreteValue(
-    std::unique_ptr<Expression>& expression) {
-  auto result = Check(expression);
+    std::unique_ptr<Expression>& expression,
+    std::optional<SpannedType> hint_expected_type) {
+  auto result = Check(expression, hint_expected_type);
 
   if (!result)
     return std::nullopt;

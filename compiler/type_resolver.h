@@ -41,6 +41,7 @@ class TypeResolver {
   using CallArguments = std::vector<std::optional<SpannedType>>;
   bool Resolve(NamedBinding binding,
                const CallArguments& argument_types,
+               std::optional<SpannedType> hint_return_type,
                std::vector<TypeId>& bindings,
                std::vector<Metadata>& bound_spans,
                Metadata expression_metadata);

@@ -118,12 +118,14 @@ FlowResult SemanticAnalyzer::Check(const std::unique_ptr<Statement>& statement,
                                    FunctionContext& function_context,
                                    const NarrowedBindings& existing_bindings,
                                    std::optional<LoopContext*> loop_context) {
-  auto check_expression = [&](std::unique_ptr<Expression>& expression) {
+  auto check_expression = [&](std::unique_ptr<Expression>& expression,
+                              std::optional<SpannedType> hint_return_type =
+                                  std::nullopt) {
     auto result =
         ExpressionChecker(scope_manager_, type_context_, type_registry_,
                           existing_bindings, function_context.required_captures,
                           error_collector_)
-            .RequireConcreteValue(expression);
+            .RequireConcreteValue(expression, hint_return_type);
 
     if (!result)
       return result;
@@ -273,39 +275,43 @@ FlowResult SemanticAnalyzer::Check(const std::unique_ptr<Statement>& statement,
           [&](AssignStatement& assign) {
             // Ensure assignment expression's type matches the declared type (if
             // given, otherwise the variable's type is deduced from the value).
-            std::optional<TypeId> parsed_type_id;
-            if (assign.type.has_value()) {
-              parsed_type_id = type_context_.GetTypeIdFor(*assign.type);
+            std::optional<SpannedType> declared_type;
+            if (assign.type) {
+              if (auto type_id = type_context_.GetTypeIdFor(*assign.type))
+                declared_type = SpannedType{*type_id, assign.type->metadata};
             }
 
-            auto result = check_expression(assign.value);
-            if (!result.has_value()) {
+            auto result = check_expression(assign.value, declared_type);
+            if (!result) {
               NamedBinding binding = scope_manager_.DeclareVariableBinding(
                   assign.name, TypeRegistry::Error);
               return FlowResult{FlowResult::Status::Fallthrough};
             }
 
-            if (parsed_type_id.has_value()) {
+            if (declared_type) {
               if (!type_context_.IsTypeSubsetOf(*result->type_id,
-                                                *parsed_type_id)) {
+                                                declared_type->type_id)) {
                 std::string expected_type =
-                    type_registry_.GetNameFromTypeId(*parsed_type_id);
+                    type_registry_.GetNameFromTypeId(declared_type->type_id);
 
                 error_collector_.Add(
                     "expected " +
-                        type_registry_.GetNameFromTypeId(*parsed_type_id) +
+                        type_registry_.GetNameFromTypeId(
+                            declared_type->type_id) +
                         ", but found " +
                         type_registry_.GetNameFromTypeId(*result->type_id),
                     assign.type->metadata);
                 // Intentional fallthrough to prevent error cascades.
               }
             } else {
-              parsed_type_id = result->type_id;
+              // Point to expression type is inferred from; `result->type_id` is
+              // guaranteed by ExpressionChecker::RequireConcreteValue.
+              declared_type = SpannedType{*result->type_id, assign.value->meta};
             }
 
             // Register the variable's type within the current scope.
             NamedBinding binding = scope_manager_.DeclareVariableBinding(
-                assign.name, parsed_type_id.value());
+                assign.name, declared_type->type_id);
             CHECK(!assign.resolved) << "Identifier was previously resolved";
             assign.resolved = ResolvedIdentifier{binding};
             return FlowResult{FlowResult::Status::Fallthrough};

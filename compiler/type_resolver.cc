@@ -28,7 +28,8 @@ TypeResolver::TypeResolver(TypeRegistry& type_registry,
 
 bool TypeResolver::Resolve(
     NamedBinding binding,
-    const std::vector<std::optional<SpannedType>>& call_argument_types,
+    const std::vector<std::optional<SpannedType>>& argument_types,
+    std::optional<SpannedType> hint_return_type,
     std::vector<TypeId>& bindings,
     std::vector<Metadata>& bound_spans,
     Metadata expression_metadata) {
@@ -59,25 +60,30 @@ bool TypeResolver::Resolve(
         return false;
 
       for (size_t i = 0; i < pattern_type->arg_types.size(); ++i) {
-        if (i >= call_argument_types.size())
+        if (i >= argument_types.size())
           break;
 
-        if (!call_argument_types[i].has_value())
+        if (!argument_types[i].has_value())
           continue;
 
-        Resolve(pattern_type->arg_types[i], call_argument_types[i]->type_id,
-                call_argument_types[i]->metadata, deduced_bindings);
+        Resolve(pattern_type->arg_types[i], argument_types[i]->type_id,
+                argument_types[i]->metadata, deduced_bindings);
       }
 
       if (pattern_type->variadic_type) {
         for (size_t i = pattern_type->arg_types.size();
-             i < call_argument_types.size(); ++i) {
-          if (!call_argument_types[i].has_value())
+             i < argument_types.size(); ++i) {
+          if (!argument_types[i].has_value())
             continue;
 
-          Resolve(*pattern_type->variadic_type, call_argument_types[i]->type_id,
-                  call_argument_types[i]->metadata, deduced_bindings);
+          Resolve(*pattern_type->variadic_type, argument_types[i]->type_id,
+                  argument_types[i]->metadata, deduced_bindings);
         }
+      }
+
+      if (hint_return_type) {
+        Resolve(pattern_type->return_type, hint_return_type->type_id,
+                hint_return_type->metadata, deduced_bindings);
       }
 
       // Ensure `bindings` is sized correctly and cleared
@@ -112,14 +118,19 @@ bool TypeResolver::Resolve(
           type_registry_.GetType<StructType>(*pattern_type_id);
 
       for (size_t i = 0; i < pattern_type->field_types.size(); ++i) {
-        if (i >= call_argument_types.size())
+        if (i >= argument_types.size())
           break;
 
-        if (!call_argument_types[i].has_value())
+        if (!argument_types[i].has_value())
           continue;
 
-        Resolve(pattern_type->field_types[i], call_argument_types[i]->type_id,
-                call_argument_types[i]->metadata, deduced_bindings);
+        Resolve(pattern_type->field_types[i], argument_types[i]->type_id,
+                argument_types[i]->metadata, deduced_bindings);
+      }
+
+      if (hint_return_type) {
+        Resolve(*pattern_type_id, hint_return_type->type_id,
+                hint_return_type->metadata, deduced_bindings);
       }
 
       // Ensure `bindings` is sized correctly and cleared

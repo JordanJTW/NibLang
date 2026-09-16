@@ -192,7 +192,8 @@ TEST_F(TypeResolverTest, ResolveConstructor) {
   std::vector<Metadata> resolved_spans;
   EXPECT_TRUE(type_resolver.Resolve(
       binding, {SpannedType{LiteralType::f32}, SpannedType{LiteralType::Bool}},
-      deduced_bindings, resolved_spans, /*expression_metadata=*/{}));
+      /*hint_return_type=*/std::nullopt, deduced_bindings, resolved_spans,
+      /*expression_metadata=*/{}));
 
   EXPECT_THAT(deduced_bindings,
               ElementsAre(LiteralType::f32, LiteralType::Bool));
@@ -212,14 +213,15 @@ TEST_F(TypeResolverTest, ResolveConstructorWithMissingArgument) {
   std::vector<TypeId> deduced_bindings;
   std::vector<Metadata> resolved_spans;
   EXPECT_TRUE(type_resolver.Resolve(
-      binding, {std::nullopt, SpannedType{LiteralType::f32}}, deduced_bindings,
-      resolved_spans,
+      binding, {std::nullopt, SpannedType{LiteralType::f32}},
+      /*hint_return_type=*/std::nullopt, deduced_bindings, resolved_spans,
       /*expression_metadata=*/{}));
 
   EXPECT_THAT(deduced_bindings, ElementsAre(LiteralType::f32));
 
   deduced_bindings.clear();  // Ensure we get fresh bindings :^)
   EXPECT_TRUE(type_resolver.Resolve(binding, {SpannedType{LiteralType::Bool}},
+                                    /*hint_return_type=*/std::nullopt,
                                     deduced_bindings, resolved_spans,
                                     /*expression_metadata=*/{}));
 

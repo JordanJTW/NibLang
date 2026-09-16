@@ -65,7 +65,8 @@ class ExpressionChecker {
                              ErrorCollector& error_collector);
 
   std::optional<ExpressionResult> RequireConcreteValue(
-      std::unique_ptr<Expression>& expression);
+      std::unique_ptr<Expression>& expression,
+      std::optional<SpannedType> hint_return_type = std::nullopt);
 
  private:
   std::optional<ExpressionResult> HandlePrimary(PrimaryExpression&, Metadata);
@@ -85,10 +86,12 @@ class ExpressionChecker {
   std::optional<ExpressionResult> TypeCheckCallExpr(
       CallExpression& call_expr,
       ExpressionResult callee_result,
+      std::optional<SpannedType> hint_return_type,
       Metadata debug_metadata);
 
   std::optional<ExpressionResult> Check(
-      std::unique_ptr<Expression>& expression);
+      std::unique_ptr<Expression>& expression,
+      std::optional<SpannedType> hint_return_type = std::nullopt);
 
   ScopeManager& scope_manager_;
   TypeContext& type_context_;

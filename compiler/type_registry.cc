@@ -1,3 +1,7 @@
+// Copyright (c) 2026, Jordan Werthman <jordanwerthman@gmail.com>
+//
+// SPDX-License-Identifier: BSD-2-Clause
+
 #include "compiler/type_registry.h"
 
 #include <sstream>
@@ -67,13 +71,16 @@ size_t UnionType::Hash::operator()(const UnionType& key) const {
 TypeRegistry::TypeRegistry(ScopeManager& scope_manager)
     : scope_manager_(scope_manager) {
   // Add dummy entries for the built-in types to simplify logic.
-  for (size_t i = 0; i < LiteralType::kCount; ++i)
+  for (size_t i = 0; i < LiteralType::kCount; ++i) {
     type_table_[i] = BuiltInType{};
+    variable_info_[i] = VariableInfo{};
+  }
 }
 
 std::pair<SymbolId, StructSymbol*> TypeRegistry::NewStructSymbol(
-    StructSymbol symbol) {
+    StructDeclaration& declaration) {
   SymbolId symbol_id = next_symbol_id_++;
+  StructSymbol symbol{declaration, symbol_id};
   auto [it, success] = symbol_table_.emplace(symbol_id, std::move(symbol));
   CHECK(success) << "SymbolId already exists in SymbolTable";
   return {symbol_id, std::get_if<StructSymbol>(&it->second)};
@@ -92,8 +99,20 @@ SymbolId TypeRegistry::NewFunctionSymbol(
 
 TypeId TypeRegistry::NewStructType(StructType type,
                                    std::optional<TypeId> self_id) {
+  InstanceCache& cache = struct_instance_cache_[type.symbol.symbol_id];
+  if (auto it = cache.find(type.instance_template_type_ids); it != cache.end())
+    return it->second.type_id;
+
+  std::unordered_set<TypeId> template_variables;
+  for (const auto& argument_type_id : type.instance_template_type_ids) {
+    AppendTemplateVariablesFrom(argument_type_id, template_variables);
+  }
+
   TypeId type_id = self_id.has_value() ? *self_id : NewTypeId();
-  type_table_.emplace(type_id, std::move(type));
+  cache[type.instance_template_type_ids] = TypeInstance{type_id};
+
+  type_table_.emplace(type_id, type);
+  variable_info_[type_id] = VariableInfo{std::move(template_variables)};
   return type_id;
 }
 
@@ -103,9 +122,20 @@ TypeId TypeRegistry::NewFunctionType(FunctionType type) {
     return it->second;
   }
 
+  std::unordered_set<TypeId> template_variables;
+  for (const auto& argument_type_id : type.arg_types) {
+    AppendTemplateVariablesFrom(argument_type_id, template_variables);
+  }
+  AppendTemplateVariablesFrom(type.return_type, template_variables);
+
+  if (type.variadic_type) {
+    AppendTemplateVariablesFrom(*type.variadic_type, template_variables);
+  }
+
   TypeId type_id = NewTypeId();
   interned_fn_type_[type] = type_id;
   type_table_[type_id] = type;
+  variable_info_[type_id] = VariableInfo{std::move(template_variables)};
   return type_id;
 }
 
@@ -113,17 +143,26 @@ void TypeRegistry::NewAliasType(std::string_view name,
                                 TypeId self_id,
                                 TypeId target_id) {
   type_table_[self_id] = AliasType(name.data(), target_id);
+  variable_info_[self_id] = variable_info_[target_id];
 }
 
-TypeId TypeRegistry::NewOptionalType(TypeId type) {
-  if (const auto& it = interned_optional_type_.find(type);
+TypeId TypeRegistry::NewAliasType(AliasType alias_type) {
+  TypeId type_id = NewTypeId();
+  type_table_[type_id] = std::move(alias_type);
+  variable_info_[type_id] = variable_info_[alias_type.target_type_id];
+  return type_id;
+}
+
+TypeId TypeRegistry::NewOptionalType(TypeId wrapped_type) {
+  if (const auto& it = interned_optional_type_.find(wrapped_type);
       it != interned_optional_type_.end()) {
     return it->second;
   }
 
   TypeId type_id = NewTypeId();
-  interned_optional_type_[type] = type_id;
-  type_table_[type_id] = OptionalType{type};
+  interned_optional_type_[wrapped_type] = type_id;
+  type_table_[type_id] = OptionalType{wrapped_type};
+  variable_info_[type_id] = variable_info_[wrapped_type];
   return type_id;
 }
 
@@ -133,9 +172,15 @@ TypeId TypeRegistry::NewUnionType(UnionType type) {
     return it->second;
   }
 
+  std::unordered_set<TypeId> template_variables;
+  for (const auto& member_type_id : type.types) {
+    AppendTemplateVariablesFrom(member_type_id, template_variables);
+  }
+
   TypeId type_id = NewTypeId();
   interned_union_type_[type] = type_id;
   type_table_[type_id] = type;
+  variable_info_[type_id] = VariableInfo{std::move(template_variables)};
   return type_id;
 }
 
@@ -145,9 +190,15 @@ TypeId TypeRegistry::NewIntersectionType(IntersectionType type) {
     return it->second;
   }
 
+  std::unordered_set<TypeId> template_variables;
+  for (const auto& member_type_id : type.types) {
+    AppendTemplateVariablesFrom(member_type_id, template_variables);
+  }
+
   TypeId type_id = NewTypeId();
   interned_intersection_type_[type] = type_id;
   type_table_[type_id] = type;
+  variable_info_[type_id] = VariableInfo{std::move(template_variables)};
   return type_id;
 }
 
@@ -160,6 +211,7 @@ TypeId TypeRegistry::NewPlaceholderType(SlotId idx) {
   TypeId type_id = NewTypeId();
   type_table_[type_id] = PlaceholderType{idx};
   interned_placeholder_type_[idx] = type_id;
+  variable_info_[type_id] = VariableInfo{};
   return type_id;
 }
 
@@ -168,6 +220,7 @@ TypeId TypeRegistry::NewTemplateVariableType(
     std::optional<SpannedType> constraint_type) {
   TypeId type_id = NewTypeId();
   type_table_[type_id] = TemplateVariableType(std::move(name), constraint_type);
+  variable_info_[type_id] = VariableInfo{{type_id}};
   return type_id;
 }
 
@@ -232,22 +285,25 @@ std::string TypeRegistry::GetNameFromTypeId(TypeId type_id,
             std::stringstream ss;
 
             bool must_include_final_quote = false;
+            const auto& declaration = type.symbol.declaration;
             if (options.use_debug_names) {
-              ss << type.declaration.kind << " " << type.declaration.name.text;
+              ss << declaration.kind << " " << declaration.name.text;
             } else if (options.is_embedded_type) {
-              ss << type.declaration.name.text;
+              ss << declaration.name.text;
             } else {
-              ss << "'" + type.declaration.name.text;
+              ss << "'" + declaration.name.text;
               must_include_final_quote = true;
             }
 
-            if (!type.template_arguments.empty()) {
+            if (!type.instance_template_type_ids.empty()) {
               ss << "[";
-              for (size_t i = 0; i < type.template_arguments.size(); ++i) {
+              for (size_t i = 0; i < type.instance_template_type_ids.size();
+                   ++i) {
                 if (i > 0)
                   ss << ", ";
                 options.is_embedded_type = true;
-                ss << GetNameFromTypeId(type.template_arguments[i], options);
+                ss << GetNameFromTypeId(type.instance_template_type_ids[i],
+                                        options);
               }
               ss << "]";
             }
@@ -316,7 +372,9 @@ std::string TypeRegistry::GetNameFromTypeId(TypeId type_id,
 std::string TypeRegistry::ToJson() const {
   nlohmann::json dict;
   for (const auto& [type_id, type] : type_table_) {
-    dict["type_table"][type_id] = GetNameFromTypeId(type_id);
+    dict["type_table"][type_id]["name"] = GetNameFromTypeId(type_id);
+    dict["type_table"][type_id]["variables"] =
+        variable_info_.at(type_id).template_variables;
   }
 
   for (const auto& [symbol_id, symbol] : symbol_table_) {
@@ -349,4 +407,11 @@ std::ostream& operator<<(std::ostream& os, const TypeRegistry& registry) {
     os << id << ". " << registry.GetNameFromTypeId(id) << "\n";
   }
   return os;
+}
+
+void TypeRegistry::AppendTemplateVariablesFrom(
+    TypeId type_id,
+    std::unordered_set<TypeId>& template_variables) {
+  const auto& member_variables = variable_info_[type_id].template_variables;
+  template_variables.insert(member_variables.begin(), member_variables.end());
 }

@@ -161,12 +161,14 @@ FlowResult SemanticAnalyzer::Check(const std::unique_ptr<Statement>& statement,
           },
           [&](ReturnStatement& ret) {
             if (ret.value) {
-              if (auto result = check_expression(ret.value)) {
+              if (auto result = check_expression(
+                      ret.value,
+                      SpannedType{function_context.return_type_id, {}})) {
                 if (!type_context_.IsTypeSubsetOf(
-                        *result->type_id, function_context.return_type_id)) {
+                        result->type_id, function_context.return_type_id)) {
                   error_collector_.Add(
                       "Returning " +
-                          type_registry_.GetNameFromTypeId(*result->type_id) +
+                          type_registry_.GetNameFromTypeId(result->type_id) +
                           " from function with return type " +
                           type_registry_.GetNameFromTypeId(
                               function_context.return_type_id),
@@ -289,7 +291,7 @@ FlowResult SemanticAnalyzer::Check(const std::unique_ptr<Statement>& statement,
             }
 
             if (declared_type) {
-              if (!type_context_.IsTypeSubsetOf(*result->type_id,
+               if (!type_context_.IsTypeSubsetOf(result->type_id,
                                                 declared_type->type_id)) {
                 std::string expected_type =
                     type_registry_.GetNameFromTypeId(declared_type->type_id);
@@ -299,14 +301,14 @@ FlowResult SemanticAnalyzer::Check(const std::unique_ptr<Statement>& statement,
                         type_registry_.GetNameFromTypeId(
                             declared_type->type_id) +
                         ", but found " +
-                        type_registry_.GetNameFromTypeId(*result->type_id),
+                        type_registry_.GetNameFromTypeId(result->type_id),
                     assign.type->metadata);
                 // Intentional fallthrough to prevent error cascades.
               }
             } else {
               // Point to expression type is inferred from; `result->type_id` is
               // guaranteed by ExpressionChecker::RequireConcreteValue.
-              declared_type = SpannedType{*result->type_id, assign.value->meta};
+              declared_type = SpannedType{result->type_id, assign.value->meta};
             }
 
             // Register the variable's type within the current scope.

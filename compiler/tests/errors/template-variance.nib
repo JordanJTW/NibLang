@@ -1,0 +1,73 @@
+@import "std/types.nib"
+
+interface Printable {
+  fn print() -> String;
+}
+
+struct Person {
+  name: String;
+
+  implements Printable {
+    fn print() -> String {
+      return name;
+    }
+  }
+}
+
+
+struct Consumer[T] {
+  fn consume(value: T) {}
+}
+
+struct Producer[T] {
+  value: T;
+
+  fn produce() -> T {
+    return value;
+  }
+}
+
+struct Box[T] {
+  item: T;
+
+  fn get() -> T {
+    return item;
+  }
+
+  fn set(new_item: T) {
+    item = new_item;
+  }
+}
+
+fn main() {
+  let printable_consumer = Consumer.of(Printable)();
+
+  let person_consumer: Consumer[Person] = printable_consumer;
+  person_consumer.consume(Person("Jordan"));
+
+  let specific_person_consumer = Consumer.of(Person)();
+
+  let bad_printable_consumer: Consumer[Printable] = specific_person_consumer;
+
+  let person_producer: Producer[Person] = Producer(Person("Jordan"));
+
+  // GOOD: Safe subtyping assignment (Person -> Printable)
+  let printable_producer: Producer[Printable] = person_producer;
+  let item: Printable = printable_producer.produce();
+
+  // BAD: Producer[Printable] cannot be assigned to Producer[Person]
+  // ERROR: Type mismatch: expected Producer[Person], found Producer[Printable]
+  let bad_person_producer: Producer[Person] = printable_producer;
+
+  let person_box: Box[Person] = Box(Person("Jordan"));
+
+  // BAD: Invariant types cannot cast up
+  // ERROR: Type mismatch: expected Box[Printable], found Box[Person]
+  let bad_printable_box: Box[Printable] = person_box;
+
+  let printable_box: Box[Printable] = Box(Person("Alex"));
+
+  // BAD: Invariant types cannot cast down
+  // ERROR: Type mismatch: expected Box[Person], found Box[Printable]
+  let bad_person_box: Box[Person] = printable_box;
+}

@@ -16,6 +16,7 @@
 #include "compiler/type_context.h"
 #include "compiler/type_registry.h"
 #include "compiler/type_resolver.h"
+#include "compiler/type_rewriter.h"
 
 namespace {
 
@@ -42,7 +43,8 @@ ExpressionChecker::ExpressionChecker(
       type_registry_(type_registry),
       narrowed_bindings_(std::move(narrowed_bindings)),
       required_captures_(required_captures),
-      error_collector_(error_collector) {}
+      error_collector_(error_collector),
+      type_resolver_(type_registry_, type_context_, error_collector_) {}
 
 std::optional<ExpressionResult> ExpressionChecker::Check(
     std::unique_ptr<Expression>& expression,
@@ -61,18 +63,16 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
 
             if (lhs->type_id != rhs->type_id &&
                 !((rhs->type_id == LiteralType::Nil &&
-                   type_context_.IsTypeSubsetOf(*rhs->type_id,
-                                                *lhs->type_id)) ||
+                   type_context_.IsTypeSubsetOf(rhs->type_id, lhs->type_id)) ||
                   (lhs->type_id == LiteralType::Nil &&
-                   type_context_.IsTypeSubsetOf(*lhs->type_id,
-                                                *rhs->type_id)))) {
+                   type_context_.IsTypeSubsetOf(lhs->type_id, rhs->type_id)))) {
               error_collector_
                   .Add("LHS and RHS are not compatible", expression->meta)
                   .WithNote("LHS type is " +
-                                type_registry_.GetNameFromTypeId(*lhs->type_id),
+                                type_registry_.GetNameFromTypeId(lhs->type_id),
                             binary.lhs->meta)
                   .WithNote("But RHS type is " +
-                                type_registry_.GetNameFromTypeId(*rhs->type_id),
+                                type_registry_.GetNameFromTypeId(rhs->type_id),
                             binary.rhs->meta);
               return std::nullopt;
             }
@@ -97,8 +97,8 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
               }
 
               if (symbol_to_narrow) {
-                auto unwrapped_type_id = type_context_.UnwrapOptional(
-                    symbol_to_narrow->realized_type_id.value());
+                auto unwrapped_type_id =
+                    type_context_.UnwrapOptional(symbol_to_narrow->type_id);
 
                 // This should NEVER be hit. See compatibility check above.
                 CHECK(unwrapped_type_id)
@@ -132,7 +132,7 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
               return result;
             }
 
-            return ExpressionResult(*lhs->type_id);
+            return ExpressionResult(lhs->type_id);
           },
           [&](CallExpression& call_expr) -> std::optional<ExpressionResult> {
             auto callee_result = Check(call_expr.callee);
@@ -170,20 +170,19 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
 
             // Always use the `binding` type directly since it describes the
             // type of the slot and not whatever it might have been narrowed to.
-            CHECK(lhs->binding->realized_type_id) << "MUST have TypeId";
-            if (!type_context_.IsTypeSubsetOf(
-                    *rhs->type_id, *lhs->binding->realized_type_id)) {
+            TypeId storage_type_id =
+                lhs->storage_type_id.value_or(lhs->type_id);
+            if (!type_context_.IsTypeSubsetOf(rhs->type_id, storage_type_id)) {
               error_collector_.Add(
                   "expected " +
-                      type_registry_.GetNameFromTypeId(
-                          *lhs->binding->realized_type_id) +
+                      type_registry_.GetNameFromTypeId(storage_type_id) +
                       ", but found " +
-                      type_registry_.GetNameFromTypeId(*rhs->type_id),
+                      type_registry_.GetNameFromTypeId(rhs->type_id),
                   expression->meta);
               return std::nullopt;
             }
-            if (*lhs->binding->realized_type_id != *rhs->type_id) {
-              rhs->true_bindings[lhs->binding->binding_id] = *rhs->type_id;
+            if (lhs->binding->type_id != rhs->type_id) {
+              rhs->true_bindings[lhs->binding->binding_id] = rhs->type_id;
             }
             return rhs;
           },
@@ -201,12 +200,12 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
             if (index->type_id != LiteralType::i32) {
               error_collector_.Add(
                   "index must be i32 but instead type is: " +
-                      type_registry_.GetNameFromTypeId(*index->type_id),
+                      type_registry_.GetNameFromTypeId(index->type_id),
                   array_access.index->meta);
               // Continue parsing to collect more errors.
             }
 
-            // FIXME: Once templates exist we can narrot the type here.
+            // FIXME: Once templates exist we can narrow the type here.
             return ExpressionResult{LiteralType::Any};
           },
           [&](LogicExpression& logic) -> std::optional<ExpressionResult> {
@@ -220,10 +219,10 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
               error_collector_
                   .Add("LHS and RHS are not compatible", expression->meta)
                   .WithNote("LHS type is " +
-                                type_registry_.GetNameFromTypeId(*lhs->type_id),
+                                type_registry_.GetNameFromTypeId(lhs->type_id),
                             logic.lhs->meta)
                   .WithNote("But RHS type is " +
-                                type_registry_.GetNameFromTypeId(*rhs->type_id),
+                                type_registry_.GetNameFromTypeId(rhs->type_id),
                             logic.rhs->meta);
               return std::nullopt;
             }
@@ -237,16 +236,8 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
               true_bindings = lhs->true_bindings;  // Conflicts overwritten
               for (const auto& [id, type_id] : rhs->true_bindings) {
                 if (lhs->true_bindings.contains(id)) {
-                  LOG(INFO)
-                      << "Intersect: "
-                      << type_registry_.GetNameFromTypeId(type_id) << " & "
-                      << type_registry_.GetNameFromTypeId(
-                             lhs->true_bindings[id]);
                   true_bindings[id] = type_context_.GetIntersectionOf(
                       {type_id, lhs->true_bindings[id]});
-                  LOG(INFO)
-                      << "Result: "
-                      << type_registry_.GetNameFromTypeId(true_bindings[id]);
                 } else {
                   true_bindings[id] = type_id;
                 }
@@ -291,10 +282,14 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
           },
           [&](ClosureExpression& closure) -> std::optional<ExpressionResult> {
             SymbolId symbol_id = type_registry_.NewFunctionSymbol(closure.fn);
-            if (auto binding = type_context_.DefineFunction(
-                    symbol_id, /*self_id=*/std::nullopt,
-                    TypeContext::CheckFunctionBody::YES)) {
-              return ExpressionResult(*binding->realized_type_id);
+            closure.fn.resolved =
+                ResolvedFunction{.function_symbol_id = symbol_id};
+
+            auto& symbol =
+                type_registry_.GetSymbolChecked<FunctionSymbol>(symbol_id);
+            if (auto instance = type_context_.DeclareFunctionType(
+                    symbol, TypeContext::CheckFunctionBody::YES)) {
+              return ExpressionResult(instance->type_id);
             }
             CHECK(false) << "Failed to declare symbol for closure";
             return std::nullopt;
@@ -330,7 +325,7 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
             }
 
             bool is_valid_cast =
-                type_context_.IsTypeSubsetOf(as_type.value(), *result->type_id);
+                type_context_.IsTypeSubsetOf(as_type.value(), result->type_id);
 
             // Allow explicit casts between i32 <=> Codepoint.
             is_valid_cast |= (as_type.value() == LiteralType::Codepoint &&
@@ -349,7 +344,7 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
             if (!is_valid_cast) {
               error_collector_.Add(
                   "Invalid type cast from " +
-                      type_registry_.GetNameFromTypeId(*result->type_id) +
+                      type_registry_.GetNameFromTypeId(result->type_id) +
                       " to " + type_registry_.GetNameFromTypeId(*as_type),
                   cast.as_type.metadata);
               return std::nullopt;
@@ -372,7 +367,7 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
             if (!result.has_value())
               return std::nullopt;
 
-            TypeId result_type_id = *result->type_id;
+            TypeId result_type_id = result->type_id;
             if (!type_context_.UnwrapOptional(result_type_id)) {
               result_type_id = type_context_.GetOptionalOf(result_type_id);
             }
@@ -388,14 +383,14 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
             if (!lhs || !rhs)
               return std::nullopt;
 
-            if (type_context_.IsTypeNilable(*rhs->type_id)) {
+            if (type_context_.IsTypeNilable(rhs->type_id)) {
               error_collector_.Add("right-hand side of ?? cannot be nilable",
                                    coalescing.rhs->meta);
               // Continue parsing to catch more errors...
             }
 
             std::optional<TypeId> lhs_type_id =
-                type_context_.UnwrapOptional(*lhs->type_id);
+                type_context_.UnwrapOptional(lhs->type_id);
             if (!lhs_type_id) {
               error_collector_.Add(
                   "left-hand side of ?? is not optional; operator is a no-op",
@@ -404,7 +399,7 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
             }
 
             return ExpressionResult{
-                type_context_.GetUnionOf({*lhs_type_id, *rhs->type_id})};
+                type_context_.GetUnionOf({*lhs_type_id, rhs->type_id})};
           },
           [&](OptionalAccessExpression& optional_access)
               -> std::optional<ExpressionResult> {
@@ -413,7 +408,7 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
             if (!result)
               return std::nullopt;
 
-            TypeId type_id = *result->type_id;
+            TypeId type_id = result->type_id;
             if (auto unwrapped = type_context_.UnwrapOptional(type_id)) {
               return ExpressionResult{unwrapped.value()};
             }
@@ -438,13 +433,15 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
               return std::nullopt;
             }
 
-            if (result->has_type_id()) {
-              error_collector_
-                  .Add("'" + result->binding->name.text + "' is not a template",
-                       template_expr.generic_target->meta)
-                  .WithNote("declared here", result->binding->name.metadata);
-              return std::nullopt;
-            }
+            // if
+            // (!type_registry_.HasUnboundTemplateVariables(*result->type_id)) {
+            //   error_collector_
+            //       .Add("'" + result->binding->name.text +
+            //                "' is a fully realized type",
+            //            template_expr.generic_target->meta)
+            //       .WithNote("declared here", result->binding->name.metadata);
+            //   return std::nullopt;
+            // }
 
             if (auto type_id = type_context_.GetTemplateOf(
                     *result->binding, template_expr.template_types)) {
@@ -464,11 +461,11 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
 }
 
 void ExpressionChecker::TypeCheckCallArguments(
-    const std::vector<std::optional<SpannedType>>& call_arugment_results,
+    const std::vector<std::optional<SpannedType>>& call_argument_results,
     const std::vector<TypeId>& expected_argument_types,
     const Metadata& debug_metadata,
     std::optional<TypeId> variadic_type) {
-  size_t supplied_argc = call_arugment_results.size();
+  size_t supplied_argc = call_argument_results.size();
   size_t expected_argc = expected_argument_types.size();
 
   if ((variadic_type && supplied_argc < expected_argc) ||
@@ -481,8 +478,9 @@ void ExpressionChecker::TypeCheckCallArguments(
   }
   // If more arguments are supplied than expected, this is a variadic function
   // and any additional args do not need to be checked ("any" type).
-  for (size_t i = 0; i < call_arugment_results.size(); ++i) {
-    const auto& argument_result = call_arugment_results[i];
+  for (size_t i = 0; i < call_argument_results.size(); ++i) {
+    const auto& argument_result = call_argument_results[i];
+
     const TypeId expected_type =
         (i < expected_argument_types.size() ? expected_argument_types[i]
                                             : *variadic_type);
@@ -492,14 +490,18 @@ void ExpressionChecker::TypeCheckCallArguments(
     if (!argument_result.has_value())
       continue;
 
-    if (!type_context_.IsTypeSubsetOf(argument_result->type_id,
-                                      expected_type)) {
+    if (!type_resolver_.Resolve(expected_type, argument_result->type_id,
+                                argument_result->metadata)) {
+      TypeId resolved_expected = type_resolver_.Prune(expected_type);
+      TypeId resolved_actual = type_resolver_.Prune(argument_result->type_id);
+
       std::string expected_name =
-          type_registry_.GetNameFromTypeId(expected_type);
+          type_registry_.GetNameFromTypeId(resolved_expected);
       std::string actual_name =
-          type_registry_.GetNameFromTypeId(argument_result->type_id);
+          type_registry_.GetNameFromTypeId(resolved_actual);
+
       error_collector_.Add(
-          "expected `" + expected_name + "` but got `" + actual_name + "`",
+          "expected " + expected_name + ", but got " + actual_name,
           argument_result->metadata);
     }
   }
@@ -511,7 +513,7 @@ std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
     std::optional<SpannedType> hint_return_type,
     Metadata debug_metadata) {
   // Validate constructor calls BEFORE any type-deduction for better errors.
-  if (callee_result.binding &&
+  if (callee_result.is_type_ref() &&
       callee_result.binding->kind == NamedBinding::Struct) {
     auto* struct_symbol = type_registry_.GetSymbol<StructSymbol>(
         callee_result.binding->GetSymbolId());
@@ -531,39 +533,45 @@ std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
       std::back_inserter(argument_results),
       [&](std::unique_ptr<Expression>& expr) -> std::optional<SpannedType> {
         if (auto result = RequireConcreteValue(expr))
-          return SpannedType{*result->type_id, expr->meta};
+          return SpannedType{result->type_id, expr->meta};
         return std::nullopt;
       });
 
-  std::optional<TypeId> callable_type_id = callee_result.type_id;
+  TypeId callable_type_id = callee_result.type_id;
 
-  if (!callable_type_id) {
-    CHECK(callee_result.binding && callee_result.binding->symbol_id)
-        << "SymbolId is required for templates";
+  // if (!callable_type_id) {
+  //   CHECK(callee_result.binding && callee_result.binding->symbol_id)
+  //       << "SymbolId is required for templates";
+  //
+  //   callable_type_id =
+  //       type_resolver_.NewPlaceholderTemplateOf(*callee_result.binding);
+  // } else if (auto variables =
+  //                type_registry_.GetContainedVariables(*callable_type_id);
+  //            !variables.empty()) {
+  //   SubstitutionMap substitution_map;
+  //   substitution_map.reserve(variables.size());
+  //   for (const auto& variable : variables) {
+  //     substitution_map.insert(
+  //         {variable, type_resolver_.NewPlaceholder(variable)});
+  //   }
+  //   callable_type_id = TypeRewriter(type_registry_, type_context_)
+  //                          .Rewrite(*callable_type_id, substitution_map);
+  // }
 
-    TypeResolver resolver(type_registry_, type_context_, error_collector_);
-
-    std::vector<TypeId> deduced_bindings;
-    std::vector<Metadata> resolved_spans;
-    if (resolver.Resolve(*callee_result.binding, argument_results,
-                         hint_return_type, deduced_bindings, resolved_spans,
-                         call_expr.callee->meta)) {
-      // // If there were no template variables to deduce then this Symbol is
-      // // likely a method on a templated struct -- do not realize it here.
-      // if (deduced_bindings.empty())
-      //   return std::nullopt;
-
-      callable_type_id = type_context_.GetTemplateOf(
-          *callee_result.binding, deduced_bindings, resolved_spans);
-    }
-  }
-
-  if (!callable_type_id) {
-    return std::nullopt;
-  }
+  // else if (auto& template_variables =
+  //                type_registry_.GetContainedVariables(*callable_type_id);
+  //            !template_variables.empty()) {
+  //   std::unordered_map<TypeId, TypeId> types;
+  //   for (const auto& template_variable : template_variables) {
+  //     types.insert({template_variable,
+  //                   type_resolver_.NewPlaceholder(template_variable)});
+  //   }
+  //   callable_type_id = TypeRewriter(type_registry_, type_context_)
+  //                          .Rewrite(*callable_type_id, types);
+  // }
 
   if (const auto* const fn_type =
-          type_registry_.GetType<FunctionType>(*callable_type_id)) {
+          type_registry_.GetType<FunctionType>(callable_type_id)) {
     if (callee_result.binding &&
         callee_result.binding->kind == NamedBinding::Function) {
       const auto& symbol = type_registry_.GetSymbolChecked<FunctionSymbol>(
@@ -582,33 +590,64 @@ std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
     TypeCheckCallArguments(argument_results, fn_type->arg_types, debug_metadata,
                            fn_type->variadic_type);
 
+    if (hint_return_type) {
+      type_resolver_.Resolve(fn_type->return_type, hint_return_type->type_id,
+                             hint_return_type->metadata);
+    }
+
     // Even if the arguments can not be properly type checked we should
     // resolve to the return type to prevent cascading errors :^).
-    return ExpressionResult{fn_type->return_type};
+    return ExpressionResult{type_resolver_.Rewrite(fn_type->return_type)};
   }
 
   if (const auto* const struct_type =
-          type_registry_.GetType<StructType>(*callable_type_id)) {
-    TypeCheckCallArguments(argument_results, struct_type->field_types,
+          type_registry_.GetType<StructType>(callable_type_id)) {
+    std::unordered_map<TypeId, TypeId> placeholder_map;
+    for (size_t i = 0; i < struct_type->instance_template_type_ids.size();
+         ++i) {
+      placeholder_map[struct_type->symbol.template_variable_type_ids[i]] =
+          struct_type->instance_template_type_ids[i];
+    }
+
+    std::vector<TypeId> realized_field_types;
+    realized_field_types.reserve(struct_type->symbol.field_types.size());
+
+    std::ranges::transform(struct_type->symbol.field_types,
+                           std::back_inserter(realized_field_types),
+                           [&](TypeId field_type) {
+                             TypeId substitute_type_id =
+                                 TypeRewriter(type_registry_, type_context_)
+                                     .Rewrite(field_type, placeholder_map);
+
+                             return type_resolver_.Rewrite(substitute_type_id);
+                           });
+
+    TypeCheckCallArguments(argument_results, realized_field_types,
                            debug_metadata,
                            /*variadic_type=*/std::nullopt);
     CHECK(!call_expr.resolved) << "CallExpression was previously resolved";
-    call_expr.resolved = ResolvedCall{callee_result.binding->GetSymbolId(),
-                                      struct_type->interface_types.empty()
-                                          ? FunctionKind::Constructor
-                                          : FunctionKind::ConstructorVirtual};
-    return ExpressionResult{*callable_type_id};
+    call_expr.resolved =
+        ResolvedCall{callee_result.binding->GetSymbolId(),
+                     struct_type->symbol.interface_types.empty()
+                         ? FunctionKind::Constructor
+                         : FunctionKind::ConstructorVirtual};
+
+    if (hint_return_type) {
+      type_resolver_.Resolve(callable_type_id, hint_return_type->type_id,
+                             hint_return_type->metadata);
+    }
+    return ExpressionResult{type_resolver_.Rewrite(callable_type_id)};
   }
 
   if (const auto* const alias_type =
-          type_registry_.GetType<AliasType>(*callable_type_id)) {
+          type_registry_.GetType<AliasType>(callable_type_id)) {
     return TypeCheckCallExpr(call_expr,
                              ExpressionResult{alias_type->target_type_id},
                              hint_return_type, debug_metadata);
   }
 
   error_collector_.Add("type is not callable: " +
-                           type_registry_.GetNameFromTypeId(*callable_type_id),
+                           type_registry_.GetNameFromTypeId(callable_type_id),
                        debug_metadata);
   return std::nullopt;
 }
@@ -621,7 +660,7 @@ std::optional<ExpressionResult> ExpressionChecker::HandlePrimary(
           [&](const StringLiteral&) -> std::optional<ExpressionResult> {
             if (auto binding = scope_manager_.FindBindingFor(
                     "String", ScopeManager::All)) {
-              return ExpressionResult(*binding->realized_type_id);
+              return ExpressionResult(binding->type_id);
             }
 
             error_collector_.Add("unknown identifier: String", metadata);
@@ -631,6 +670,41 @@ std::optional<ExpressionResult> ExpressionChecker::HandlePrimary(
             if (ident.name == "Nil")
               return ExpressionResult(LiteralType::Nil);
 
+            auto instantiate_result = [&](const NamedBinding& binding) {
+              const std::vector<TypeId>* template_vars = nullptr;
+
+              if (binding.kind == NamedBinding::Function) {
+                template_vars = &type_registry_
+                                     .GetSymbolChecked<FunctionSymbol>(
+                                         binding.GetSymbolId())
+                                     .template_variable_type_ids;
+              } else if (binding.kind == NamedBinding::Struct) {
+                template_vars =
+                    &type_registry_
+                         .GetSymbolChecked<StructSymbol>(binding.GetSymbolId())
+                         .template_variable_type_ids;
+              } else {
+                return ExpressionResult::of_binding(binding);
+              }
+
+              if (!template_vars->empty() && binding.type_id) {
+                std::unordered_map<TypeId, TypeId> substitution_map;
+                for (TypeId template_var_id : *template_vars) {
+                  substitution_map[template_var_id] =
+                      type_resolver_.NewPlaceholder(template_var_id);
+                }
+
+                TypeId specialized_type_id =
+                    TypeRewriter(type_registry_, type_context_)
+                        .Rewrite(binding.type_id, substitution_map);
+
+                return ExpressionResult::with_type_override(
+                    type_resolver_.Rewrite(specialized_type_id), binding);
+              }
+
+              return ExpressionResult::of_binding(binding);
+            };
+
             // Search within the current function scope for value.
             auto binding = scope_manager_.FindBindingFor(
                 ident.name, ScopeManager::Function);
@@ -638,10 +712,11 @@ std::optional<ExpressionResult> ExpressionChecker::HandlePrimary(
               CHECK(!ident.resolved) << "Identifier was previously resolved";
               ident.resolved = ResolvedIdentifier{*binding};
               if (narrowed_bindings_.contains(binding->binding_id)) {
-                return ExpressionResult::with_type_override(
-                    narrowed_bindings_.at(binding->binding_id), binding);
+                return ExpressionResult::with_storage_override(
+                    narrowed_bindings_.at(binding->binding_id),
+                    binding->type_id, binding);
               }
-              return ExpressionResult::of_binding(*binding);
+              return instantiate_result(*binding);
             }
 
             // Fallback search to the parent function scope.
@@ -654,15 +729,17 @@ std::optional<ExpressionResult> ExpressionChecker::HandlePrimary(
                 required_captures_.push_back(*binding);
                 // Variables will ALWAYS have a realized TypeId.
                 binding = scope_manager_.DeclareCaptureBinding(
-                    binding->name, *binding->realized_type_id);
+                    binding->name, binding->type_id);
               }
 
               CHECK(!ident.resolved) << "Identifier was previously resolved";
               ident.resolved = ResolvedIdentifier{*binding};
-              if (narrowed_bindings_.contains(binding->binding_id))
-                return ExpressionResult::with_type_override(
-                    narrowed_bindings_.at(binding->binding_id), binding);
-              return ExpressionResult::of_binding(*binding);
+              if (narrowed_bindings_.contains(binding->binding_id)) {
+                return ExpressionResult::with_storage_override(
+                    narrowed_bindings_.at(binding->binding_id),
+                    binding->type_id, binding);
+              }
+              return instantiate_result(*binding);
             }
 
             // Fallback search to ALL scopes for top-level  declarations i.e.
@@ -670,15 +747,17 @@ std::optional<ExpressionResult> ExpressionChecker::HandlePrimary(
             binding =
                 scope_manager_.FindBindingFor(ident.name, ScopeManager::All);
             if (binding) {
+              CHECK(!ident.resolved) << "Identifier was previously resolved";
+
               switch (binding->kind) {
                 case NamedBinding::Function:
-                case NamedBinding::Method:
                 case NamedBinding::Struct:
+                  ident.resolved = ResolvedIdentifier{*binding};
+                  return instantiate_result(*binding);
+
                 case NamedBinding::TypeAlias:
                 case NamedBinding::Template:
                 case NamedBinding::Interface:
-                  CHECK(!ident.resolved)
-                      << "Identifier was previously resolved";
                   ident.resolved = ResolvedIdentifier{*binding};
                   return ExpressionResult::of_binding(*binding);
 
@@ -721,9 +800,10 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
 
   const auto& member_name = member_access.member_name;
 
-  if (object_result->is_value() && object_result->has_type_id()) {
-    TypeId type_id = *object_result->type_id;
+  if (object_result->is_value()) {
+    TypeId type_id = object_result->type_id;
 
+    // Handles member access for constrained template variables i.e T: Hashable
     if (auto* template_variable_type =
             type_registry_.GetType<TemplateVariableType>(type_id)) {
       if (!template_variable_type->constraint_type_id) {
@@ -739,6 +819,7 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
       type_id = template_variable_type->constraint_type_id->type_id;
     }
 
+    // Handles member access for structs wrapped in optional i.e. T?
     if (auto* optional_type = type_registry_.GetType<OptionalType>(type_id)) {
       error_collector_.Add("optional type " +
                                type_registry_.GetNameFromTypeId(type_id) +
@@ -749,7 +830,6 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
       type_id = optional_type->wrapped_type;
     }
 
-    // Member access is only supported on structs
     const auto* const struct_type = type_registry_.GetType<StructType>(type_id);
     if (!struct_type) {
       error_collector_.Add("type " + type_registry_.GetNameFromTypeId(type_id) +
@@ -759,7 +839,9 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
     }
 
     if (auto binding = scope_manager_.FindBindingFor(
-            member_name.text, ScopeManager::Current, struct_type->scope_id)) {
+            member_name.text, ScopeManager::Current,
+            struct_type->symbol.instance_scope_id)) {
+      std::vector<TypeId> local_template_variables;
       if (binding->kind == NamedBinding::Field) {
         CHECK(binding->idx)
             << "member symbol must have an index for member access";
@@ -772,11 +854,40 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
             << "MemberAccessExpression was previously resolved";
         member_access.resolved =
             ResolvedAccess{ResolvedAccess::Method{binding->GetSymbolId()}};
+
+        local_template_variables =
+            type_registry_
+                .GetSymbolChecked<FunctionSymbol>(binding->GetSymbolId())
+                .template_variable_type_ids;
       }
+
+      if (binding->type_id) {
+        TypeId realized_type_id = binding->type_id;
+        SubstitutionMap substitution_map;
+        for (size_t i = 0; i < struct_type->instance_template_type_ids.size();
+             ++i) {
+          substitution_map.insert(
+              {struct_type->symbol.template_variable_type_ids[i],
+               struct_type->instance_template_type_ids[i]});
+        }
+
+        for (const TypeId local_type_id : local_template_variables) {
+          substitution_map.insert(
+              {local_type_id, type_resolver_.NewPlaceholder(local_type_id)});
+        }
+
+        TypeId substitute_type_id =
+            TypeRewriter(type_registry_, type_context_)
+                .Rewrite(realized_type_id, substitution_map);
+
+        return ExpressionResult::with_type_override(
+            type_resolver_.Rewrite(substitute_type_id), *binding);
+      }
+
       return ExpressionResult::of_binding(*binding);
     }
 
-    for (ScopeId interface_scope_id : struct_type->interface_scopes) {
+    for (ScopeId interface_scope_id : struct_type->symbol.interface_scopes) {
       if (auto binding = scope_manager_.FindBindingFor(
               member_name.text, ScopeManager::Current, interface_scope_id)) {
         CHECK_EQ(binding->kind,
@@ -785,6 +896,33 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
             << "MemberAccessExpression was previously resolved";
         member_access.resolved =
             ResolvedAccess{ResolvedAccess::Method{binding->GetSymbolId()}};
+
+        if (binding->type_id) {
+          TypeId realized_type_id = binding->type_id;
+          SubstitutionMap substitution_map;
+          for (size_t i = 0; i < struct_type->instance_template_type_ids.size();
+               ++i) {
+            substitution_map.insert(
+                {struct_type->symbol.template_variable_type_ids[i],
+                 struct_type->instance_template_type_ids[i]});
+          }
+
+          for (const TypeId local_type_id :
+               type_registry_
+                   .GetSymbolChecked<FunctionSymbol>(binding->GetSymbolId())
+                   .template_variable_type_ids) {
+            substitution_map.insert(
+                {local_type_id, type_resolver_.NewPlaceholder(local_type_id)});
+          }
+
+          TypeId substitute_type_id =
+              TypeRewriter(type_registry_, type_context_)
+                  .Rewrite(realized_type_id, substitution_map);
+
+          return ExpressionResult::with_type_override(
+              type_resolver_.Rewrite(substitute_type_id), *binding);
+        }
+
         return ExpressionResult::of_binding(*binding);
       }
     }
@@ -793,7 +931,8 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
         .Add("no member '" + member_name.text + "' found on instance of " +
                  type_registry_.GetNameFromTypeId(type_id),
              member_name.metadata)
-        .WithNote("declared here", struct_type->declaration.name.metadata);
+        .WithNote("declared here",
+                  struct_type->symbol.declaration.name.metadata);
     return std::nullopt;
   }
 
@@ -812,7 +951,7 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
 
     if (auto binding = scope_manager_.FindBindingFor(
             member_name.text, ScopeManager::Current,
-            struct_symbol.self_scope_id)) {
+            struct_symbol.static_scope_id)) {
       // Filters out non-static methods (those that require `self` with kind
       // `Method`) and fields which are only accessible on an instance.
       if (binding->kind != NamedBinding::Function) {
@@ -829,6 +968,28 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
           << "MemberAccessExpression was previously resolved";
       member_access.resolved =
           ResolvedAccess{ResolvedAccess::Function{binding->GetSymbolId()}};
+
+      auto local_template_variables =
+          type_registry_
+              .GetSymbolChecked<FunctionSymbol>(binding->GetSymbolId())
+              .template_variable_type_ids;
+
+      if (binding->type_id) {
+        TypeId realized_type_id = binding->type_id;
+        SubstitutionMap substitution_map;
+
+        for (const TypeId local_type_id : local_template_variables) {
+          substitution_map.insert(
+              {local_type_id, type_resolver_.NewPlaceholder(local_type_id)});
+        }
+
+        TypeId substitute_type_id =
+            TypeRewriter(type_registry_, type_context_)
+                .Rewrite(realized_type_id, substitution_map);
+
+        return ExpressionResult::with_type_override(
+            type_resolver_.Rewrite(substitute_type_id), *binding);
+      }
 
       return ExpressionResult::of_binding(*binding);
     }
@@ -863,10 +1024,7 @@ std::optional<ExpressionResult> ExpressionChecker::RequireConcreteValue(
       return std::nullopt;
     }
 
-    std::string type_name =
-        (result->has_type_id()
-             ? "'" + type_registry_.GetNameFromTypeId(*result->type_id) + "'"
-             : "type");
+    std::string type_name = type_registry_.GetNameFromTypeId(result->type_id);
 
     error_collector_.Add("expected value, but found " + type_name,
                          expression->meta);
@@ -874,16 +1032,16 @@ std::optional<ExpressionResult> ExpressionChecker::RequireConcreteValue(
   }
 
   // Ensure that the instance is fully instantiated (handles fn foo[T]() refs).
-  if (!result->has_type_id()) {
-    CHECK(result->binding) << "MUST set TypeId and/or Binding";
-    error_collector_
-        .Add(result->binding->name.text +
-                 " must be instantiated with template arguments "
-                 "before it can be used as a value",
-             expression->meta)
-        .WithNote("declared here", result->binding->name.metadata);
-    return std::nullopt;
-  }
+  // if (!result->has_type_id()) {
+  //   CHECK(result->binding) << "MUST set TypeId and/or Binding";
+  //   error_collector_
+  //       .Add(result->binding->name.text +
+  //                " must be instantiated with template arguments "
+  //                "before it can be used as a value",
+  //            expression->meta)
+  //       .WithNote("declared here", result->binding->name.metadata);
+  //   return std::nullopt;
+  // }
 
   return result;
 }
@@ -899,9 +1057,7 @@ std::ostream& operator<<(std::ostream& os,
   } else if (result->is_type_ref()) {
     os << "TypeRef";
   }
-  os << ", type_id: "
-     << (result->type_id.has_value() ? std::to_string(*result->type_id) : "_");
-  os << ", binding: ";
+  os << ", type_id: " << result->type_id << ", binding: ";
   if (result->binding) {
     os << *result->binding;
   } else {

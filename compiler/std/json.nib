@@ -207,7 +207,7 @@ fn parse_number(input: String, parser: Parser) -> i32 | f32 {
 fn parse_object(input: String, parser: Parser) -> HashMap[String, JsonValue] {
   parser.idx = parser.idx + 1;
   skip_whitespace(input, parser);
-  let obj = HashMap.new.of(String, JsonValue)(
+  let obj: HashMap[String, JsonValue] = HashMap.new(
     String.equals, String.hash,
   );
 
@@ -247,7 +247,7 @@ fn parse_array(input: String, parser: Parser) -> Array[JsonValue] {
 
   skip_whitespace(input, parser);
 
-  let array = Array.new.of(JsonValue)();
+  let array: Array[JsonValue] = Array.new();
 
   if (parser.idx < input.length() &&
       input.charAt(parser.idx) == ']') {

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Type Table Viewer</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 850px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+            background-color: #f8f9fa;
+            color: #212529;
+        }
+        h1 { margin-bottom: 1rem; }
+
+        .file-picker {
+            background: #ffffff;
+            border: 2px dashed #ced4da;
+            border-radius: 6px;
+            padding: 1.5rem;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .type-card {
+            background: #ffffff;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 1rem 1.25rem;
+            margin-bottom: 0.75rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .type-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+        .type-id {
+            background: #e9ecef;
+            color: #495057;
+            font-family: monospace;
+            font-size: 0.85rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+        }
+        .type-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        .var-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            margin-top: 0.5rem;
+        }
+        .var-tag {
+            background: #e7f5ff;
+            color: #1864ab;
+            font-family: monospace;
+            font-size: 0.85rem;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            border: 1px solid #bac8ff;
+        }
+        .var-id {
+            color: #495057;
+            font-weight: normal;
+            opacity: 0.75;
+        }
+        .no-vars {
+            color: #adb5bd;
+            font-size: 0.85rem;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Registered Types</h1>
+
+<div class="file-picker">
+    <label for="jsonFileInput">Select JSON file: </label>
+    <input type="file" id="jsonFileInput" accept=".json">
+</div>
+
+<div id="type-list"></div>
+
+<script>
+    document.getElementById('jsonFileInput').addEventListener('change', function(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = JSON.parse(e.target.result);
+                renderTypeTable(data);
+            } catch (err) {
+                alert('Failed to parse JSON file: ' + err.message);
+            }
+        };
+        reader.readAsText(file);
+    });
+
+    function renderTypeTable(data) {
+        const container = document.getElementById('type-list');
+        container.innerHTML = ''; // Clear previous contents
+
+        // Access type_table under "context" if present, otherwise fall back to root
+        const typeTable = (data.context && data.context.type_table)
+            ? data.context.type_table
+            : (data.type_table || {});
+
+        // Sort keys numerically by TypeId
+        const sortedTypeIds = Object.keys(typeTable).sort((a, b) => Number(a) - Number(b));
+
+        if (sortedTypeIds.length === 0) {
+            container.innerHTML = '<p>No type_table found in context.</p>';
+            return;
+        }
+
+        // Helper to extract type name given a type entry or type ID lookup
+        function getTypeName(typeId) {
+            const target = typeTable[typeId];
+            if (!target) return `Type #${typeId}`;
+            if (typeof target === 'string') return target;
+            return target.name || target.type_name || `Type #${typeId}`;
+        }
+
+        sortedTypeIds.forEach(typeId => {
+            const item = typeTable[typeId];
+            const card = document.createElement('div');
+            card.className = 'type-card';
+
+            const typeName = getTypeName(typeId);
+            const variables = item.variables || item.template_variables || [];
+
+            // Format each template variable with its ID and resolved name
+            const varsHtml = variables.length > 0
+                ? `<div class="var-list">` +
+                variables.map(varId => {
+                    const varName = getTypeName(varId);
+                    return `<span class="var-tag"><span class="var-id">#${varId}:</span> ${varName}</span>`;
+                }).join('') +
+                `</div>`
+                : `<span class="no-vars">No template variables</span>`;
+
+            card.innerHTML = `
+          <div class="type-header">
+            <span class="type-id">ID: ${typeId}</span>
+            <span class="type-name">${typeName}</span>
+          </div>
+          ${varsHtml}
+        `;
+
+            container.appendChild(card);
+        });
+    }
+</script>
+</body>
+</html>

@@ -26,10 +26,8 @@ SpannedText SpannedText::FromToken(Token token) {
 }
 
 std::ostream& operator<<(std::ostream& os, const NamedBinding& symbol) {
-  os << "{name=" << symbol.name.text << ", kind=" << symbol.kind << ", type_id="
-     << (symbol.realized_type_id ? std::to_string(*symbol.realized_type_id)
-                                 : "?")
-     << ", symbol_id="
+  os << "{name=" << symbol.name.text << ", kind=" << symbol.kind
+     << ", type_id=" << symbol.type_id << ", symbol_id="
      << (symbol.symbol_id ? std::to_string(*symbol.symbol_id) : "?");
   if (symbol.idx.has_value())
     os << ", idx=" << symbol.idx.value();
@@ -93,8 +91,6 @@ std::ostream& operator<<(std::ostream& os, NamedBinding::Kind kind) {
   switch (kind) {
     case NamedBinding::Function:
       return os << "Function";
-    case NamedBinding::Method:
-      return os << "Method";
     case NamedBinding::Struct:
       return os << "Struct";
     case NamedBinding::Interface:

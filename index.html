@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AST Tree Visualizer</title>
+  <style>
+    :root {
+      --bg-color: #0f172a;
+      --card-bg: #1e293b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --border-color: #334155;
+      --accent-color: #38bdf8;
+      --type-struct: #10b981;
+      --type-fn: #6366f1;
+      --type-flow: #f59e0b;
+      --type-other: #ec4899;
+      --type-template: #eab308;
+      --selected-bg: rgba(56, 189, 248, 0.08);
+      --selected-border: rgba(56, 189, 248, 0.4);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      margin: 0;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1200px;
+      background-color: var(--card-bg);
+      border-radius: 12px;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border-color);
+      padding: 24px;
+      box-sizing: border-box;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 16px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.5rem;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    button {
+      background-color: #334155;
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      padding: 8px 14px;
+      font-size: 0.875rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    button:hover {
+      background-color: #475569;
+      border-color: #64748b;
+    }
+
+    .btn-primary {
+      background-color: var(--accent-color);
+      color: var(--bg-color);
+      font-weight: 600;
+      border: none;
+    }
+
+    .btn-primary:hover {
+      background-color: #7dd3fc;
+    }
+
+    /* Split Workspace Layout */
+    .workspace {
+      display: flex;
+      gap: 24px;
+      align-items: flex-start;
+    }
+
+    .tree-pane {
+      flex: 1;
+      min-width: 0;
+      max-height: 70vh;
+      overflow-y: auto;
+      padding-right: 8px;
+    }
+
+    .details-pane {
+      width: 420px;
+      flex-shrink: 0;
+      background-color: rgba(15, 23, 42, 0.4);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 20px;
+      box-sizing: border-box;
+      position: sticky;
+      top: 24px;
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+
+    @media (max-width: 900px) {
+      .workspace {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .details-pane {
+        width: 100%;
+        position: static;
+        max-height: none;
+      }
+    }
+
+    /* Empty State display */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+      text-align: center;
+      color: var(--text-muted);
+      border: 2px dashed var(--border-color);
+      border-radius: 8px;
+    }
+
+    .empty-state p {
+      margin: 12px 0 0 0;
+      font-size: 1rem;
+    }
+
+    /* Tree Styles */
+    .tree-root {
+      list-style: none;
+      padding-left: 0;
+      margin: 0;
+    }
+
+    ul {
+      list-style: none;
+      padding-left: 20px;
+      margin: 4px 0 0 0;
+      border-left: 1px dashed var(--border-color);
+      position: relative;
+    }
+
+    li {
+      margin: 6px 0;
+      position: relative;
+    }
+
+    .node-row {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 12px;
+      border-radius: 6px;
+      background-color: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      transition: all 0.15s;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .node-row:hover {
+      background-color: rgba(255, 255, 255, 0.06);
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .node-row.selected {
+      background-color: var(--selected-bg);
+      border-color: var(--selected-border);
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.15);
+    }
+
+    .toggle-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      margin-right: 6px;
+      font-size: 10px;
+      color: var(--text-muted);
+      transition: transform 0.2s;
+    }
+
+    .collapsed .toggle-icon {
+      transform: rotate(-90deg);
+    }
+
+    .no-children .toggle-icon {
+      visibility: hidden;
+    }
+
+    .node-badge {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-right: 8px;
+      letter-spacing: 0.5px;
+    }
+
+    .type-struct {
+      background-color: rgba(16, 185, 129, 0.15);
+      color: var(--type-struct);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+
+    .type-fn {
+      background-color: rgba(99, 102, 241, 0.15);
+      color: var(--type-fn);
+      border: 1px solid rgba(99, 102, 241, 0.2);
+    }
+
+    .type-flow {
+      background-color: rgba(245, 158, 11, 0.15);
+      color: var(--type-flow);
+      border: 1px solid rgba(245, 158, 11, 0.2);
+    }
+
+    .type-root-node {
+      background-color: rgba(56, 189, 248, 0.15);
+      color: var(--accent-color);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+    }
+
+    .type-template {
+      background-color: rgba(234, 179, 8, 0.15);
+      color: var(--type-template);
+      border: 1px solid rgba(234, 179, 8, 0.2);
+    }
+
+    .type-default {
+      background-color: rgba(236, 72, 153, 0.15);
+      color: var(--type-other);
+      border: 1px solid rgba(236, 72, 153, 0.2);
+    }
+
+    .node-name {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.95rem;
+      font-weight: 500;
+    }
+
+    .node-id {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-left: 8px;
+      opacity: 0.7;
+    }
+
+    /* Details Panel elements */
+    .details-title {
+      font-size: 1.1rem;
+      margin-top: 0;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 12px;
+    }
+
+    .details-desc {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    .empty-bindings {
+      color: var(--text-muted);
+      font-style: italic;
+      font-size: 0.9rem;
+      text-align: center;
+      padding: 24px 0;
+    }
+
+    /* Bindings UI List */
+    .binding-card {
+      background-color: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-bottom: 10px;
+    }
+
+    .binding-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .binding-name {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-weight: 600;
+      color: var(--accent-color);
+      font-size: 0.9rem;
+    }
+
+    .binding-kind {
+      font-size: 0.7rem;
+      background-color: rgba(255, 255, 255, 0.08);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: bold;
+    }
+
+    .binding-details {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .binding-detail-item strong {
+      color: var(--text-main);
+    }
+
+    .context-resolved {
+      color: var(--accent-color);
+      font-weight: 600;
+    }
+
+    .id-subtext {
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      margin-left: 4px;
+    }
+
+    .children-container {
+      transition: max-height 0.2s ease-out;
+    }
+
+    .collapsed+.children-container {
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+  <header>
+    <h1>🌳 AST Structure Visualizer</h1>
+    <div class="controls">
+      <input type="file" id="jsonFileInput" accept=".json" style="display: none;" />
+      <button class="btn-primary" onclick="document.getElementById('jsonFileInput').click()">Load File</button>
+      <button onclick="expandAll()">Expand All</button>
+      <button onclick="collapseAll()">Collapse All</button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <!-- Left Hand Side: Dynamic tree -->
+    <div class="tree-pane" id="tree">
+      <div class="empty-state" id="emptyState">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+        <p>No AST JSON loaded. Click <b>"Load File"</b> to get started.</p>
+      </div>
+    </div>
+
+    <!-- Right Hand Side: Sticky details inspector panel -->
+    <div class="details-pane" id="detailsPane">
+      <h3 class="details-title">🔍 Scope Inspector</h3>
+      <p class="details-desc">Select a node from the syntax tree on the left to inspect its active bindings.</p>
+      <div id="bindingsList" class="empty-bindings">
+        No active selection.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const treeContainer = document.getElementById('tree');
+  const emptyState = document.getElementById('emptyState');
+  const fileInput = document.getElementById('jsonFileInput');
+  const bindingsList = document.getElementById('bindingsList');
+  const detailsPane = document.getElementById('detailsPane');
+
+  // Default tracking variables
+  let activeSelectedRow = null;
+  let contextStore = { symbols: {}, types: {} };
+  let fallbackStore = { symbols: {}, types: {} };
+
+  // File Input Listener
+  fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function (event) {
+      try {
+        const rawData = JSON.parse(event.target.result);
+        parseAndRender(rawData);
+      } catch (err) {
+        alert("Error parsing JSON: " + err.message);
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  // Parse and walk AST document
+  function parseAndRender(data) {
+    contextStore = { symbols: {}, types: {} };
+    fallbackStore = { symbols: {}, types: {} };
+
+    // Process context tables (supporting both Map objects and Arrays)
+    if (data.context) {
+      if (data.context.symbol_table) {
+        contextStore.symbols = data.context.symbol_table;
+      }
+      if (data.context.type_table) {
+        contextStore.types = data.context.type_table;
+      }
+    } else if (data.type_table) {
+      // Direct root type_table support
+      contextStore.types = data.type_table;
+      if (data.symbol_table) {
+        contextStore.symbols = data.symbol_table;
+      }
+    }
+
+    // Resolve tree depth entry point (handle root or nested 'scopes' property)
+    const targetScope = data.scopes ? data.scopes : data;
+
+    // Scan scope tree to auto-discover fallback mappings from inline bindings
+    buildFallbackMappings(targetScope);
+
+    renderTree(targetScope);
+  }
+
+  // Auto-discover names from AST bindings declared throughout the tree as a fallback
+  function buildFallbackMappings(scope) {
+    if (!scope) return;
+
+    if (scope.bindings) {
+      Object.values(scope.bindings).forEach(binding => {
+        if (binding.symbol_id !== undefined && binding.name) {
+          fallbackStore.symbols[binding.symbol_id] = binding.name;
+        }
+        if (binding.type_id !== undefined && binding.name) {
+          fallbackStore.types[binding.type_id] = binding.name;
+        }
+      });
+    }
+
+    if (scope.children) {
+      scope.children.forEach(child => buildFallbackMappings(child));
+    }
+  }
+
+  // Render tree
+  function renderTree(scopeRoot) {
+    treeContainer.innerHTML = '';
+
+    const rootUl = document.createElement('ul');
+    rootUl.className = 'tree-root';
+    rootUl.appendChild(createTreeHTML(scopeRoot));
+    treeContainer.appendChild(rootUl);
+
+    // Auto-select root node initially
+    const firstRow = treeContainer.querySelector('.node-row');
+    if (firstRow) {
+      firstRow.click();
+    }
+  }
+
+  // Helper: Map kind id to string values
+  function getKindName(kindId) {
+    const kinds = {
+      0: 'Function',
+      1: 'Method',
+      2: 'Struct',
+      3: 'Field',
+      4: 'Argument',
+      5: 'Variable',
+      6: 'Capture',
+      7: 'Narrowed',
+      8: 'Template Variable',
+      9: 'TypeAlias',
+      10: 'Interface',
+    };
+    return kinds[kindId] !== undefined ? kinds[kindId] : `Kind ${kindId}`;
+  }
+
+  // Badge configuration
+  function getTypeDetails(node) {
+    if (node.type === undefined && node.bindings && !node.id) {
+      return { label: 'Root', class: 'type-root-node' };
+    }
+    switch (node.type) {
+      case 0: return { label: 'Root', class: 'type-root-node' };
+      case 1: return { label: 'Struct Symbol', class: 'type-struct' };
+      case 2: return { label: 'Struct Instance', class: 'type-struct' };
+      case 3: return { label: 'Func Symbol', class: 'type-fn' };
+      case 4: return { label: 'Func Instance', class: 'type-fn' };
+      case 5: return { label: 'Block', class: 'type-flow' };
+      case 6: return { label: 'Template', class: 'type-template' };
+      default: return { label: 'Symbol', class: 'type-default' };
+    }
+  }
+
+  // Render type identifiers dynamically with resolved names from type_table object map or array
+  function renderTypeDetail(typeId) {
+    let name = null;
+
+    if (contextStore.types && contextStore.types[typeId] !== undefined) {
+      const entry = contextStore.types[typeId];
+      if (typeof entry === 'object' && entry !== null) {
+        name = entry.name || entry.type_name || JSON.stringify(entry);
+      } else {
+        name = entry;
+      }
+    } else {
+      name = fallbackStore.types[typeId];
+    }
+
+    if (name) {
+      return `Type: <span class="context-resolved">${name}</span><span class="id-subtext">(ID: ${typeId})</span>`;
+    }
+    return `Type ID: <strong>${typeId}</strong>`;
+  }
+
+  // Render symbol identifiers dynamically with resolved names
+  function renderSymbolDetail(symbolId) {
+    let name = null;
+    if (contextStore.symbols && contextStore.symbols[symbolId] !== undefined) {
+      const entry = contextStore.symbols[symbolId];
+      name = (entry && typeof entry === 'object') ? entry.name : entry;
+    } else {
+      name = fallbackStore.symbols[symbolId];
+    }
+
+    if (name) {
+      return `Symbol: <span class="context-resolved">${name}</span><span class="id-subtext">(ID: ${symbolId})</span>`;
+    }
+    return `Symbol ID: <strong>${symbolId}</strong>`;
+  }
+
+  // Populate Right Panel details on select
+  function populateDetailsPanel(node) {
+    const typeDetails = getTypeDetails(node);
+
+    // Update Panel Header Title
+    const headerTitle = detailsPane.querySelector('.details-title');
+    const headerDesc = detailsPane.querySelector('.details-desc');
+
+    const nodeNameText = node.name || "Global Scope";
+    headerTitle.innerHTML = `🔍 Inspecting ${nodeNameText}`;
+    headerDesc.innerHTML = `Type: <span class="node-badge ${typeDetails.class}">${typeDetails.label}</span> ${node.id !== undefined ? `(ID: ${node.id})` : ''}`;
+
+    bindingsList.innerHTML = '';
+
+    if (!node.bindings || Object.keys(node.bindings).length === 0) {
+      bindingsList.innerHTML = `<div class="empty-bindings">No bindings declared in this scope.</div>`;
+      return;
+    }
+
+    Object.entries(node.bindings).forEach(([key, val]) => {
+      const card = document.createElement('div');
+      card.className = 'binding-card';
+
+      // Header containing name & type kind
+      const header = document.createElement('div');
+      header.className = 'binding-header';
+
+      const bName = document.createElement('span');
+      bName.className = 'binding-name';
+      bName.textContent = val.name || key;
+
+      const bKind = document.createElement('span');
+      bKind.className = 'binding-kind';
+      bKind.textContent = getKindName(val.kind);
+
+      header.appendChild(bName);
+      header.appendChild(bKind);
+      card.appendChild(header);
+
+      // Details containing key indexes with resolved contexts
+      const details = document.createElement('div');
+      details.className = 'binding-details';
+
+      if (val.type_id !== undefined) {
+        details.innerHTML += `<span class="binding-detail-item">${renderTypeDetail(val.type_id)}</span>`;
+      }
+      if (val.symbol_id !== undefined) {
+        details.innerHTML += `<span class="binding-detail-item">${renderSymbolDetail(val.symbol_id)}</span>`;
+      }
+
+      card.appendChild(details);
+      bindingsList.appendChild(card);
+    });
+  }
+
+  // Recursively build tree DOM nodes
+  function createTreeHTML(node) {
+    const hasChildren = node.children && node.children.length > 0;
+    const li = document.createElement('li');
+
+    const nodeRow = document.createElement('div');
+    nodeRow.className = `node-row ${hasChildren ? '' : 'no-children'} collapsed`;
+
+    const toggleIcon = document.createElement('span');
+    toggleIcon.className = 'toggle-icon';
+    toggleIcon.textContent = '▼';
+    nodeRow.appendChild(toggleIcon);
+
+    const typeDetails = getTypeDetails(node);
+    const badge = document.createElement('span');
+    badge.className = `node-badge ${typeDetails.class}`;
+    badge.textContent = typeDetails.label;
+    nodeRow.appendChild(badge);
+
+    const label = document.createElement('span');
+    label.className = 'node-name';
+    label.textContent = node.name || "Global Scope";
+    nodeRow.appendChild(label);
+
+    if (node.id !== undefined) {
+      const idLabel = document.createElement('span');
+      idLabel.className = 'node-id';
+      idLabel.textContent = `(id: ${node.id})`;
+      nodeRow.appendChild(idLabel);
+    }
+
+    li.appendChild(nodeRow);
+
+    // Node row selection & action routing
+    nodeRow.addEventListener('click', (e) => {
+      e.stopPropagation();
+
+      if (activeSelectedRow) {
+        activeSelectedRow.classList.remove('selected');
+      }
+
+      nodeRow.classList.add('selected');
+      activeSelectedRow = nodeRow;
+
+      populateDetailsPanel(node);
+
+      const clickedToggle = e.target.classList.contains('toggle-icon');
+      if (hasChildren && (clickedToggle || e.target === nodeRow || e.target === label)) {
+        nodeRow.classList.toggle('collapsed');
+      }
+    });
+
+    if (hasChildren) {
+      const ul = document.createElement('ul');
+      ul.className = 'children-container';
+      node.children.forEach(child => {
+        ul.appendChild(createTreeHTML(child));
+      });
+      li.appendChild(ul);
+    }
+
+    return li;
+  }
+
+  function expandAll() {
+    document.querySelectorAll('.node-row').forEach(node => {
+      node.classList.remove('collapsed');
+    });
+  }
+
+  function collapseAll() {
+    document.querySelectorAll('.node-row').forEach(node => {
+      if (!node.classList.contains('no-children')) {
+        node.classList.add('collapsed');
+      }
+    });
+  }
+</script>
+</body>
+
+</html>

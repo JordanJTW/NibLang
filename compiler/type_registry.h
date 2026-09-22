@@ -1,3 +1,7 @@
+// Copyright (c) 2026, Jordan Werthman <jordanwerthman@gmail.com>
+//
+// SPDX-License-Identifier: BSD-2-Clause
+
 #pragma once
 
 #include <optional>
@@ -16,7 +20,8 @@ struct AliasType {
   TypeId target_type_id;
 };
 
-// Represents a LiteralType in the type table. Ensures there are no gaps.
+// Represents a literal type (`bool`, `i32`) in the type table.
+// Ensures there are no gaps.
 struct BuiltInType {};
 
 struct FunctionType {
@@ -51,21 +56,12 @@ struct PlaceholderType {
 };
 
 struct StructType {
-  const StructDeclaration& declaration;
-
-  // A separate _ordered_ list of field types used for constructors.
-  std::vector<TypeId> field_types;
-  std::vector<TypeId> template_arguments;
-  // The interfaces implemented by this struct.
-  std::unordered_set<TypeId> interface_types;
-  std::vector<ScopeId> interface_scopes;
-  // Represents the lexical scope of the struct definition.
-  ScopeId scope_id;
+  const StructSymbol& symbol;
+  std::vector<TypeId> instance_template_type_ids;
 };
 
 struct TemplateVariableType {
   SpannedText name;
-  // If `constraint_type_id` is not provided then only match self.
   std::optional<SpannedType> constraint_type_id;
 };
 
@@ -113,7 +109,8 @@ class TypeRegistry {
 
   // Registers `symbol` with a unique SymbolId in the SymbolTable.
   // Returns the SymbolId and a pointer to `symbol` _in_ the SymbolTable.
-  std::pair<SymbolId, StructSymbol*> NewStructSymbol(StructSymbol symbol);
+  std::pair<SymbolId, StructSymbol*> NewStructSymbol(
+      StructDeclaration& declaration);
 
   // Creates a new FunctionSymbol for `declaration` in the symbol table and adds
   // a NamedBinding to it in the current scope. `parent_declaration` MUST be set
@@ -142,6 +139,7 @@ class TypeRegistry {
 
   // Creates an alias with `name` linking `self_id` to `target_id`.
   void NewAliasType(std::string_view name, TypeId self_id, TypeId target_id);
+  TypeId NewAliasType(AliasType alias_type);
 
   // Vends a new TypeId. The TypeId MUST be used (i.e. registered promptly).
   TypeId NewTypeId();
@@ -196,6 +194,14 @@ class TypeRegistry {
 
   std::string ToJson() const;
 
+  const auto& GetContainedVariables(TypeId type_id) {
+    return variable_info_.at(type_id).template_variables;
+  }
+
+  bool HasUnboundTemplateVariables(TypeId type_id) const {
+    return !variable_info_.at(type_id).template_variables.empty();
+  }
+
  private:
   friend std::ostream& operator<<(std::ostream&, const TypeRegistry&);
 
@@ -208,9 +214,19 @@ class TypeRegistry {
       interned_intersection_type_;
   // Maps a TypeId to the TypeId of Optional[TypeId]
   std::unordered_map<TypeId, TypeId> interned_optional_type_;
+  std::unordered_map<SymbolId, InstanceCache> struct_instance_cache_;
+
+  struct VariableInfo {
+    std::unordered_set<TypeId> template_variables;
+  };
 
   std::unordered_map<TypeId, Type> type_table_;
+  std::unordered_map<TypeId, VariableInfo> variable_info_;
   TypeId next_type_id_{LiteralType::kCount};  // TypeIds start after built-ins
+
+  void AppendTemplateVariablesFrom(
+      TypeId type_id,
+      std::unordered_set<TypeId>& template_variables);
 
   using Symbol = std::variant<FunctionSymbol, StructSymbol>;
   std::unordered_map<SymbolId, Symbol> symbol_table_;

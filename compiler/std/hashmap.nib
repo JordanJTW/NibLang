@@ -16,7 +16,7 @@ struct HashMap[Key, Value] {
         equalsFn: fn (Key, Key) -> bool,
         hashFn: fn (Key) -> i32,
     ) -> HashMap[Key, Value] {
-        return HashMap(Array.withSize.of(MapNode[Key, Value]?)(13), 0, equalsFn, hashFn);
+        return HashMap(Array.withSize(13), 0, equalsFn, hashFn);
     }
 
     fn get(key: Key) -> Value? {

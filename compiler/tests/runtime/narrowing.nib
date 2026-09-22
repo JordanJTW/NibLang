@@ -1,0 +1,58 @@
+// @import "std/types.nib"
+
+extern struct String {
+  fn length() -> i32;
+}
+
+fn GetWord() -> String? {
+  return "Jordan";
+}
+//
+// fn test_threaded() -> i32 {
+//   let x: String? = GetWord();
+//
+//   if (x != Nil) {
+//     let y: String = x;
+//     x = "world";
+//   } else {
+//     x = "nope";
+//     return 13;
+//   }
+//   return 42;
+// }
+//
+
+//
+
+//
+
+
+fn test_logical_and() -> i32 {
+  let a: String? = GetWord();
+  let b: String? = GetWord();
+
+  // Both must be non-nil for the body to execute
+  if (a != Nil && b != Nil) {
+    let s1: String = a;
+    let s2: String = b;
+    return a.length()+ s2.length();
+  }
+  return 0;
+}
+//
+// fn test_logical_or_guard() -> i32 {
+//   let a: String? = GetWord();
+//
+//   // If a is Nil, return early; otherwise 'a' is narrowed for the rest of the function
+//   if (a == Nil) {
+//     return 0;
+//   }
+//
+//   let s: String = a;
+//   return s.length();
+// }
+
+// fn main() {
+//   test_guard();
+//   test_threaded();
+// }

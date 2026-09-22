@@ -35,13 +35,9 @@ ByteCodeGenerator::FunctionObject ByteCodeGenerator::Build(
     const FunctionSymbol& symbol,
     std::vector<SymbolId>& called_symbols) && {
   size_t argument_count = 0;
-
-  CHECK(!symbol.instances.empty()) << "Building uninstantiated function";
-  const auto& [key, instance] = *symbol.instances.begin();
-
   // Process captures first to reflect their position in an OP_BIND.
   for (const auto& binding :
-       scope_manager_.GetBindingsForScope(instance.scope_id)) {
+       scope_manager_.GetBindingsForScope(symbol.instance_scope_id)) {
     if (binding.kind == NamedBinding::Kind::Capture) {
       symbol_to_local_idx_[binding.idx.value()] = next_local_idx_++;
       argument_count++;
@@ -49,7 +45,7 @@ ByteCodeGenerator::FunctionObject ByteCodeGenerator::Build(
   }
 
   for (const auto& binding :
-       scope_manager_.GetBindingsForScope(instance.scope_id)) {
+       scope_manager_.GetBindingsForScope(symbol.instance_scope_id)) {
     if (binding.kind == NamedBinding::Kind::Argument) {
       symbol_to_local_idx_[binding.idx.value()] = next_local_idx_++;
       argument_count++;
@@ -341,10 +337,9 @@ void ByteCodeGenerator::EmitExpression(
               PushSymbol(binding);
 
             bytecode_.PatchBind(
-                *closure.fn.resolved->function_symbol.symbol_id,
+                closure.fn.resolved->function_symbol_id,
                 /*argc=*/closure.fn.resolved->required_captures.size());
-            called_symbols_.push_back(
-                *closure.fn.resolved->function_symbol.symbol_id);
+            called_symbols_.push_back(closure.fn.resolved->function_symbol_id);
           },
           [&](PrefixUnaryExpression& prefix) {
             EmitExpression(prefix.operand);

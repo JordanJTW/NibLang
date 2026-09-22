@@ -13,6 +13,7 @@
 #include "compiler/scope_manager.h"
 #include "compiler/type_context.h"
 #include "compiler/type_registry.h"
+#include "compiler/type_resolver.h"
 #include "compiler/types.h"
 
 using NarrowedBindings = std::unordered_map<BindingId, TypeId>;
@@ -21,8 +22,7 @@ struct ExpressionResult {
   explicit ExpressionResult(TypeId type_id) : type_id(type_id) {}
 
   static ExpressionResult of_binding(NamedBinding binding) {
-    ExpressionResult res;
-    res.type_id = binding.realized_type_id;
+    ExpressionResult res(binding.type_id);
     res.binding = std::move(binding);
     return res;
   }
@@ -38,21 +38,27 @@ struct ExpressionResult {
     return result;
   }
 
+  static ExpressionResult with_storage_override(
+      TypeId type_id,
+      TypeId storage_type_id,
+      std::optional<NamedBinding> binding) {
+    ExpressionResult res = with_type_override(type_id, binding);
+    res.storage_type_id = storage_type_id;
+    return res;
+  }
+
   // Is this an instance? i.e. "hello world", 2 + 2, foo
   // If no binding is given then assume a temporary value with only a TypeId.
   bool is_value() const { return binding ? binding->IsValue() : true; }
   // Is this a type? i.e. String, i32, Point. Types MUST have a binding.
   bool is_type_ref() const { return binding ? binding->IsTypeRef() : false; }
-  bool has_type_id() const { return type_id.has_value(); }
 
-  std::optional<TypeId> type_id;
+  TypeId type_id;
+  std::optional<TypeId> storage_type_id;
   std::optional<NamedBinding> binding;
 
   NarrowedBindings true_bindings;
   NarrowedBindings false_bindings;
-
- private:
-  ExpressionResult() = default;
 };
 
 class ExpressionChecker {
@@ -99,6 +105,8 @@ class ExpressionChecker {
   const NarrowedBindings narrowed_bindings_;
   std::vector<NamedBinding>& required_captures_;
   ErrorCollector& error_collector_;
+
+  TypeResolver type_resolver_;
 };
 
 std::ostream& operator<<(std::ostream& os,

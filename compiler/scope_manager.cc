@@ -110,7 +110,7 @@ std::optional<NamedBinding> ScopeManager::FindBindingFor(
 NamedBinding ScopeManager::InsertNameIntoScope(
     SpannedText name,
     NamedBinding::Kind kind,
-    std::optional<TypeId> type_id,
+    TypeId type_id,
     std::optional<SymbolId> symbol_id,
     std::optional<NamedBinding::Idx> idx,
     std::optional<TypeId> parent_type_id) {
@@ -127,7 +127,7 @@ NamedBinding ScopeManager::InsertNameIntoScope(
   NamedBinding binding = {
       .name = name,
       .kind = kind,
-      .realized_type_id = type_id,
+      .type_id = type_id,
       .symbol_id = symbol_id,
       .idx = idx,
       .parent_type_id = parent_type_id,
@@ -185,8 +185,7 @@ std::string ScopeManager::ToJson(ScopeId scope_id) const {
         nlohmann::json b;
         b["name"] = binding.name.text;
         b["kind"] = binding.kind;
-        if (binding.realized_type_id)
-          b["type_id"] = *binding.realized_type_id;
+        b["type_id"] = binding.type_id;
         if (binding.symbol_id)
           b["symbol_id"] = *binding.symbol_id;
 

@@ -1,0 +1,22 @@
+// RUN: %compiler %s --output %t.bin
+// RUN: %run %t.bin 2> %t.out
+
+interface Interface {
+  fn do_it() -> i32;
+}
+
+struct Foo {
+  implements Interface {
+    fn do_it() -> i32 {
+      return 123;
+    }
+  }
+}
+
+fn take_interface(value: Interface) {
+  value.do_it();
+}
+
+fn main() {
+  take_interface(Foo());
+}

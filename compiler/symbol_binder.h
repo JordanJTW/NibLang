@@ -1,3 +1,7 @@
+// Copyright (c) 2026, Jordan Werthman <jordanwerthman@gmail.com>
+//
+// SPDX-License-Identifier: BSD-2-Clause
+
 #pragma once
 
 #include <optional>
@@ -18,17 +22,20 @@ class SymbolBinder {
   void Process(const Block& block);
 
   using StructBinding = std::pair<NamedBinding, StructSymbol*>;
-  StructBinding BindStruct(StructDeclaration& declaration);
+  StructBinding ForwardDeclareStruct(StructDeclaration& declaration);
 
  private:
-  void BindTypeAlias(const TypeAliasStatement& alias);
-
-  SymbolId NewFunction(FunctionDeclaration& declaration,
-                       std::optional<const StructDeclaration*>
-                           parent_declaration = std::nullopt);
+  void ForwardDeclareTypeAlias(const TypeAliasStatement& alias);
 
   std::vector<TypeId> BindTemplateVariables(
       const std::vector<TemplateVariable>& template_variables);
+
+  void BindStructSymbol(StructSymbol& struct_symbol,
+                        std::optional<TypeId> self_id);
+  std::optional<NamedBinding> NewFunctionSymbol(
+      FunctionDeclaration& declaration,
+      std::optional<const StructDeclaration*> parent_declaration,
+      std::optional<TypeId> self_id);
 
   ScopeManager& scope_manager_;
   TypeRegistry& type_registry_;

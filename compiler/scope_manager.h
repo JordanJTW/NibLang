@@ -65,7 +65,7 @@ class ScopeManager {
   NamedBinding InsertNameIntoScope(
       SpannedText name,
       NamedBinding::Kind kind,
-      std::optional<TypeId> type_id,
+      TypeId type_id,
       std::optional<SymbolId> symbol_id,
       std::optional<NamedBinding::Idx> idx = std::nullopt,
       std::optional<TypeId> parent_type_id = std::nullopt);

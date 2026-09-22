@@ -13,7 +13,7 @@ extern struct Array[T] {
   fn length() -> i32;
 
   fn slice(start: i32, count: i32) -> Array[T] {
-    let slice = Array.withSize.of(T)(count);
+    let slice: Array[T] = Array.withSize(count);
 
     let idx = 0;
     while (start + idx < self.length() && idx < count) {
@@ -24,7 +24,7 @@ extern struct Array[T] {
   }
 
   fn map[N](transform: fn(T) -> N) -> Array[N] {
-    let result = Array.withSize.of(N)(self.length());
+    let result: Array[N] = Array.withSize(self.length());
 
     let idx = 0;
     while (idx < self.length()) {
@@ -59,16 +59,16 @@ extern struct Promise[T] {
   static fn all[ResultType](
     promises: Array[Promise[ResultType]]
   ) -> Promise[Array[ResultType]] {
-    let promise = Promise.new.of(Array[ResultType])();
+    let promise: Promise[Array[ResultType]] = Promise.new();
 
-    let results = Array.withSize.of(ResultType)(promises.length());
+    let results: Array[ResultType] = Array.withSize(promises.length());
     let completed = Box(0);
 
     let idx = 0;
     while (idx < promises.length()) {
       promises.get(idx).then(
-        fn (value: ResultType) {  
-          results.set(idx, value);  
+        fn (value: ResultType) {
+          results.set(idx, value);
           completed.value = completed.value + 1;
 
           if (completed.value == promises.length()) {

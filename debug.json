@@ -1,0 +1,3964 @@
+{"scopes": {
+  "bindings": {
+    "Array": {
+      "kind": 1,
+      "name": "Array",
+      "symbol_id": 0,
+      "type_id": 9
+    },
+    "Box": {
+      "kind": 1,
+      "name": "Box",
+      "symbol_id": 1,
+      "type_id": 10
+    },
+    "Equatable": {
+      "kind": 1,
+      "name": "Equatable",
+      "symbol_id": 5,
+      "type_id": 14
+    },
+    "HashMap": {
+      "kind": 1,
+      "name": "HashMap",
+      "symbol_id": 36,
+      "type_id": 103
+    },
+    "Hashable": {
+      "kind": 1,
+      "name": "Hashable",
+      "symbol_id": 4,
+      "type_id": 13
+    },
+    "JsonValue": {
+      "kind": 8,
+      "name": "JsonValue",
+      "type_id": 142
+    },
+    "Map": {
+      "kind": 1,
+      "name": "Map",
+      "symbol_id": 2,
+      "type_id": 11
+    },
+    "MapNode": {
+      "kind": 1,
+      "name": "MapNode",
+      "symbol_id": 35,
+      "type_id": 102
+    },
+    "Parser": {
+      "kind": 1,
+      "name": "Parser",
+      "symbol_id": 41,
+      "type_id": 141
+    },
+    "Promise": {
+      "kind": 1,
+      "name": "Promise",
+      "symbol_id": 3,
+      "type_id": 12
+    },
+    "String": {
+      "kind": 1,
+      "name": "String",
+      "symbol_id": 6,
+      "type_id": 15
+    },
+    "expect_char": {
+      "kind": 0,
+      "name": "expect_char",
+      "symbol_id": 45,
+      "type_id": 148
+    },
+    "is_digit": {
+      "kind": 0,
+      "name": "is_digit",
+      "symbol_id": 42,
+      "type_id": 146
+    },
+    "is_whitespace": {
+      "kind": 0,
+      "name": "is_whitespace",
+      "symbol_id": 43,
+      "type_id": 146
+    },
+    "main": {
+      "kind": 0,
+      "name": "main",
+      "symbol_id": 55,
+      "type_id": 186
+    },
+    "parse_array": {
+      "kind": 0,
+      "name": "parse_array",
+      "symbol_id": 49,
+      "type_id": 153
+    },
+    "parse_number": {
+      "kind": 0,
+      "name": "parse_number",
+      "symbol_id": 47,
+      "type_id": 151
+    },
+    "parse_object": {
+      "kind": 0,
+      "name": "parse_object",
+      "symbol_id": 48,
+      "type_id": 152
+    },
+    "parse_string": {
+      "kind": 0,
+      "name": "parse_string",
+      "symbol_id": 46,
+      "type_id": 149
+    },
+    "parse_value": {
+      "kind": 0,
+      "name": "parse_value",
+      "symbol_id": 50,
+      "type_id": 154
+    },
+    "partition": {
+      "kind": 0,
+      "name": "partition",
+      "symbol_id": 53,
+      "type_id": 175
+    },
+    "quicksort": {
+      "kind": 0,
+      "name": "quicksort",
+      "symbol_id": 52,
+      "type_id": 171
+    },
+    "skip_whitespace": {
+      "kind": 0,
+      "name": "skip_whitespace",
+      "symbol_id": 44,
+      "type_id": 147
+    },
+    "sort": {
+      "kind": 0,
+      "name": "sort",
+      "symbol_id": 51,
+      "type_id": 167
+    },
+    "swap": {
+      "kind": 0,
+      "name": "swap",
+      "symbol_id": 54,
+      "type_id": 178
+    }
+  },
+  "children": [
+    {
+      "bindings": {
+        "init": {
+          "kind": 0,
+          "name": "init",
+          "symbol_id": 8,
+          "type_id": 22
+        },
+        "new": {
+          "kind": 0,
+          "name": "new",
+          "symbol_id": 7,
+          "type_id": 19
+        },
+        "withSize": {
+          "kind": 0,
+          "name": "withSize",
+          "symbol_id": 9,
+          "type_id": 25
+        }
+      },
+      "children": [
+        {
+          "bindings": {
+            "F": {
+              "kind": 7,
+              "name": "F",
+              "type_id": 17
+            }
+          },
+          "children": [
+            {
+              "id": 3,
+              "name": "fn new",
+              "parent_id": 2,
+              "type": 4
+            }
+          ],
+          "id": 2,
+          "name": "fn new",
+          "parent_id": 1,
+          "type": 6
+        },
+        {
+          "bindings": {
+            "F": {
+              "kind": 7,
+              "name": "F",
+              "type_id": 20
+            }
+          },
+          "children": [
+            {
+              "id": 5,
+              "name": "fn init",
+              "parent_id": 4,
+              "type": 4
+            }
+          ],
+          "id": 4,
+          "name": "fn init",
+          "parent_id": 1,
+          "type": 6
+        },
+        {
+          "bindings": {
+            "F": {
+              "kind": 7,
+              "name": "F",
+              "type_id": 23
+            }
+          },
+          "children": [
+            {
+              "bindings": {
+                "size": {
+                  "kind": 4,
+                  "name": "size",
+                  "type_id": 2
+                }
+              },
+              "id": 7,
+              "name": "fn withSize",
+              "parent_id": 6,
+              "type": 4
+            }
+          ],
+          "id": 6,
+          "name": "fn withSize",
+          "parent_id": 1,
+          "type": 6
+        },
+        {
+          "bindings": {
+            "T": {
+              "kind": 7,
+              "name": "T",
+              "type_id": 16
+            }
+          },
+          "children": [
+            {
+              "bindings": {
+                "get": {
+                  "kind": 0,
+                  "name": "get",
+                  "symbol_id": 11,
+                  "type_id": 27
+                },
+                "length": {
+                  "kind": 0,
+                  "name": "length",
+                  "symbol_id": 13,
+                  "type_id": 29
+                },
+                "map": {
+                  "kind": 0,
+                  "name": "map",
+                  "symbol_id": 15,
+                  "type_id": 34
+                },
+                "push": {
+                  "kind": 0,
+                  "name": "push",
+                  "symbol_id": 10,
+                  "type_id": 26
+                },
+                "set": {
+                  "kind": 0,
+                  "name": "set",
+                  "symbol_id": 12,
+                  "type_id": 28
+                },
+                "slice": {
+                  "kind": 0,
+                  "name": "slice",
+                  "symbol_id": 14,
+                  "type_id": 30
+                }
+              },
+              "children": [
+                {
+                  "bindings": {
+                    "self": {
+                      "kind": 4,
+                      "name": "self",
+                      "type_id": 9
+                    },
+                    "value": {
+                      "kind": 4,
+                      "name": "value",
+                      "type_id": 16
+                    }
+                  },
+                  "id": 10,
+                  "name": "fn push",
+                  "parent_id": 9,
+                  "type": 4
+                },
+                {
+                  "bindings": {
+                    "idx": {
+                      "kind": 4,
+                      "name": "idx",
+                      "type_id": 2
+                    },
+                    "self": {
+                      "kind": 4,
+                      "name": "self",
+                      "type_id": 9
+                    }
+                  },
+                  "id": 11,
+                  "name": "fn get",
+                  "parent_id": 9,
+                  "type": 4
+                },
+                {
+                  "bindings": {
+                    "idx": {
+                      "kind": 4,
+                      "name": "idx",
+                      "type_id": 2
+                    },
+                    "self": {
+                      "kind": 4,
+                      "name": "self",
+                      "type_id": 9
+                    },
+                    "value": {
+                      "kind": 4,
+                      "name": "value",
+                      "type_id": 16
+                    }
+                  },
+                  "id": 12,
+                  "name": "fn set",
+                  "parent_id": 9,
+                  "type": 4
+                },
+                {
+                  "bindings": {
+                    "self": {
+                      "kind": 4,
+                      "name": "self",
+                      "type_id": 9
+                    }
+                  },
+                  "id": 13,
+                  "name": "fn length",
+                  "parent_id": 9,
+                  "type": 4
+                },
+                {
+                  "bindings": {
+                    "count": {
+                      "kind": 4,
+                      "name": "count",
+                      "type_id": 2
+                    },
+                    "idx": {
+                      "kind": 5,
+                      "name": "idx",
+                      "type_id": 2
+                    },
+                    "self": {
+                      "kind": 4,
+                      "name": "self",
+                      "type_id": 9
+                    },
+                    "slice": {
+                      "kind": 5,
+                      "name": "slice",
+                      "type_id": 9
+                    },
+                    "start": {
+                      "kind": 4,
+                      "name": "start",
+                      "type_id": 2
+                    }
+                  },
+                  "id": 14,
+                  "name": "fn slice",
+                  "parent_id": 9,
+                  "type": 4
+                },
+                {
+                  "bindings": {
+                    "N": {
+                      "kind": 7,
+                      "name": "N",
+                      "type_id": 31
+                    }
+                  },
+                  "children": [
+                    {
+                      "bindings": {
+                        "idx": {
+                          "kind": 5,
+                          "name": "idx",
+                          "type_id": 2
+                        },
+                        "result": {
+                          "kind": 5,
+                          "name": "result",
+                          "type_id": 33
+                        },
+                        "self": {
+                          "kind": 4,
+                          "name": "self",
+                          "type_id": 9
+                        },
+                        "transform": {
+                          "kind": 4,
+                          "name": "transform",
+                          "type_id": 32
+                        }
+                      },
+                      "id": 16,
+                      "name": "fn map",
+                      "parent_id": 15,
+                      "type": 4
+                    }
+                  ],
+                  "id": 15,
+                  "name": "fn map",
+                  "parent_id": 9,
+                  "type": 6
+                }
+              ],
+              "id": 9,
+              "name": "struct Array",
+              "parent_id": 8,
+              "type": 2
+            }
+          ],
+          "id": 8,
+          "name": "struct Array",
+          "parent_id": 1,
+          "type": 6
+        }
+      ],
+      "id": 1,
+      "name": "struct Array",
+      "parent_id": 0,
+      "type": 1
+    },
+    {
+      "children": [
+        {
+          "bindings": {
+            "T": {
+              "kind": 7,
+              "name": "T",
+              "type_id": 35
+            }
+          },
+          "children": [
+            {
+              "bindings": {
+                "value": {
+                  "kind": 3,
+                  "name": "value",
+                  "type_id": 35
+                }
+              },
+              "id": 19,
+              "name": "struct Box",
+              "parent_id": 18,
+              "type": 2
+            }
+          ],
+          "id": 18,
+          "name": "struct Box",
+          "parent_id": 17,
+          "type": 6
+        }
+      ],
+      "id": 17,
+      "name": "struct Box",
+      "parent_id": 0,
+      "type": 1
+    },
+    {
+      "bindings": {
+        "new": {
+          "kind": 0,
+          "name": "new",
+          "symbol_id": 16,
+          "type_id": 41
+        }
+      },
+      "children": [
+        {
+          "bindings": {
+            "K": {
+              "kind": 7,
+              "name": "K",
+              "type_id": 38
+            },
+            "V": {
+              "kind": 7,
+              "name": "V",
+              "type_id": 39
+            }
+          },
+          "children": [
+            {
+              "id": 22,
+              "name": "fn new",
+              "parent_id": 21,
+              "type": 4
+            }
+          ],
+          "id": 21,
+          "name": "fn new",
+          "parent_id": 20,
+          "type": 6
+        },
+        {
+          "bindings": {
+            "K": {
+              "kind": 7,
+              "name": "K",
+              "type_id": 36
+            },
+            "V": {
+              "kind": 7,
+              "name": "V",
+              "type_id": 37
+            }
+          },
+          "children": [
+            {
+              "bindings": {
+                "get": {
+                  "kind": 0,
+                  "name": "get",
+                  "symbol_id": 17,
+                  "type_id": 42
+                },
+                "set": {
+                  "kind": 0,
+                  "name": "set",
+                  "symbol_id": 18,
+                  "type_id": 43
+                }
+              },
+              "children": [
+                {
+                  "bindings": {
+                    "key": {
+                      "kind": 4,
+                      "name": "key",
+                      "type_id": 36
+                    },
+                    "self": {
+                      "kind": 4,
+                      "name": "self",
+                      "type_id": 11
+                    }
+                  },
+                  "id": 25,
+                  "name": "fn get",
+                  "parent_id": 24,
+                  "type": 4
+                },
+                {
+                  "bindings": {
+                    "key": {
+                      "kind": 4,
+                      "name": "key",
+                      "type_id": 36
+                    },
+                    "self": {
+                      "kind": 4,
+                      "name": "self",
+                      "type_id": 11
+                    },
+                    "value": {
+                      "kind": 4,
+                      "name": "value",
+                      "type_id": 37
+                    }
+                  },
+                  "id": 26,
+                  "name": "fn set",
+                  "parent_id": 24,
+                  "type": 4
+                }
+              ],
+              "id": 24,
+              "name": "struct Map",
+              "parent_id": 23,
+              "type": 2
+            }
+          ],
+          "id": 23,
+          "name": "struct Map",
+          "parent_id": 20,
+          "type": 6
+        }
+      ],
+      "id": 20,
+      "name": "struct Map",
+      "parent_id": 0,
+      "type": 1
+    },
+    {
+      "bindings": {
+        "all": {
+          "kind": 0,
+          "name": "all",
+          "symbol_id": 20,
+          "type_id": 53
+        },
+        "new": {
+          "kind": 0,
+          "name": "new",
+          "symbol_id": 19,
+          "type_id": 47
+        }
+      },
+      "children": [
+        {
+          "bindings": {
+            "T": {
+              "kind": 7,
+              "name": "T",
+              "type_id": 45
+            }
+          },
+          "children": [
+            {
+              "id": 29,
+              "name": "fn new",
+              "parent_id": 28,
+              "type": 4
+            }
+          ],
+          "id": 28,
+          "name": "fn new",
+          "parent_id": 27,
+          "type": 6
+        },
+        {
+          "bindings": {
+            "ResultType": {
+              "kind": 7,
+              "name": "ResultType",
+              "type_id": 48
+            }
+          },
+          "children": [
+            {
+              "bindings": {
+                "completed": {
+                  "kind": 5,
+                  "name": "completed",
+                  "type_id": 87
+                },
+                "idx": {
+                  "kind": 5,
+                  "name": "idx",
+                  "type_id": 2
+                },
+                "promise": {
+                  "kind": 5,
+                  "name": "promise",
+                  "type_id": 52
+                },
+                "promises": {
+                  "kind": 4,
+                  "name": "promises",
+                  "type_id": 50
+                },
+                "results": {
+                  "kind": 5,
+                  "name": "results",
+                  "type_id": 51
+                }
+              },
+              "children": [
+                {
+                  "bindings": {
+                    "completed": {
+                      "kind": 6,
+                      "name": "completed",
+                      "type_id": 87
+                    },
+                    "idx": {
+                      "kind": 6,
+                      "name": "idx",
+                      "type_id": 2
+                    },
+                    "results": {
+                      "kind": 6,
+                      "name": "results",
+                      "type_id": 51
+                    },
+                    "value": {
+                      "kind": 4,
+                      "name": "value",
+                      "type_id": 48
+                    }
+                  },
+                  "children": [
+                    {
+                      "bindings": {
+                        "promise": {
+                          "kind": 6,
+                          "name": "promise",
+                          "type_id": 52
+                        }
+                      },
+                      "id": 58,
+                      "name": "if",
+                      "parent_id": 56,
+                      "type": 5
+                    },
+                    {
+                      "id": 59,
+                      "name": "else",
+                      "parent_id": 56,
+                      "type": 5
+                    }
+                  ],
+                  "id": 56,
+                  "name": "fn __llamda.0",
+                  "parent_id": 31,
+                  "type": 4
+                },
+                {
+                  "bindings": {
+                    "completed": {
+                      "kind": 6,
+                      "name": "completed",
+                      "type_id": 87
+                    },
+                    "error": {
+                      "kind": 4,
+                      "name": "error",
+                      "type_id": 6
+                    }
+                  },
+                  "children": [
+                    {
+                      "bindings": {
+                        "promise": {
+                          "kind": 6,
+                          "name": "promise",
+                          "type_id": 52
+                        }
+                      },
+                      "id": 60,
+                      "name": "if",
+                      "parent_id": 57,
+                      "type": 5
+                    },
+                    {
+                      "id": 61,
+                      "name": "else",
+                      "parent_id": 57,
+                      "type": 5
+                    }
+                  ],
+                  "id": 57,
+                  "name": "fn __llamda.1",
+                  "parent_id": 31,
+                  "type": 4
+                }
+              ],
+              "id": 31,
+              "name": "fn all",
+              "parent_id": 30,
+              "type": 4
+            }
+          ],
+          "id": 30,
+          "name": "fn all",
+          "parent_id": 27,
+          "type": 6
+        },
+        {
+          "bindings": {
+            "T": {
+              "kind": 7,
+              "name": "T",
+              "type_id": 44
+            }
+          },
+          "children": [
+            {
+              "bindings": {
+                "fulfill": {
+                  "kind": 0,
+                  "name": "fulfill",
+                  "symbol_id": 21,
+                  "type_id": 54
+                },
+                "reject": {
+                  "kind": 0,
+                  "name": "reject",
+                  "symbol_id": 22,
+                  "type_id": 55
+                },
+                "then": {
+                  "kind": 0,
+                  "name": "then",
+                  "symbol_id": 23,
+                  "type_id": 64
+                }
+              },
+              "children": [
+                {
+                  "bindings": {
+                    "self": {
+                      "kind": 4,
+                      "name": "self",
+                      "type_id": 12
+                    },
+                    "value": {
+                      "kind": 4,
+                      "name": "value",
+                      "type_id": 44
+                    }
+                  },
+                  "id": 34,
+                  "name": "fn fulfill",
+                  "parent_id": 33,
+                  "type": 4
+                },
+                {
+                  "bindings": {
+                    "error": {
+                      "kind": 4,
+                      "name": "error",
+                      "type_id": 6
+                    },
+                    "self": {
+                      "kind": 4,
+                      "name": "self",
+                      "type_id": 12
+                    }
+                  },
+                  "id": 35,
+                  "name": "fn reject",
+                  "parent_id": 33,
+                  "type": 4
+                },
+                {
+                  "bindings": {
+                    "R1": {
+                      "kind": 7,
+                      "name": "R1",
+                      "type_id": 56
+                    },
+                    "R2": {
+                      "kind": 7,
+                      "name": "R2",
+                      "type_id": 57
+                    }
+                  },
+                  "children": [
+                    {
+                      "bindings": {
+                        "on_fulfill": {
+                          "kind": 4,
+                          "name": "on_fulfill",
+                          "type_id": 59
+                        },
+                        "on_reject": {
+                          "kind": 4,
+                          "name": "on_reject",
+                          "type_id": 61
+                        },
+                        "self": {
+                          "kind": 4,
+                          "name": "self",
+                          "type_id": 12
+                        }
+                      },
+                      "id": 37,
+                      "name": "fn then",
+                      "parent_id": 36,
+                      "type": 4
+                    }
+                  ],
+                  "id": 36,
+                  "name": "fn then",
+                  "parent_id": 33,
+                  "type": 6
+                }
+              ],
+              "id": 33,
+              "name": "struct Promise",
+              "parent_id": 32,
+              "type": 2
+            }
+          ],
+          "id": 32,
+          "name": "struct Promise",
+          "parent_id": 27,
+          "type": 6
+        }
+      ],
+      "id": 27,
+      "name": "struct Promise",
+      "parent_id": 0,
+      "type": 1
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "bindings": {
+                "hash": {
+                  "kind": 0,
+                  "name": "hash",
+                  "symbol_id": 24,
+                  "type_id": 29
+                }
+              },
+              "children": [
+                {
+                  "bindings": {
+                    "self": {
+                      "kind": 4,
+                      "name": "self",
+                      "type_id": 13
+                    }
+                  },
+                  "id": 41,
+                  "name": "fn hash",
+                  "parent_id": 40,
+                  "type": 4
+                }
+              ],
+              "id": 40,
+              "name": "struct Hashable",
+              "parent_id": 39,
+              "type": 2
+            }
+          ],
+          "id": 39,
+          "name": "struct Hashable",
+          "parent_id": 38,
+          "type": 6
+        }
+      ],
+      "id": 38,
+      "name": "struct Hashable",
+      "parent_id": 0,
+      "type": 1
+    },
+    {
+      "children": [
+        {
+          "bindings": {
+            "T": {
+              "kind": 7,
+              "name": "T",
+              "type_id": 65
+            }
+          },
+          "children": [
+            {
+              "bindings": {
+                "equals": {
+                  "kind": 0,
+                  "name": "equals",
+                  "symbol_id": 25,
+                  "type_id": 66
+                }
+              },
+              "children": [
+                {
+                  "bindings": {
+                    "self": {
+                      "kind": 4,
+                      "name": "self",
+                      "type_id": 14
+                    },
+                    "value": {
+                      "kind": 4,
+                      "name": "value",
+                      "type_id": 65
+                    }
+                  },
+                  "id": 45,
+                  "name": "fn equals",
+                  "parent_id": 44,
+                  "type": 4
+                }
+              ],
+              "id": 44,
+              "name": "struct Equatable",
+              "parent_id": 43,
+              "type": 2
+            }
+          ],
+          "id": 43,
+          "name": "struct Equatable",
+          "parent_id": 42,
+          "type": 6
+        }
+      ],
+      "id": 42,
+      "name": "struct Equatable",
+      "parent_id": 0,
+      "type": 1
+    },
+    {
+      "bindings": {
+        "equals": {
+          "kind": 0,
+          "name": "equals",
+          "symbol_id": 28,
+          "type_id": 69
+        },
+        "hash": {
+          "kind": 0,
+          "name": "hash",
+          "symbol_id": 27,
+          "type_id": 68
+        },
+        "valueOf": {
+          "kind": 0,
+          "name": "valueOf",
+          "symbol_id": 26,
+          "type_id": 67
+        }
+      },
+      "children": [
+        {
+          "bindings": {
+            "value": {
+              "kind": 4,
+              "name": "value",
+              "type_id": 6
+            }
+          },
+          "id": 47,
+          "name": "fn valueOf",
+          "parent_id": 46,
+          "type": 4
+        },
+        {
+          "bindings": {
+            "value": {
+              "kind": 4,
+              "name": "value",
+              "type_id": 15
+            }
+          },
+          "id": 48,
+          "name": "fn hash",
+          "parent_id": 46,
+          "type": 4
+        },
+        {
+          "bindings": {
+            "v1": {
+              "kind": 4,
+              "name": "v1",
+              "type_id": 15
+            },
+            "v2": {
+              "kind": 4,
+              "name": "v2",
+              "type_id": 15
+            }
+          },
+          "id": 49,
+          "name": "fn equals",
+          "parent_id": 46,
+          "type": 4
+        },
+        {
+          "children": [
+            {
+              "bindings": {
+                "charAt": {
+                  "kind": 0,
+                  "name": "charAt",
+                  "symbol_id": 30,
+                  "type_id": 70
+                },
+                "length": {
+                  "kind": 0,
+                  "name": "length",
+                  "symbol_id": 29,
+                  "type_id": 29
+                },
+                "startsWith": {
+                  "kind": 0,
+                  "name": "startsWith",
+                  "symbol_id": 32,
+                  "type_id": 72
+                },
+                "substr": {
+                  "kind": 0,
+                  "name": "substr",
+                  "symbol_id": 31,
+                  "type_id": 71
+                }
+              },
+              "children": [
+                {
+                  "bindings": {
+                    "self": {
+                      "kind": 4,
+                      "name": "self",
+                      "type_id": 15
+                    }
+                  },
+                  "id": 52,
+                  "name": "fn length",
+                  "parent_id": 51,
+                  "type": 4
+                },
+                {
+                  "bindings": {
+                    "idx": {
+                      "kind": 4,
+                      "name": "idx",
+                      "type_id": 2
+                    },
+                    "self": {
+                      "kind": 4,
+                      "name": "self",
+                      "type_id": 15
+                    }
+                  },
+                  "id": 53,
+                  "name": "fn charAt",
+                  "parent_id": 51,
+                  "type": 4
+                },
+                {
+                  "bindings": {
+                    "end": {
+                      "kind": 4,
+                      "name": "end",
+                      "type_id": 2
+                    },
+                    "self": {
+                      "kind": 4,
+                      "name": "self",
+                      "type_id": 15
+                    },
+                    "start": {
+                      "kind": 4,
+                      "name": "start",
+                      "type_id": 2
+                    }
+                  },
+                  "id": 54,
+                  "name": "fn substr",
+                  "parent_id": 51,
+                  "type": 4
+                },
+                {
+                  "bindings": {
+                    "idx": {
+                      "kind": 4,
+                      "name": "idx",
+                      "type_id": 2
+                    },
+                    "prefix": {
+                      "kind": 4,
+                      "name": "prefix",
+                      "type_id": 15
+                    },
+                    "self": {
+                      "kind": 4,
+                      "name": "self",
+                      "type_id": 15
+                    }
+                  },
+                  "id": 55,
+                  "name": "fn startsWith",
+                  "parent_id": 51,
+                  "type": 4
+                }
+              ],
+              "id": 51,
+              "name": "struct String",
+              "parent_id": 50,
+              "type": 2
+            }
+          ],
+          "id": 50,
+          "name": "struct String",
+          "parent_id": 46,
+          "type": 6
+        }
+      ],
+      "id": 46,
+      "name": "struct String",
+      "parent_id": 0,
+      "type": 1
+    },
+    {
+      "children": [
+        {
+          "bindings": {
+            "Key": {
+              "kind": 7,
+              "name": "Key",
+              "type_id": 104
+            },
+            "Value": {
+              "kind": 7,
+              "name": "Value",
+              "type_id": 105
+            }
+          },
+          "children": [
+            {
+              "bindings": {
+                "key": {
+                  "kind": 3,
+                  "name": "key",
+                  "type_id": 104
+                },
+                "next": {
+                  "kind": 3,
+                  "name": "next",
+                  "type_id": 106
+                },
+                "value": {
+                  "kind": 3,
+                  "name": "value",
+                  "type_id": 105
+                }
+              },
+              "id": 64,
+              "name": "struct MapNode",
+              "parent_id": 63,
+              "type": 2
+            }
+          ],
+          "id": 63,
+          "name": "struct MapNode",
+          "parent_id": 62,
+          "type": 6
+        }
+      ],
+      "id": 62,
+      "name": "struct MapNode",
+      "parent_id": 0,
+      "type": 1
+    },
+    {
+      "bindings": {
+        "new": {
+          "kind": 0,
+          "name": "new",
+          "symbol_id": 37,
+          "type_id": 114
+        }
+      },
+      "children": [
+        {
+          "bindings": {
+            "Key": {
+              "kind": 7,
+              "name": "Key",
+              "type_id": 109
+            },
+            "Value": {
+              "kind": 7,
+              "name": "Value",
+              "type_id": 110
+            }
+          },
+          "children": [
+            {
+              "bindings": {
+                "equalsFn": {
+                  "kind": 4,
+                  "name": "equalsFn",
+                  "type_id": 111
+                },
+                "hashFn": {
+                  "kind": 4,
+                  "name": "hashFn",
+                  "type_id": 112
+                }
+              },
+              "id": 67,
+              "name": "fn new",
+              "parent_id": 66,
+              "type": 4
+            }
+          ],
+          "id": 66,
+          "name": "fn new",
+          "parent_id": 65,
+          "type": 6
+        },
+        {
+          "bindings": {
+            "Key": {
+              "kind": 7,
+              "name": "Key",
+              "type_id": 107
+            },
+            "Value": {
+              "kind": 7,
+              "name": "Value",
+              "type_id": 108
+            }
+          },
+          "children": [
+            {
+              "bindings": {
+                "buckets": {
+                  "kind": 3,
+                  "name": "buckets",
+                  "type_id": 117
+                },
+                "equalsFn": {
+                  "kind": 3,
+                  "name": "equalsFn",
+                  "type_id": 118
+                },
+                "find_node": {
+                  "kind": 0,
+                  "name": "find_node",
+                  "symbol_id": 40,
+                  "type_id": 123
+                },
+                "get": {
+                  "kind": 0,
+                  "name": "get",
+                  "symbol_id": 38,
+                  "type_id": 121
+                },
+                "hashFn": {
+                  "kind": 3,
+                  "name": "hashFn",
+                  "type_id": 119
+                },
+                "set": {
+                  "kind": 0,
+                  "name": "set",
+                  "symbol_id": 39,
+                  "type_id": 122
+                },
+                "size": {
+                  "kind": 3,
+                  "name": "size",
+                  "type_id": 2
+                }
+              },
+              "children": [
+                {
+                  "bindings": {
+                    "key": {
+                      "kind": 4,
+                      "name": "key",
+                      "type_id": 107
+                    },
+                    "self": {
+                      "kind": 4,
+                      "name": "self",
+                      "type_id": 103
+                    }
+                  },
+                  "id": 70,
+                  "name": "fn get",
+                  "parent_id": 69,
+                  "type": 4
+                },
+                {
+                  "bindings": {
+                    "bucket_idx": {
+                      "kind": 5,
+                      "name": "bucket_idx",
+                      "type_id": 2
+                    },
+                    "existing": {
+                      "kind": 5,
+                      "name": "existing",
+                      "type_id": 116
+                    },
+                    "head": {
+                      "kind": 5,
+                      "name": "head",
+                      "type_id": 116
+                    },
+                    "key": {
+                      "kind": 4,
+                      "name": "key",
+                      "type_id": 107
+                    },
+                    "self": {
+                      "kind": 4,
+                      "name": "self",
+                      "type_id": 103
+                    },
+                    "value": {
+                      "kind": 4,
+                      "name": "value",
+                      "type_id": 108
+                    }
+                  },
+                  "children": [
+                    {
+                      "id": 73,
+                      "name": "if",
+                      "parent_id": 71,
+                      "type": 5
+                    },
+                    {
+                      "id": 74,
+                      "name": "else",
+                      "parent_id": 71,
+                      "type": 5
+                    }
+                  ],
+                  "id": 71,
+                  "name": "fn set",
+                  "parent_id": 69,
+                  "type": 4
+                },
+                {
+                  "bindings": {
+                    "bucket_idx": {
+                      "kind": 5,
+                      "name": "bucket_idx",
+                      "type_id": 2
+                    },
+                    "key": {
+                      "kind": 4,
+                      "name": "key",
+                      "type_id": 107
+                    },
+                    "node": {
+                      "kind": 5,
+                      "name": "node",
+                      "type_id": 116
+                    },
+                    "self": {
+                      "kind": 4,
+                      "name": "self",
+                      "type_id": 103
+                    }
+                  },
+                  "children": [
+                    {
+                      "id": 75,
+                      "name": "if",
+                      "parent_id": 72,
+                      "type": 5
+                    },
+                    {
+                      "id": 76,
+                      "name": "else",
+                      "parent_id": 72,
+                      "type": 5
+                    }
+                  ],
+                  "id": 72,
+                  "name": "fn find_node",
+                  "parent_id": 69,
+                  "type": 4
+                }
+              ],
+              "id": 69,
+              "name": "struct HashMap",
+              "parent_id": 68,
+              "type": 2
+            }
+          ],
+          "id": 68,
+          "name": "struct HashMap",
+          "parent_id": 65,
+          "type": 6
+        }
+      ],
+      "id": 65,
+      "name": "struct HashMap",
+      "parent_id": 0,
+      "type": 1
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "bindings": {
+                "idx": {
+                  "kind": 3,
+                  "name": "idx",
+                  "type_id": 2
+                }
+              },
+              "id": 79,
+              "name": "struct Parser",
+              "parent_id": 78,
+              "type": 2
+            }
+          ],
+          "id": 78,
+          "name": "struct Parser",
+          "parent_id": 77,
+          "type": 6
+        }
+      ],
+      "id": 77,
+      "name": "struct Parser",
+      "parent_id": 0,
+      "type": 1
+    },
+    {
+      "bindings": {
+        "ch": {
+          "kind": 4,
+          "name": "ch",
+          "type_id": 4
+        }
+      },
+      "id": 80,
+      "name": "fn is_digit",
+      "parent_id": 0,
+      "type": 4
+    },
+    {
+      "bindings": {
+        "ch": {
+          "kind": 4,
+          "name": "ch",
+          "type_id": 4
+        }
+      },
+      "id": 81,
+      "name": "fn is_whitespace",
+      "parent_id": 0,
+      "type": 4
+    },
+    {
+      "bindings": {
+        "input": {
+          "kind": 4,
+          "name": "input",
+          "type_id": 15
+        },
+        "parser": {
+          "kind": 4,
+          "name": "parser",
+          "type_id": 141
+        }
+      },
+      "id": 82,
+      "name": "fn skip_whitespace",
+      "parent_id": 0,
+      "type": 4
+    },
+    {
+      "bindings": {
+        "expected": {
+          "kind": 4,
+          "name": "expected",
+          "type_id": 4
+        },
+        "input": {
+          "kind": 4,
+          "name": "input",
+          "type_id": 15
+        },
+        "parser": {
+          "kind": 4,
+          "name": "parser",
+          "type_id": 141
+        }
+      },
+      "children": [
+        {
+          "id": 89,
+          "name": "if",
+          "parent_id": 83,
+          "type": 5
+        },
+        {
+          "id": 90,
+          "name": "else",
+          "parent_id": 83,
+          "type": 5
+        }
+      ],
+      "id": 83,
+      "name": "fn expect_char",
+      "parent_id": 0,
+      "type": 4
+    },
+    {
+      "bindings": {
+        "ch": {
+          "kind": 5,
+          "name": "ch",
+          "type_id": 4
+        },
+        "chunk_start": {
+          "kind": 5,
+          "name": "chunk_start",
+          "type_id": 2
+        },
+        "has_escapes": {
+          "kind": 5,
+          "name": "has_escapes",
+          "type_id": 5
+        },
+        "input": {
+          "kind": 4,
+          "name": "input",
+          "type_id": 15
+        },
+        "parser": {
+          "kind": 4,
+          "name": "parser",
+          "type_id": 141
+        },
+        "result": {
+          "kind": 5,
+          "name": "result",
+          "type_id": 15
+        }
+      },
+      "children": [
+        {
+          "children": [
+            {
+              "bindings": {
+                "tmp": {
+                  "kind": 5,
+                  "name": "tmp",
+                  "type_id": 15
+                }
+              },
+              "id": 92,
+              "name": "if",
+              "parent_id": 91,
+              "type": 5
+            },
+            {
+              "id": 93,
+              "name": "else",
+              "parent_id": 91,
+              "type": 5
+            },
+            {
+              "id": 94,
+              "name": "if",
+              "parent_id": 91,
+              "type": 5
+            },
+            {
+              "id": 95,
+              "name": "else",
+              "parent_id": 91,
+              "type": 5
+            }
+          ],
+          "id": 91,
+          "name": "if",
+          "parent_id": 84,
+          "type": 5
+        },
+        {
+          "id": 96,
+          "name": "else",
+          "parent_id": 84,
+          "type": 5
+        },
+        {
+          "bindings": {
+            "escape_ch": {
+              "kind": 5,
+              "name": "escape_ch",
+              "type_id": 4
+            }
+          },
+          "children": [
+            {
+              "id": 98,
+              "name": "if",
+              "parent_id": 97,
+              "type": 5
+            },
+            {
+              "id": 99,
+              "name": "else",
+              "parent_id": 97,
+              "type": 5
+            },
+            {
+              "id": 100,
+              "name": "if",
+              "parent_id": 97,
+              "type": 5
+            },
+            {
+              "id": 101,
+              "name": "else",
+              "parent_id": 97,
+              "type": 5
+            },
+            {
+              "id": 102,
+              "name": "if",
+              "parent_id": 97,
+              "type": 5
+            },
+            {
+              "id": 103,
+              "name": "else",
+              "parent_id": 97,
+              "type": 5
+            },
+            {
+              "id": 104,
+              "name": "if",
+              "parent_id": 97,
+              "type": 5
+            },
+            {
+              "id": 105,
+              "name": "else",
+              "parent_id": 97,
+              "type": 5
+            },
+            {
+              "id": 106,
+              "name": "if",
+              "parent_id": 97,
+              "type": 5
+            },
+            {
+              "id": 107,
+              "name": "else",
+              "parent_id": 97,
+              "type": 5
+            },
+            {
+              "id": 108,
+              "name": "if",
+              "parent_id": 97,
+              "type": 5
+            },
+            {
+              "id": 109,
+              "name": "else",
+              "parent_id": 97,
+              "type": 5
+            },
+            {
+              "id": 110,
+              "name": "if",
+              "parent_id": 97,
+              "type": 5
+            },
+            {
+              "id": 111,
+              "name": "else",
+              "parent_id": 97,
+              "type": 5
+            },
+            {
+              "id": 112,
+              "name": "if",
+              "parent_id": 97,
+              "type": 5
+            },
+            {
+              "id": 113,
+              "name": "else",
+              "parent_id": 97,
+              "type": 5
+            },
+            {
+              "id": 114,
+              "name": "if",
+              "parent_id": 97,
+              "type": 5
+            },
+            {
+              "id": 115,
+              "name": "else",
+              "parent_id": 97,
+              "type": 5
+            },
+            {
+              "id": 116,
+              "name": "if",
+              "parent_id": 97,
+              "type": 5
+            },
+            {
+              "id": 117,
+              "name": "else",
+              "parent_id": 97,
+              "type": 5
+            }
+          ],
+          "id": 97,
+          "name": "if",
+          "parent_id": 84,
+          "type": 5
+        },
+        {
+          "id": 118,
+          "name": "else",
+          "parent_id": 84,
+          "type": 5
+        }
+      ],
+      "id": 84,
+      "name": "fn parse_string",
+      "parent_id": 0,
+      "type": 4
+    },
+    {
+      "bindings": {
+        "digit": {
+          "kind": 5,
+          "name": "digit",
+          "type_id": 2
+        },
+        "input": {
+          "kind": 4,
+          "name": "input",
+          "type_id": 15
+        },
+        "int_part": {
+          "kind": 5,
+          "name": "int_part",
+          "type_id": 2
+        },
+        "negative": {
+          "kind": 5,
+          "name": "negative",
+          "type_id": 5
+        },
+        "parser": {
+          "kind": 4,
+          "name": "parser",
+          "type_id": 141
+        },
+        "value": {
+          "kind": 5,
+          "name": "value",
+          "type_id": 3
+        }
+      },
+      "children": [
+        {
+          "id": 119,
+          "name": "if",
+          "parent_id": 85,
+          "type": 5
+        },
+        {
+          "id": 120,
+          "name": "else",
+          "parent_id": 85,
+          "type": 5
+        },
+        {
+          "id": 121,
+          "name": "if",
+          "parent_id": 85,
+          "type": 5
+        },
+        {
+          "id": 122,
+          "name": "else",
+          "parent_id": 85,
+          "type": 5
+        },
+        {
+          "bindings": {
+            "digit": {
+              "kind": 5,
+              "name": "digit",
+              "type_id": 3
+            },
+            "divisor": {
+              "kind": 5,
+              "name": "divisor",
+              "type_id": 3
+            }
+          },
+          "children": [
+            {
+              "id": 124,
+              "name": "if",
+              "parent_id": 123,
+              "type": 5
+            },
+            {
+              "id": 125,
+              "name": "else",
+              "parent_id": 123,
+              "type": 5
+            }
+          ],
+          "id": 123,
+          "name": "if",
+          "parent_id": 85,
+          "type": 5
+        },
+        {
+          "id": 126,
+          "name": "else",
+          "parent_id": 85,
+          "type": 5
+        },
+        {
+          "bindings": {
+            "exp_negative": {
+              "kind": 5,
+              "name": "exp_negative",
+              "type_id": 5
+            },
+            "exponent": {
+              "kind": 5,
+              "name": "exponent",
+              "type_id": 2
+            },
+            "i": {
+              "kind": 5,
+              "name": "i",
+              "type_id": 2
+            },
+            "scale": {
+              "kind": 5,
+              "name": "scale",
+              "type_id": 3
+            }
+          },
+          "children": [
+            {
+              "id": 128,
+              "name": "if",
+              "parent_id": 127,
+              "type": 5
+            },
+            {
+              "id": 129,
+              "name": "else",
+              "parent_id": 127,
+              "type": 5
+            },
+            {
+              "id": 130,
+              "name": "if",
+              "parent_id": 127,
+              "type": 5
+            },
+            {
+              "children": [
+                {
+                  "id": 132,
+                  "name": "if",
+                  "parent_id": 131,
+                  "type": 5
+                },
+                {
+                  "id": 133,
+                  "name": "else",
+                  "parent_id": 131,
+                  "type": 5
+                }
+              ],
+              "id": 131,
+              "name": "else",
+              "parent_id": 127,
+              "type": 5
+            },
+            {
+              "id": 134,
+              "name": "if",
+              "parent_id": 127,
+              "type": 5
+            },
+            {
+              "id": 135,
+              "name": "else",
+              "parent_id": 127,
+              "type": 5
+            },
+            {
+              "id": 136,
+              "name": "if",
+              "parent_id": 127,
+              "type": 5
+            },
+            {
+              "id": 137,
+              "name": "else",
+              "parent_id": 127,
+              "type": 5
+            }
+          ],
+          "id": 127,
+          "name": "if",
+          "parent_id": 85,
+          "type": 5
+        },
+        {
+          "id": 138,
+          "name": "else",
+          "parent_id": 85,
+          "type": 5
+        },
+        {
+          "id": 139,
+          "name": "if",
+          "parent_id": 85,
+          "type": 5
+        },
+        {
+          "id": 140,
+          "name": "else",
+          "parent_id": 85,
+          "type": 5
+        }
+      ],
+      "id": 85,
+      "name": "fn parse_number",
+      "parent_id": 0,
+      "type": 4
+    },
+    {
+      "bindings": {
+        "ch": {
+          "kind": 5,
+          "name": "ch",
+          "type_id": 4
+        },
+        "input": {
+          "kind": 4,
+          "name": "input",
+          "type_id": 15
+        },
+        "key": {
+          "kind": 5,
+          "name": "key",
+          "type_id": 15
+        },
+        "obj": {
+          "kind": 5,
+          "name": "obj",
+          "type_id": 144
+        },
+        "parser": {
+          "kind": 4,
+          "name": "parser",
+          "type_id": 141
+        },
+        "value": {
+          "kind": 5,
+          "name": "value",
+          "type_id": 142
+        }
+      },
+      "children": [
+        {
+          "id": 141,
+          "name": "if",
+          "parent_id": 86,
+          "type": 5
+        },
+        {
+          "id": 142,
+          "name": "else",
+          "parent_id": 86,
+          "type": 5
+        },
+        {
+          "id": 143,
+          "name": "if",
+          "parent_id": 86,
+          "type": 5
+        },
+        {
+          "id": 144,
+          "name": "else",
+          "parent_id": 86,
+          "type": 5
+        },
+        {
+          "id": 145,
+          "name": "if",
+          "parent_id": 86,
+          "type": 5
+        },
+        {
+          "id": 146,
+          "name": "else",
+          "parent_id": 86,
+          "type": 5
+        }
+      ],
+      "id": 86,
+      "name": "fn parse_object",
+      "parent_id": 0,
+      "type": 4
+    },
+    {
+      "bindings": {
+        "array": {
+          "kind": 5,
+          "name": "array",
+          "type_id": 143
+        },
+        "ch": {
+          "kind": 5,
+          "name": "ch",
+          "type_id": 4
+        },
+        "input": {
+          "kind": 4,
+          "name": "input",
+          "type_id": 15
+        },
+        "parser": {
+          "kind": 4,
+          "name": "parser",
+          "type_id": 141
+        },
+        "value": {
+          "kind": 5,
+          "name": "value",
+          "type_id": 142
+        }
+      },
+      "children": [
+        {
+          "id": 147,
+          "name": "if",
+          "parent_id": 87,
+          "type": 5
+        },
+        {
+          "id": 148,
+          "name": "else",
+          "parent_id": 87,
+          "type": 5
+        },
+        {
+          "id": 149,
+          "name": "if",
+          "parent_id": 87,
+          "type": 5
+        },
+        {
+          "id": 150,
+          "name": "else",
+          "parent_id": 87,
+          "type": 5
+        },
+        {
+          "id": 151,
+          "name": "if",
+          "parent_id": 87,
+          "type": 5
+        },
+        {
+          "id": 152,
+          "name": "else",
+          "parent_id": 87,
+          "type": 5
+        },
+        {
+          "id": 153,
+          "name": "if",
+          "parent_id": 87,
+          "type": 5
+        },
+        {
+          "id": 154,
+          "name": "else",
+          "parent_id": 87,
+          "type": 5
+        }
+      ],
+      "id": 87,
+      "name": "fn parse_array",
+      "parent_id": 0,
+      "type": 4
+    },
+    {
+      "bindings": {
+        "ch": {
+          "kind": 5,
+          "name": "ch",
+          "type_id": 4
+        },
+        "input": {
+          "kind": 4,
+          "name": "input",
+          "type_id": 15
+        },
+        "parser": {
+          "kind": 4,
+          "name": "parser",
+          "type_id": 141
+        }
+      },
+      "children": [
+        {
+          "id": 155,
+          "name": "if",
+          "parent_id": 88,
+          "type": 5
+        },
+        {
+          "id": 156,
+          "name": "else",
+          "parent_id": 88,
+          "type": 5
+        },
+        {
+          "id": 157,
+          "name": "if",
+          "parent_id": 88,
+          "type": 5
+        },
+        {
+          "id": 158,
+          "name": "else",
+          "parent_id": 88,
+          "type": 5
+        },
+        {
+          "id": 159,
+          "name": "if",
+          "parent_id": 88,
+          "type": 5
+        },
+        {
+          "id": 160,
+          "name": "else",
+          "parent_id": 88,
+          "type": 5
+        },
+        {
+          "id": 161,
+          "name": "if",
+          "parent_id": 88,
+          "type": 5
+        },
+        {
+          "id": 162,
+          "name": "else",
+          "parent_id": 88,
+          "type": 5
+        },
+        {
+          "id": 163,
+          "name": "if",
+          "parent_id": 88,
+          "type": 5
+        },
+        {
+          "id": 164,
+          "name": "else",
+          "parent_id": 88,
+          "type": 5
+        },
+        {
+          "id": 165,
+          "name": "if",
+          "parent_id": 88,
+          "type": 5
+        },
+        {
+          "id": 166,
+          "name": "else",
+          "parent_id": 88,
+          "type": 5
+        },
+        {
+          "id": 167,
+          "name": "if",
+          "parent_id": 88,
+          "type": 5
+        },
+        {
+          "id": 168,
+          "name": "else",
+          "parent_id": 88,
+          "type": 5
+        }
+      ],
+      "id": 88,
+      "name": "fn parse_value",
+      "parent_id": 0,
+      "type": 4
+    },
+    {
+      "bindings": {
+        "T": {
+          "kind": 7,
+          "name": "T",
+          "type_id": 164
+        }
+      },
+      "children": [
+        {
+          "bindings": {
+            "array": {
+              "kind": 4,
+              "name": "array",
+              "type_id": 165
+            },
+            "compare": {
+              "kind": 4,
+              "name": "compare",
+              "type_id": 166
+            }
+          },
+          "children": [
+            {
+              "id": 177,
+              "name": "if",
+              "parent_id": 170,
+              "type": 5
+            },
+            {
+              "id": 178,
+              "name": "else",
+              "parent_id": 170,
+              "type": 5
+            }
+          ],
+          "id": 170,
+          "name": "fn sort",
+          "parent_id": 169,
+          "type": 4
+        }
+      ],
+      "id": 169,
+      "name": "fn sort",
+      "parent_id": 0,
+      "type": 6
+    },
+    {
+      "bindings": {
+        "T": {
+          "kind": 7,
+          "name": "T",
+          "type_id": 168
+        }
+      },
+      "children": [
+        {
+          "bindings": {
+            "array": {
+              "kind": 4,
+              "name": "array",
+              "type_id": 169
+            },
+            "compare": {
+              "kind": 4,
+              "name": "compare",
+              "type_id": 170
+            },
+            "high": {
+              "kind": 4,
+              "name": "high",
+              "type_id": 2
+            },
+            "low": {
+              "kind": 4,
+              "name": "low",
+              "type_id": 2
+            }
+          },
+          "children": [
+            {
+              "bindings": {
+                "pivot_index": {
+                  "kind": 5,
+                  "name": "pivot_index",
+                  "type_id": 2
+                }
+              },
+              "id": 179,
+              "name": "if",
+              "parent_id": 172,
+              "type": 5
+            },
+            {
+              "id": 180,
+              "name": "else",
+              "parent_id": 172,
+              "type": 5
+            }
+          ],
+          "id": 172,
+          "name": "fn quicksort",
+          "parent_id": 171,
+          "type": 4
+        }
+      ],
+      "id": 171,
+      "name": "fn quicksort",
+      "parent_id": 0,
+      "type": 6
+    },
+    {
+      "bindings": {
+        "T": {
+          "kind": 7,
+          "name": "T",
+          "type_id": 172
+        }
+      },
+      "children": [
+        {
+          "bindings": {
+            "array": {
+              "kind": 4,
+              "name": "array",
+              "type_id": 173
+            },
+            "compare": {
+              "kind": 4,
+              "name": "compare",
+              "type_id": 174
+            },
+            "high": {
+              "kind": 4,
+              "name": "high",
+              "type_id": 2
+            },
+            "i": {
+              "kind": 5,
+              "name": "i",
+              "type_id": 2
+            },
+            "j": {
+              "kind": 5,
+              "name": "j",
+              "type_id": 2
+            },
+            "low": {
+              "kind": 4,
+              "name": "low",
+              "type_id": 2
+            },
+            "pivot": {
+              "kind": 5,
+              "name": "pivot",
+              "type_id": 172
+            }
+          },
+          "children": [
+            {
+              "id": 181,
+              "name": "if",
+              "parent_id": 174,
+              "type": 5
+            },
+            {
+              "id": 182,
+              "name": "else",
+              "parent_id": 174,
+              "type": 5
+            }
+          ],
+          "id": 174,
+          "name": "fn partition",
+          "parent_id": 173,
+          "type": 4
+        }
+      ],
+      "id": 173,
+      "name": "fn partition",
+      "parent_id": 0,
+      "type": 6
+    },
+    {
+      "bindings": {
+        "T": {
+          "kind": 7,
+          "name": "T",
+          "type_id": 176
+        }
+      },
+      "children": [
+        {
+          "bindings": {
+            "a": {
+              "kind": 4,
+              "name": "a",
+              "type_id": 2
+            },
+            "array": {
+              "kind": 4,
+              "name": "array",
+              "type_id": 177
+            },
+            "b": {
+              "kind": 4,
+              "name": "b",
+              "type_id": 2
+            },
+            "tmp": {
+              "kind": 5,
+              "name": "tmp",
+              "type_id": 176
+            }
+          },
+          "id": 176,
+          "name": "fn swap",
+          "parent_id": 175,
+          "type": 4
+        }
+      ],
+      "id": 175,
+      "name": "fn swap",
+      "parent_id": 0,
+      "type": 6
+    },
+    {
+      "bindings": {
+        "sortable": {
+          "kind": 5,
+          "name": "sortable",
+          "type_id": 188
+        },
+        "sortable2": {
+          "kind": 5,
+          "name": "sortable2",
+          "type_id": 194
+        },
+        "sortable3": {
+          "kind": 5,
+          "name": "sortable3",
+          "type_id": 194
+        },
+        "sortable4": {
+          "kind": 5,
+          "name": "sortable4",
+          "type_id": 143
+        }
+      },
+      "children": [
+        {
+          "bindings": {
+            "v1": {
+              "kind": 4,
+              "name": "v1",
+              "type_id": 2
+            },
+            "v2": {
+              "kind": 4,
+              "name": "v2",
+              "type_id": 2
+            }
+          },
+          "id": 184,
+          "name": "fn __llamda.0",
+          "parent_id": 183,
+          "type": 4
+        },
+        {
+          "bindings": {
+            "x": {
+              "kind": 4,
+              "name": "x",
+              "type_id": 2
+            }
+          },
+          "id": 185,
+          "name": "fn __llamda.1",
+          "parent_id": 183,
+          "type": 4
+        },
+        {
+          "bindings": {
+            "v1": {
+              "kind": 4,
+              "name": "v1",
+              "type_id": 15
+            },
+            "v2": {
+              "kind": 4,
+              "name": "v2",
+              "type_id": 15
+            }
+          },
+          "id": 186,
+          "name": "fn __llamda.2",
+          "parent_id": 183,
+          "type": 4
+        },
+        {
+          "bindings": {
+            "v1": {
+              "kind": 4,
+              "name": "v1",
+              "type_id": 15
+            },
+            "v2": {
+              "kind": 4,
+              "name": "v2",
+              "type_id": 15
+            }
+          },
+          "id": 187,
+          "name": "fn __llamda.3",
+          "parent_id": 183,
+          "type": 4
+        },
+        {
+          "bindings": {
+            "v1": {
+              "kind": 4,
+              "name": "v1",
+              "type_id": 142
+            },
+            "v2": {
+              "kind": 4,
+              "name": "v2",
+              "type_id": 142
+            }
+          },
+          "id": 188,
+          "name": "fn __llamda.4",
+          "parent_id": 183,
+          "type": 4
+        }
+      ],
+      "id": 183,
+      "name": "fn main",
+      "parent_id": 0,
+      "type": 4
+    }
+  ],
+  "id": 0,
+  "name": "<<root>>",
+  "parent_id": 0,
+  "type": 0
+}, "context": {
+  "symbol_table": [
+    {
+      "kind": "struct",
+      "name": "Array"
+    },
+    {
+      "kind": "struct",
+      "name": "Box"
+    },
+    {
+      "kind": "struct",
+      "name": "Map"
+    },
+    {
+      "kind": "struct",
+      "name": "Promise"
+    },
+    {
+      "kind": "struct",
+      "name": "Hashable"
+    },
+    {
+      "kind": "struct",
+      "name": "Equatable"
+    },
+    {
+      "kind": "struct",
+      "name": "String"
+    },
+    {
+      "kind": "function",
+      "name": "Array_new"
+    },
+    {
+      "kind": "function",
+      "name": "Array_init"
+    },
+    {
+      "kind": "function",
+      "name": "Array_withSize"
+    },
+    {
+      "kind": "function",
+      "name": "Array_push"
+    },
+    {
+      "kind": "function",
+      "name": "Array_get"
+    },
+    {
+      "kind": "function",
+      "name": "Array_set"
+    },
+    {
+      "kind": "function",
+      "name": "Array_length"
+    },
+    {
+      "kind": "function",
+      "name": "Array_slice"
+    },
+    {
+      "kind": "function",
+      "name": "Array_map"
+    },
+    {
+      "kind": "function",
+      "name": "Map_new"
+    },
+    {
+      "kind": "function",
+      "name": "Map_get"
+    },
+    {
+      "kind": "function",
+      "name": "Map_set"
+    },
+    {
+      "kind": "function",
+      "name": "Promise_new"
+    },
+    {
+      "kind": "function",
+      "name": "Promise_all"
+    },
+    {
+      "kind": "function",
+      "name": "Promise_fulfill"
+    },
+    {
+      "kind": "function",
+      "name": "Promise_reject"
+    },
+    {
+      "kind": "function",
+      "name": "Promise_then"
+    },
+    {
+      "kind": "function",
+      "name": "Hashable_hash"
+    },
+    {
+      "kind": "function",
+      "name": "Equatable_equals"
+    },
+    {
+      "kind": "function",
+      "name": "String_valueOf"
+    },
+    {
+      "kind": "function",
+      "name": "String_hash"
+    },
+    {
+      "kind": "function",
+      "name": "String_equals"
+    },
+    {
+      "kind": "function",
+      "name": "String_length"
+    },
+    {
+      "kind": "function",
+      "name": "String_charAt"
+    },
+    {
+      "kind": "function",
+      "name": "String_substr"
+    },
+    {
+      "kind": "function",
+      "name": "String_startsWith"
+    },
+    {
+      "kind": "function",
+      "name": "__llamda.0"
+    },
+    {
+      "kind": "function",
+      "name": "__llamda.1"
+    },
+    {
+      "kind": "struct",
+      "name": "MapNode"
+    },
+    {
+      "kind": "struct",
+      "name": "HashMap"
+    },
+    {
+      "kind": "function",
+      "name": "HashMap_new"
+    },
+    {
+      "kind": "function",
+      "name": "HashMap_get"
+    },
+    {
+      "kind": "function",
+      "name": "HashMap_set"
+    },
+    {
+      "kind": "function",
+      "name": "HashMap_find_node"
+    },
+    {
+      "kind": "struct",
+      "name": "Parser"
+    },
+    {
+      "kind": "function",
+      "name": "is_digit"
+    },
+    {
+      "kind": "function",
+      "name": "is_whitespace"
+    },
+    {
+      "kind": "function",
+      "name": "skip_whitespace"
+    },
+    {
+      "kind": "function",
+      "name": "expect_char"
+    },
+    {
+      "kind": "function",
+      "name": "parse_string"
+    },
+    {
+      "kind": "function",
+      "name": "parse_number"
+    },
+    {
+      "kind": "function",
+      "name": "parse_object"
+    },
+    {
+      "kind": "function",
+      "name": "parse_array"
+    },
+    {
+      "kind": "function",
+      "name": "parse_value"
+    },
+    {
+      "kind": "function",
+      "name": "sort"
+    },
+    {
+      "kind": "function",
+      "name": "quicksort"
+    },
+    {
+      "kind": "function",
+      "name": "partition"
+    },
+    {
+      "kind": "function",
+      "name": "swap"
+    },
+    {
+      "kind": "function",
+      "name": "main"
+    },
+    {
+      "kind": "function",
+      "name": "__llamda.0"
+    },
+    {
+      "kind": "function",
+      "name": "__llamda.1"
+    },
+    {
+      "kind": "function",
+      "name": "__llamda.2"
+    },
+    {
+      "kind": "function",
+      "name": "__llamda.3"
+    },
+    {
+      "kind": "function",
+      "name": "__llamda.4"
+    }
+  ],
+  "type_table": [
+    {
+      "name": "'error'",
+      "variables": []
+    },
+    {
+      "name": "'Unit'",
+      "variables": []
+    },
+    {
+      "name": "'i32'",
+      "variables": []
+    },
+    {
+      "name": "'f32'",
+      "variables": []
+    },
+    {
+      "name": "'Codepoint'",
+      "variables": []
+    },
+    {
+      "name": "'bool'",
+      "variables": []
+    },
+    {
+      "name": "'any'",
+      "variables": []
+    },
+    {
+      "name": "'never'",
+      "variables": []
+    },
+    {
+      "name": "'Nil'",
+      "variables": []
+    },
+    {
+      "name": "'Array[T]'",
+      "variables": [
+        16
+      ]
+    },
+    {
+      "name": "'Box[T]'",
+      "variables": [
+        35
+      ]
+    },
+    {
+      "name": "'Map[K, V]'",
+      "variables": [
+        37,
+        36
+      ]
+    },
+    {
+      "name": "'Promise[T]'",
+      "variables": [
+        44
+      ]
+    },
+    {
+      "name": "'Hashable'",
+      "variables": []
+    },
+    {
+      "name": "'Equatable[T]'",
+      "variables": [
+        65
+      ]
+    },
+    {
+      "name": "'String'",
+      "variables": []
+    },
+    {
+      "name": "template variable 'T'",
+      "variables": [
+        16
+      ]
+    },
+    {
+      "name": "template variable 'F'",
+      "variables": [
+        17
+      ]
+    },
+    {
+      "name": "'Array[F]'",
+      "variables": [
+        17
+      ]
+    },
+    {
+      "name": "'fn () -> Array[F]'",
+      "variables": [
+        17
+      ]
+    },
+    {
+      "name": "template variable 'F'",
+      "variables": [
+        20
+      ]
+    },
+    {
+      "name": "'Array[F]'",
+      "variables": [
+        20
+      ]
+    },
+    {
+      "name": "'fn (...F) -> Array[F]'",
+      "variables": [
+        20
+      ]
+    },
+    {
+      "name": "template variable 'F'",
+      "variables": [
+        23
+      ]
+    },
+    {
+      "name": "'Array[F]'",
+      "variables": [
+        23
+      ]
+    },
+    {
+      "name": "'fn (i32) -> Array[F]'",
+      "variables": [
+        23
+      ]
+    },
+    {
+      "name": "'fn (T) -> Unit'",
+      "variables": [
+        16
+      ]
+    },
+    {
+      "name": "'fn (i32) -> T'",
+      "variables": [
+        16
+      ]
+    },
+    {
+      "name": "'fn (i32, T) -> T'",
+      "variables": [
+        16
+      ]
+    },
+    {
+      "name": "'fn () -> i32'",
+      "variables": []
+    },
+    {
+      "name": "'fn (i32, i32) -> Array[T]'",
+      "variables": [
+        16
+      ]
+    },
+    {
+      "name": "template variable 'N'",
+      "variables": [
+        31
+      ]
+    },
+    {
+      "name": "'fn (T) -> N'",
+      "variables": [
+        31,
+        16
+      ]
+    },
+    {
+      "name": "'Array[N]'",
+      "variables": [
+        31
+      ]
+    },
+    {
+      "name": "'fn (fn (T) -> N) -> Array[N]'",
+      "variables": [
+        16,
+        31
+      ]
+    },
+    {
+      "name": "template variable 'T'",
+      "variables": [
+        35
+      ]
+    },
+    {
+      "name": "template variable 'K'",
+      "variables": [
+        36
+      ]
+    },
+    {
+      "name": "template variable 'V'",
+      "variables": [
+        37
+      ]
+    },
+    {
+      "name": "template variable 'K'",
+      "variables": [
+        38
+      ]
+    },
+    {
+      "name": "template variable 'V'",
+      "variables": [
+        39
+      ]
+    },
+    {
+      "name": "'Map[K, V]'",
+      "variables": [
+        39,
+        38
+      ]
+    },
+    {
+      "name": "'fn () -> Map[K, V]'",
+      "variables": [
+        38,
+        39
+      ]
+    },
+    {
+      "name": "'fn (K) -> V'",
+      "variables": [
+        37,
+        36
+      ]
+    },
+    {
+      "name": "'fn (K, V) -> Unit'",
+      "variables": [
+        37,
+        36
+      ]
+    },
+    {
+      "name": "template variable 'T'",
+      "variables": [
+        44
+      ]
+    },
+    {
+      "name": "template variable 'T'",
+      "variables": [
+        45
+      ]
+    },
+    {
+      "name": "'Promise[T]'",
+      "variables": [
+        45
+      ]
+    },
+    {
+      "name": "'fn () -> Promise[T]'",
+      "variables": [
+        45
+      ]
+    },
+    {
+      "name": "template variable 'ResultType'",
+      "variables": [
+        48
+      ]
+    },
+    {
+      "name": "'Promise[ResultType]'",
+      "variables": [
+        48
+      ]
+    },
+    {
+      "name": "'Array[Promise[ResultType]]'",
+      "variables": [
+        48
+      ]
+    },
+    {
+      "name": "'Array[ResultType]'",
+      "variables": [
+        48
+      ]
+    },
+    {
+      "name": "'Promise[Array[ResultType]]'",
+      "variables": [
+        48
+      ]
+    },
+    {
+      "name": "'fn (Array[Promise[ResultType]]) -> Promise[Array[ResultType]]'",
+      "variables": [
+        48
+      ]
+    },
+    {
+      "name": "'fn (T) -> Unit'",
+      "variables": [
+        44
+      ]
+    },
+    {
+      "name": "'fn (any) -> Unit'",
+      "variables": []
+    },
+    {
+      "name": "template variable 'R1'",
+      "variables": [
+        56
+      ]
+    },
+    {
+      "name": "template variable 'R2'",
+      "variables": [
+        57
+      ]
+    },
+    {
+      "name": "'fn (T) -> R1'",
+      "variables": [
+        56,
+        44
+      ]
+    },
+    {
+      "name": "'fn (T) -> R1?'",
+      "variables": [
+        56,
+        44
+      ]
+    },
+    {
+      "name": "'fn (any) -> R2'",
+      "variables": [
+        57
+      ]
+    },
+    {
+      "name": "'fn (any) -> R2?'",
+      "variables": [
+        57
+      ]
+    },
+    {
+      "name": "(R1|R2)",
+      "variables": [
+        57,
+        56
+      ]
+    },
+    {
+      "name": "'Promise[(R1|R2)]'",
+      "variables": [
+        56,
+        57
+      ]
+    },
+    {
+      "name": "'fn (fn (T) -> R1?, fn (any) -> R2?) -> Promise[(R1|R2)]'",
+      "variables": [
+        57,
+        44,
+        56
+      ]
+    },
+    {
+      "name": "template variable 'T'",
+      "variables": [
+        65
+      ]
+    },
+    {
+      "name": "'fn (T) -> bool'",
+      "variables": [
+        65
+      ]
+    },
+    {
+      "name": "'fn (any) -> String'",
+      "variables": []
+    },
+    {
+      "name": "'fn (String) -> i32'",
+      "variables": []
+    },
+    {
+      "name": "'fn (String, String) -> bool'",
+      "variables": []
+    },
+    {
+      "name": "'fn (i32) -> Codepoint'",
+      "variables": []
+    },
+    {
+      "name": "'fn (i32, i32) -> String'",
+      "variables": []
+    },
+    {
+      "name": "'fn (String, i32) -> bool'",
+      "variables": []
+    },
+    {
+      "name": "$0",
+      "variables": []
+    },
+    {
+      "name": "'Array[$0]'",
+      "variables": []
+    },
+    {
+      "name": "$1",
+      "variables": []
+    },
+    {
+      "name": "'Array[$1]'",
+      "variables": []
+    },
+    {
+      "name": "'fn (i32) -> Array[$1]'",
+      "variables": []
+    },
+    {
+      "name": "'fn (i32) -> Array[T]'",
+      "variables": [
+        16
+      ]
+    },
+    {
+      "name": "'fn (i32) -> Array[N]'",
+      "variables": [
+        31
+      ]
+    },
+    {
+      "name": "'fn (i32, N) -> N'",
+      "variables": [
+        31
+      ]
+    },
+    {
+      "name": "'Promise[$0]'",
+      "variables": []
+    },
+    {
+      "name": "'Promise[$1]'",
+      "variables": []
+    },
+    {
+      "name": "'fn () -> Promise[$1]'",
+      "variables": []
+    },
+    {
+      "name": "'fn () -> Promise[Array[ResultType]]'",
+      "variables": [
+        48
+      ]
+    },
+    {
+      "name": "'fn (i32) -> Array[ResultType]'",
+      "variables": [
+        48
+      ]
+    },
+    {
+      "name": "'Box[$0]'",
+      "variables": []
+    },
+    {
+      "name": "'Box[i32]'",
+      "variables": []
+    },
+    {
+      "name": "'fn (i32) -> Promise[ResultType]'",
+      "variables": [
+        48
+      ]
+    },
+    {
+      "name": "'fn (ResultType) -> $0'",
+      "variables": [
+        48
+      ]
+    },
+    {
+      "name": "'fn (ResultType) -> $0?'",
+      "variables": [
+        48
+      ]
+    },
+    {
+      "name": "'fn (any) -> $1'",
+      "variables": []
+    },
+    {
+      "name": "'fn (any) -> $1?'",
+      "variables": []
+    },
+    {
+      "name": "($0|$1)",
+      "variables": []
+    },
+    {
+      "name": "'Promise[($0|$1)]'",
+      "variables": []
+    },
+    {
+      "name": "'fn (fn (ResultType) -> $0?, fn (any) -> $1?) -> Promise[($0|$1)]'",
+      "variables": [
+        48
+      ]
+    },
+    {
+      "name": "'fn (ResultType) -> Unit'",
+      "variables": [
+        48
+      ]
+    },
+    {
+      "name": "'fn (any) -> any'",
+      "variables": []
+    },
+    {
+      "name": "(Unit|any)",
+      "variables": []
+    },
+    {
+      "name": "'Promise[(Unit|any)]'",
+      "variables": []
+    },
+    {
+      "name": "'fn (i32, ResultType) -> ResultType'",
+      "variables": [
+        48
+      ]
+    },
+    {
+      "name": "'fn (Array[ResultType]) -> Unit'",
+      "variables": [
+        48
+      ]
+    },
+    {
+      "name": "'MapNode[Key, Value]'",
+      "variables": [
+        105,
+        104
+      ]
+    },
+    {
+      "name": "'HashMap[Key, Value]'",
+      "variables": [
+        108,
+        107
+      ]
+    },
+    {
+      "name": "template variable 'Key'",
+      "variables": [
+        104
+      ]
+    },
+    {
+      "name": "template variable 'Value'",
+      "variables": [
+        105
+      ]
+    },
+    {
+      "name": "'MapNode[Key, Value]?'",
+      "variables": [
+        104,
+        105
+      ]
+    },
+    {
+      "name": "template variable 'Key'",
+      "variables": [
+        107
+      ]
+    },
+    {
+      "name": "template variable 'Value'",
+      "variables": [
+        108
+      ]
+    },
+    {
+      "name": "template variable 'Key'",
+      "variables": [
+        109
+      ]
+    },
+    {
+      "name": "template variable 'Value'",
+      "variables": [
+        110
+      ]
+    },
+    {
+      "name": "'fn (Key, Key) -> bool'",
+      "variables": [
+        109
+      ]
+    },
+    {
+      "name": "'fn (Key) -> i32'",
+      "variables": [
+        109
+      ]
+    },
+    {
+      "name": "'HashMap[Key, Value]'",
+      "variables": [
+        110,
+        109
+      ]
+    },
+    {
+      "name": "'fn (fn (Key, Key) -> bool, fn (Key) -> i32) -> HashMap[Key, Value]'",
+      "variables": [
+        110,
+        109
+      ]
+    },
+    {
+      "name": "'MapNode[Key, Value]'",
+      "variables": [
+        108,
+        107
+      ]
+    },
+    {
+      "name": "'MapNode[Key, Value]?'",
+      "variables": [
+        107,
+        108
+      ]
+    },
+    {
+      "name": "'Array[MapNode[Key, Value]?]'",
+      "variables": [
+        108,
+        107
+      ]
+    },
+    {
+      "name": "'fn (Key, Key) -> bool'",
+      "variables": [
+        107
+      ]
+    },
+    {
+      "name": "'fn (Key) -> i32'",
+      "variables": [
+        107
+      ]
+    },
+    {
+      "name": "'Value?'",
+      "variables": [
+        108
+      ]
+    },
+    {
+      "name": "'fn (Key) -> Value?'",
+      "variables": [
+        108,
+        107
+      ]
+    },
+    {
+      "name": "'fn (Key, Value) -> Unit'",
+      "variables": [
+        108,
+        107
+      ]
+    },
+    {
+      "name": "'fn (Key) -> MapNode[Key, Value]?'",
+      "variables": [
+        108,
+        107
+      ]
+    },
+    {
+      "name": "'HashMap[$0, $1]'",
+      "variables": []
+    },
+    {
+      "name": "$2",
+      "variables": []
+    },
+    {
+      "name": "'Array[$2]'",
+      "variables": []
+    },
+    {
+      "name": "$3",
+      "variables": []
+    },
+    {
+      "name": "'Array[$3]'",
+      "variables": []
+    },
+    {
+      "name": "'fn (i32) -> Array[$3]'",
+      "variables": []
+    },
+    {
+      "name": "'MapNode[Key, Value]'",
+      "variables": [
+        110,
+        109
+      ]
+    },
+    {
+      "name": "'MapNode[Key, Value]?'",
+      "variables": [
+        109,
+        110
+      ]
+    },
+    {
+      "name": "'Array[MapNode[Key, Value]?]'",
+      "variables": [
+        110,
+        109
+      ]
+    },
+    {
+      "name": "'fn (i32) -> Array[MapNode[Key, Value]?]'",
+      "variables": [
+        109,
+        110
+      ]
+    },
+    {
+      "name": "'MapNode[$0, $1]'",
+      "variables": []
+    },
+    {
+      "name": "'MapNode[$0, $1]?'",
+      "variables": []
+    },
+    {
+      "name": "'Array[MapNode[$0, $1]?]'",
+      "variables": []
+    },
+    {
+      "name": "'fn ($0, $0) -> bool'",
+      "variables": []
+    },
+    {
+      "name": "'fn ($0) -> i32'",
+      "variables": []
+    },
+    {
+      "name": "'fn (i32) -> MapNode[Key, Value]?'",
+      "variables": [
+        108,
+        107
+      ]
+    },
+    {
+      "name": "'fn (i32, MapNode[Key, Value]?) -> MapNode[Key, Value]?'",
+      "variables": [
+        108,
+        107
+      ]
+    },
+    {
+      "name": "'Parser'",
+      "variables": []
+    },
+    {
+      "name": "alias 'JsonValue'",
+      "variables": []
+    },
+    {
+      "name": "'Array[JsonValue]'",
+      "variables": []
+    },
+    {
+      "name": "'HashMap[String, JsonValue]'",
+      "variables": []
+    },
+    {
+      "name": "(i32|f32|bool|String|Array[JsonValue]|HashMap[String, JsonValue])",
+      "variables": []
+    },
+    {
+      "name": "'fn (Codepoint) -> bool'",
+      "variables": []
+    },
+    {
+      "name": "'fn (String, Parser) -> Unit'",
+      "variables": []
+    },
+    {
+      "name": "'fn (String, Parser, Codepoint) -> Unit'",
+      "variables": []
+    },
+    {
+      "name": "'fn (String, Parser) -> String'",
+      "variables": []
+    },
+    {
+      "name": "(i32|f32)",
+      "variables": []
+    },
+    {
+      "name": "'fn (String, Parser) -> (i32|f32)'",
+      "variables": []
+    },
+    {
+      "name": "'fn (String, Parser) -> HashMap[String, JsonValue]'",
+      "variables": []
+    },
+    {
+      "name": "'fn (String, Parser) -> Array[JsonValue]'",
+      "variables": []
+    },
+    {
+      "name": "'fn (String, Parser) -> JsonValue'",
+      "variables": []
+    },
+    {
+      "name": "'fn ($2, $2) -> bool'",
+      "variables": []
+    },
+    {
+      "name": "'fn ($2) -> i32'",
+      "variables": []
+    },
+    {
+      "name": "'HashMap[$2, $3]'",
+      "variables": []
+    },
+    {
+      "name": "'fn (fn ($2, $2) -> bool, fn ($2) -> i32) -> HashMap[$2, $3]'",
+      "variables": []
+    },
+    {
+      "name": "'fn (fn (String, String) -> bool, fn (String) -> i32) -> HashMap[String, JsonValue]'",
+      "variables": []
+    },
+    {
+      "name": "'fn (String, JsonValue) -> Unit'",
+      "variables": []
+    },
+    {
+      "name": "'fn () -> Array[$1]'",
+      "variables": []
+    },
+    {
+      "name": "'fn () -> Array[JsonValue]'",
+      "variables": []
+    },
+    {
+      "name": "'fn (JsonValue) -> Unit'",
+      "variables": []
+    },
+    {
+      "name": "template variable 'T'",
+      "variables": [
+        164
+      ]
+    },
+    {
+      "name": "'Array[T]'",
+      "variables": [
+        164
+      ]
+    },
+    {
+      "name": "'fn (T, T) -> i32'",
+      "variables": [
+        164
+      ]
+    },
+    {
+      "name": "'fn (Array[T], fn (T, T) -> i32) -> Unit'",
+      "variables": [
+        164
+      ]
+    },
+    {
+      "name": "template variable 'T'",
+      "variables": [
+        168
+      ]
+    },
+    {
+      "name": "'Array[T]'",
+      "variables": [
+        168
+      ]
+    },
+    {
+      "name": "'fn (T, T) -> i32'",
+      "variables": [
+        168
+      ]
+    },
+    {
+      "name": "'fn (Array[T], i32, i32, fn (T, T) -> i32) -> Unit'",
+      "variables": [
+        168
+      ]
+    },
+    {
+      "name": "template variable 'T'",
+      "variables": [
+        172
+      ]
+    },
+    {
+      "name": "'Array[T]'",
+      "variables": [
+        172
+      ]
+    },
+    {
+      "name": "'fn (T, T) -> i32'",
+      "variables": [
+        172
+      ]
+    },
+    {
+      "name": "'fn (Array[T], i32, i32, fn (T, T) -> i32) -> i32'",
+      "variables": [
+        172
+      ]
+    },
+    {
+      "name": "template variable 'T'",
+      "variables": [
+        176
+      ]
+    },
+    {
+      "name": "'Array[T]'",
+      "variables": [
+        176
+      ]
+    },
+    {
+      "name": "'fn (Array[T], i32, i32) -> Unit'",
+      "variables": [
+        176
+      ]
+    },
+    {
+      "name": "'fn ($0, $0) -> i32'",
+      "variables": []
+    },
+    {
+      "name": "'fn (Array[$0], i32, i32, fn ($0, $0) -> i32) -> Unit'",
+      "variables": []
+    },
+    {
+      "name": "'fn (Array[$0], i32, i32, fn ($0, $0) -> i32) -> i32'",
+      "variables": []
+    },
+    {
+      "name": "'fn (i32) -> T'",
+      "variables": [
+        172
+      ]
+    },
+    {
+      "name": "'fn (Array[$0], i32, i32) -> Unit'",
+      "variables": []
+    },
+    {
+      "name": "'fn (i32) -> T'",
+      "variables": [
+        176
+      ]
+    },
+    {
+      "name": "'fn (i32, T) -> T'",
+      "variables": [
+        176
+      ]
+    },
+    {
+      "name": "'fn () -> any'",
+      "variables": []
+    },
+    {
+      "name": "'fn (...$1) -> Array[$1]'",
+      "variables": []
+    },
+    {
+      "name": "'Array[i32]'",
+      "variables": []
+    },
+    {
+      "name": "'fn (Array[$0], fn ($0, $0) -> i32) -> Unit'",
+      "variables": []
+    },
+    {
+      "name": "'fn (i32, i32) -> i32'",
+      "variables": []
+    },
+    {
+      "name": "'fn (i32) -> $0'",
+      "variables": []
+    },
+    {
+      "name": "'fn (fn (i32) -> $0) -> Array[$0]'",
+      "variables": []
+    },
+    {
+      "name": "'fn (i32) -> String'",
+      "variables": []
+    },
+    {
+      "name": "'Array[String]'",
+      "variables": []
+    },
+    {
+      "name": "'fn (String, String) -> i32'",
+      "variables": []
+    },
+    {
+      "name": "'fn (JsonValue, JsonValue) -> i32'",
+      "variables": []
+    },
+    {
+      "name": "'Array[any]'",
+      "variables": []
+    },
+    {
+      "name": "'fn (...any) -> Array[any]'",
+      "variables": []
+    }
+  ]
+}}

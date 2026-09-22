@@ -36,12 +36,12 @@ class TypeContext {
   // Performs type checking of the members/fields and creates a new StructType
   // for `self_id` from the results. `template_arguments` are stored on the new
   // StructType but are NOT used for any sort of template resolution here.
-  void DefineStructType(
-      TypeId self_id,
-      SymbolId symbol_id,
-      StructSymbol& symbol,
-      const std::vector<TypeId>& template_arguments,
-      CheckFunctionBody check_fn_body = CheckFunctionBody::NO);
+  // void DefineStructType(
+  //     TypeId self_id,
+  //     SymbolId symbol_id,
+  //     StructSymbol& symbol,
+  //     const std::vector<TypeId>& template_arguments,
+  //     CheckFunctionBody check_fn_body = CheckFunctionBody::NO);
 
   // Declares a new function symbol in the current scope. Functions are
   // structurally typed based on signature. If this functions signature has not
@@ -109,6 +109,11 @@ class TypeContext {
     return current_functions;
   }
 
+  std::optional<TypeInstance> DeclareFunctionType(
+      FunctionSymbol& symbol,
+      CheckFunctionBody check_fn_body,
+      std::optional<TypeId> self_id = std::nullopt);
+
  private:
   friend std::ostream& operator<<(std::ostream&, const TypeContext&);
 
@@ -121,11 +126,6 @@ class TypeContext {
 
   // Simplifies the intersection type set by removing redundant base types.
   void FlattenSubtypesIntersection(std::set<TypeId>& types) const;
-
-  std::optional<TypeInstance> DeclareFunctionType(
-      FunctionDeclaration& decl,
-      CheckFunctionBody check_fn_body,
-      std::optional<TypeId> self_id = std::nullopt);
 
   std::vector<RealizedFunction> realized_functions_;
 };

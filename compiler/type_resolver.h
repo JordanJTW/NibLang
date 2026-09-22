@@ -20,6 +20,7 @@ class TypeResolver {
   explicit TypeResolver(TypeRegistry& type_registry,
                         TypeContext& type_context,
                         ErrorCollector& error_collector);
+  ~TypeResolver();
 
   // Performs pattern matching on `concrete_type` using `pattern_type` to infer
   // the types of PlaceholderType(s) in `pattern_type`. If an error occurs due
@@ -30,24 +31,27 @@ class TypeResolver {
   // Array[Box[i32]] + Array[T] => { T: Box[i32] }
   bool Resolve(TypeId pattern_type,
                TypeId concrete_type,
-               Metadata resolution_span,
-               Bindings& bindings);
+               Metadata resolution_span);
 
-  // Attempts to deduce all required types to instantiate `binding` (which
-  // represents a struct or function) given the `argument_types` used at a call-
-  // site. Returns true if all required types were successfully deduced and the
-  // `binding` can be instantiated by `bindings`, false otherwise.
-  // `expression_metadata` is used to log errors in deducing a given variable.
-  using CallArguments = std::vector<std::optional<SpannedType>>;
-  bool Resolve(NamedBinding binding,
-               const CallArguments& argument_types,
-               std::optional<SpannedType> hint_return_type,
-               std::vector<TypeId>& bindings,
-               std::vector<Metadata>& bound_spans,
-               Metadata expression_metadata);
+  std::optional<TypeId> NewPlaceholderTemplateOf(const NamedBinding& binding);
+
+  TypeId Prune(TypeId type_id);
+
+  std::string ToString() const;
+
+  TypeId Rewrite(TypeId type_id);
+
+  TypeId NewPlaceholder(TypeId type_id) {
+    template_variables_.push_back(type_id);
+    return type_registry_.NewPlaceholderType(next_placeholder_idx_++);
+  }
 
  private:
   TypeRegistry& type_registry_;
   TypeContext& type_context_;
   ErrorCollector& error_collector_;
+
+  Bindings bindings_;
+  size_t next_placeholder_idx_{0};
+  std::vector<TypeId> template_variables_;
 };

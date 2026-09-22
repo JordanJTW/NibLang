@@ -240,8 +240,8 @@ void Printer::Print(const Statement& stmt, size_t indent) {
           },
           [&](const StructDeclaration& struct_decl) {
             std::cout << std::string(indent, ' ')
-                      << "StructDeclaration kind: " << struct_decl.kind
-                      << struct_decl.name.text << std::endl;
+                      << "StructDeclaration name: " << struct_decl.name.text
+                      << " kind: " << struct_decl.kind << std::endl;
 
             if (!struct_decl.fields.empty())
               std::cout << std::string(indent + 2, ' ')

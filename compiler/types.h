@@ -46,7 +46,6 @@ struct NamedBinding {
   SpannedText name;
   enum Kind {
     Function,  // free functions, static methods, and bound methods
-    Method,    // unbound (symbol level) method definitions
     Struct,
     Interface,
     Field,
@@ -56,12 +55,12 @@ struct NamedBinding {
     Template,  // template variable i.e. T
     TypeAlias,
   } kind;
-  std::optional<TypeId> realized_type_id;
+  TypeId type_id;
   std::optional<SymbolId> symbol_id;
 
   inline bool IsTypeRef() const {
     return kind == Struct || kind == Template || kind == TypeAlias ||
-           kind == Interface || kind == Method;
+           kind == Interface;
   }
   inline bool IsVariable() const {
     // A variable by any other name is just as sweet...
@@ -85,7 +84,7 @@ struct NamedBinding {
   BindingId binding_id;
 
   inline bool operator==(const NamedBinding& other) const {
-    return kind == other.kind && realized_type_id == other.realized_type_id &&
+    return kind == other.kind && type_id == other.type_id &&
            symbol_id == other.symbol_id && name.text == other.name.text &&
            idx == other.idx;
   }
@@ -289,7 +288,7 @@ struct NilCoalescingExpression {
 };
 
 struct ResolvedFunction {
-  NamedBinding function_symbol;
+  SymbolId function_symbol_id;
 
   std::vector<NamedBinding> required_captures;
   bool should_insert_unit_return = false;
@@ -306,7 +305,7 @@ struct FunctionDeclaration {
   std::vector<std::pair<SpannedText, ParsedType>> arguments;
   ParsedType return_type;
   FunctionKind function_kind;
-  std::vector<TemplateVariable> template_arguments;
+  std::vector<TemplateVariable> template_variables;
   std::optional<VariadicType> variadic_type;
 
   std::unique_ptr<Block> body;

@@ -16,11 +16,11 @@ target_link_libraries(scope_manager PRIVATE nlohmann_json::nlohmann_json)
 
 add_library(semantic_analyzer expression_checker.cc semantic_analyzer.cc)
 target_include_directories(semantic_analyzer PRIVATE ${PROJECT_SOURCE_DIR})
-target_link_libraries(semantic_analyzer PRIVATE error_collector logging printer scope_manager symbol_binder type_context type_registry type_resolver)
+target_link_libraries(semantic_analyzer PRIVATE error_collector logging printer scope_manager symbol_binder type_context type_registry type_resolver type_rewriter)
 
 add_library(symbol_binder symbol_binder.cc)
 target_include_directories(symbol_binder PRIVATE ${PROJECT_SOURCE_DIR})
-target_link_libraries(symbol_binder PRIVATE error_collector logging printer scope_manager type_context type_registry type_resolver)
+target_link_libraries(symbol_binder PRIVATE error_collector logging printer scope_manager type_context type_registry type_resolver type_rewriter)
 
 add_library(type_context type_context.cc)
 target_include_directories(type_context PRIVATE ${PROJECT_SOURCE_DIR})
@@ -34,6 +34,10 @@ target_link_libraries(type_registry PRIVATE nlohmann_json::nlohmann_json)
 add_library(type_resolver type_resolver.cc)
 target_include_directories(type_resolver PRIVATE ${PROJECT_SOURCE_DIR})
 target_link_libraries(type_resolver PRIVATE error_collector logging types type_context)
+
+add_library(type_rewriter type_rewriter.cc)
+target_include_directories(type_rewriter PRIVATE ${PROJECT_SOURCE_DIR})
+target_link_libraries(type_rewriter PRIVATE error_collector logging types type_registry)
 
 add_library(types types.cc)
 target_include_directories(types PRIVATE ${PROJECT_SOURCE_DIR})

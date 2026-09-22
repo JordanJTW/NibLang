@@ -4,12 +4,18 @@
 
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <unordered_map>
 #include <vector>
 
 #include "compiler/error_collector.h"
 #include "compiler/types.h"
+
+class ScopeGuard {
+ public:
+  virtual ~ScopeGuard() = default;
+};
 
 // Maintains information related to lexical scoping within the AST.
 class ScopeManager {
@@ -67,6 +73,8 @@ class ScopeManager {
   const auto& GetBindingsForScope(ScopeId scope_id) const {
     return scopes_[scope_id].bindings_for_scope;
   }
+
+  std::unique_ptr<ScopeGuard> NewScope(ScopeType type, std::string_view name);
 
   template <typename Fn>
   auto WithScope(ScopeId scope_id, Fn&& block) {

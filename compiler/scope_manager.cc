@@ -49,6 +49,22 @@ void ScopeManager::SetActiveScopeId(ScopeId scope_id) {
     function_scope_id_ = id;
 }
 
+class ScopeGuardImpl : public ScopeGuard {
+ public:
+  explicit ScopeGuardImpl(ScopeManager& scope_manager)
+      : scope_manager_(scope_manager) {}
+  ~ScopeGuardImpl() override { scope_manager_.ExitScope(); }
+
+ private:
+  ScopeManager& scope_manager_;
+};
+
+std::unique_ptr<ScopeGuard> ScopeManager::NewScope(ScopeType type,
+                                                   std::string_view name) {
+  EnterScope(type, name);
+  return std::make_unique<ScopeGuardImpl>(*this);
+}
+
 std::optional<NamedBinding> ScopeManager::FindBindingFor(
     std::string_view name,
     ScopeToCheck scope_to_check,

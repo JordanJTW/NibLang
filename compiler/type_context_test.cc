@@ -86,36 +86,36 @@ TEST_F(TypeContextTest, GetTypeIdFor_BuiltInType) {
   }
 }
 
-TEST_F(TypeContextTest, GetTypeIdFor_Function) {
-  FunctionDeclaration fn_decl{
-      .name = SpannedText{"test_fn"},
-      .arguments = {{SpannedText{"arg1"}, ParsedType{"i32"}},
-                    {SpannedText{"arg2"}, ParsedType{"f32"}}},
-      .return_type = ParsedType{"bool"},
-      .function_kind = FunctionKind::Free,
-      .body = std::make_unique<Block>(),  // non-extern MUST have body
-  };
-
-  auto symbol_id = type_registry.NewFunctionSymbol(fn_decl);
-  auto symbol = type_context.DefineFunction(symbol_id);
-  ASSERT_TRUE(symbol.has_value());
-  EXPECT_EQ(symbol->kind, NamedBinding::Function);
-
-  // Check that the function type is registered
-  auto fn_type = type_registry.GetType<FunctionType>(symbol->type_id);
-  EXPECT_EQ(fn_type->arg_types.size(), 2);
-  EXPECT_EQ(fn_type->arg_types[0], LiteralType::i32);
-  EXPECT_EQ(fn_type->arg_types[1], LiteralType::f32);
-  EXPECT_EQ(fn_type->return_type, LiteralType::Bool);
-  EXPECT_FALSE(fn_type->variadic_type.has_value());
-
-  // Function with the same signature should resolve to the same TypeId.
-  auto type_id = type_context.GetTypeIdFor(ParsedType{
-      ParsedFunctionType{{ParsedType{"i32"}, ParsedType{"f32"}},
-                         std::make_shared<ParsedType>(ParsedType{"bool"})}});
-  ASSERT_TRUE(type_id.has_value());
-  EXPECT_EQ(symbol->type_id, type_id);
-}
+// TEST_F(TypeContextTest, GetTypeIdFor_Function) {
+//   FunctionDeclaration fn_decl{
+//       .name = SpannedText{"test_fn"},
+//       .arguments = {{SpannedText{"arg1"}, ParsedType{"i32"}},
+//                     {SpannedText{"arg2"}, ParsedType{"f32"}}},
+//       .return_type = ParsedType{"bool"},
+//       .function_kind = FunctionKind::Free,
+//       .body = std::make_unique<Block>(),  // non-extern MUST have body
+//   };
+//
+//   auto symbol_id = type_registry.NewFunctionSymbol(fn_decl);
+//   auto symbol = type_context.DefineFunction(symbol_id);
+//   ASSERT_TRUE(symbol.has_value());
+//   EXPECT_EQ(symbol->kind, NamedBinding::Function);
+//
+//   // Check that the function type is registered
+//   auto fn_type = type_registry.GetType<FunctionType>(symbol->type_id);
+//   EXPECT_EQ(fn_type->arg_types.size(), 2);
+//   EXPECT_EQ(fn_type->arg_types[0], LiteralType::i32);
+//   EXPECT_EQ(fn_type->arg_types[1], LiteralType::f32);
+//   EXPECT_EQ(fn_type->return_type, LiteralType::Bool);
+//   EXPECT_FALSE(fn_type->variadic_type.has_value());
+//
+//   // Function with the same signature should resolve to the same TypeId.
+//   auto type_id = type_context.GetTypeIdFor(ParsedType{
+//       ParsedFunctionType{{ParsedType{"i32"}, ParsedType{"f32"}},
+//                          std::make_shared<ParsedType>(ParsedType{"bool"})}});
+//   ASSERT_TRUE(type_id.has_value());
+//   EXPECT_EQ(symbol->type_id, type_id);
+// }
 
 TEST_F(TypeContextTest, GetTypeIdFor_UnknownType) {
   auto type_id = type_context.GetTypeIdFor(ParsedType{"UnknownType"});
@@ -271,30 +271,30 @@ TEST_F(TypeContextTest, DISABLED_DeclareStructSymbol_WithTemplate) {
 //   EXPECT_EQ(field1_binding->type_id, LiteralType::Bool);
 // }
 
-TEST_F(TypeContextTest, GetTemplateOf_Function) {
-  FunctionDeclaration declaration;
-  declaration.name = SpannedText{"TestFunction"};
-  declaration.arguments = {{SpannedText{"arg1"}, ParsedType{"Type"}}};
-  declaration.return_type = ParsedType{"Return"};
-  declaration.function_kind = FunctionKind::Free;
-  declaration.template_variables = {{"Type"}, {"Return"}};
-  declaration.body = std::make_unique<Block>();
-
-  auto symbol_id = type_registry.NewFunctionSymbol(declaration);
-  auto binding = type_context.DefineFunction(symbol_id);
-  ASSERT_TRUE(binding.has_value());
-
-  EXPECT_TRUE(binding->symbol_id.has_value());
-
-  std::optional<TypeId> type_id = type_context.GetTemplateOf(
-      *binding, {LiteralType::Bool, LiteralType::i32},
-      /*argument_spans=*/{{}, {}});
-  ASSERT_TRUE(type_id.has_value());
-
-  auto fn_info = type_registry.GetType<FunctionType>(*type_id);
-  EXPECT_THAT(fn_info->arg_types, testing::ElementsAre(LiteralType::Bool));
-  EXPECT_EQ(fn_info->return_type, LiteralType::i32);
-}
+// TEST_F(TypeContextTest, GetTemplateOf_Function) {
+//   FunctionDeclaration declaration;
+//   declaration.name = SpannedText{"TestFunction"};
+//   declaration.arguments = {{SpannedText{"arg1"}, ParsedType{"Type"}}};
+//   declaration.return_type = ParsedType{"Return"};
+//   declaration.function_kind = FunctionKind::Free;
+//   declaration.template_variables = {{"Type"}, {"Return"}};
+//   declaration.body = std::make_unique<Block>();
+//
+//   auto symbol_id = type_registry.NewFunctionSymbol(declaration);
+//   auto binding = type_context.DefineFunction(symbol_id);
+//   ASSERT_TRUE(binding.has_value());
+//
+//   EXPECT_TRUE(binding->symbol_id.has_value());
+//
+//   std::optional<TypeId> type_id = type_context.GetTemplateOf(
+//       *binding, {LiteralType::Bool, LiteralType::i32},
+//       /*argument_spans=*/{{}, {}});
+//   ASSERT_TRUE(type_id.has_value());
+//
+//   auto fn_info = type_registry.GetType<FunctionType>(*type_id);
+//   EXPECT_THAT(fn_info->arg_types, testing::ElementsAre(LiteralType::Bool));
+//   EXPECT_EQ(fn_info->return_type, LiteralType::i32);
+// }
 
 // TEST_F(TypeContextTest, GetTemplateOf_Nested) {
 //   auto make_template_type = [](std::string base, ParsedType parameter) {

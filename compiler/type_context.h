@@ -33,27 +33,6 @@ class TypeContext {
   // or only the signature (only the signature is needed for type deduction).
   enum class CheckFunctionBody { YES, NO };
 
-  // Performs type checking of the members/fields and creates a new StructType
-  // for `self_id` from the results. `template_arguments` are stored on the new
-  // StructType but are NOT used for any sort of template resolution here.
-  // void DefineStructType(
-  //     TypeId self_id,
-  //     SymbolId symbol_id,
-  //     StructSymbol& symbol,
-  //     const std::vector<TypeId>& template_arguments,
-  //     CheckFunctionBody check_fn_body = CheckFunctionBody::NO);
-
-  // Declares a new function symbol in the current scope. Functions are
-  // structurally typed based on signature. If this functions signature has not
-  // been seen before a new TypeId will be created for it. Performs type
-  // checking on `decl` and, if successful, returns the declared NamedBinding.
-  // Errors are logged from within this function. `self_struct` and `self_id`
-  // MUST be provided for method declarations.
-  std::optional<NamedBinding> DefineFunction(
-      SymbolId symbol_id,
-      std::optional<TypeId> self_id = std::nullopt,
-      CheckFunctionBody check_fn_body = CheckFunctionBody::NO);
-
   // Returns the TypeId for a given ParsedType if it can be resolved.
   std::optional<TypeId> GetTypeIdFor(const ParsedType& type);
 
@@ -75,13 +54,11 @@ class TypeContext {
   std::optional<TypeId> GetTemplateOf(
       NamedBinding binding,
       const std::vector<TypeId>& argument_type_ids,
-      const std::vector<Metadata>& argument_spans,
-      CheckFunctionBody check_fn_body = CheckFunctionBody::NO);
+      const std::vector<Metadata>& argument_spans);
 
   std::optional<TypeId> GetGenericTemplateOf(
       NamedBinding binding,
-      const std::vector<TypeId>& template_type_ids,
-      CheckFunctionBody check_fn_body = CheckFunctionBody::NO);
+      const std::vector<TypeId>& template_type_ids);
 
   std::optional<TypeId> GetTemplateOf(
       NamedBinding binding,

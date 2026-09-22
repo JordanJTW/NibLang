@@ -324,8 +324,7 @@ std::optional<TypeId> TypeResolver::NewPlaceholderTemplateOf(
     template_variables_.push_back(template_type_ids.at(idx));
   }
   return type_context_.GetTemplateOf(binding, placeholder_type_ids,
-                                     placeholder_metadata,
-                                     TypeContext::CheckFunctionBody::NO);
+                                     placeholder_metadata);
 }
 
 TypeId TypeResolver::Prune(TypeId type_id) {

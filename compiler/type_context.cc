@@ -39,71 +39,6 @@ TypeContext::TypeContext(ScopeManager& scope_manager,
       type_registry_(type_registry),
       error_collector_(error_collector) {}
 
-// void TypeContext::DefineStructType(
-//     TypeId self_id,
-//     SymbolId symbol_id,
-//     StructSymbol& symbol,
-//     const std::vector<TypeId>& template_arguments,
-//     CheckFunctionBody check_function_body) {
-//   StructType struct_type(symbol_id, symbol.declaration);
-//   struct_type.template_arguments = template_arguments;
-//   struct_type.scope_id =
-//       scope_manager_.EnterScope(ScopeManager::StructInstanceScope,
-//                                 "struct " + symbol.declaration.name.text);
-//
-//   // Cache the instance early in case a member/method refers to `self`.
-//   symbol.instances[template_arguments] =
-//       TypeInstance{self_id, struct_type.scope_id};
-//
-//   NamedBinding::Idx field_idx = 0;
-//   for (const auto& [name, type] : symbol.declaration.fields) {
-//     auto type_id = GetTypeIdFor(type);
-//     if (!type_id.has_value()) {
-//       error_collector_.Add("Unknown type for struct field: " + name.text,
-//                            type.metadata);
-//       continue;
-//     }
-//
-//     scope_manager_.InsertNameIntoScope(name, NamedBinding::Field, type_id,
-//                                        /*symbol_id=*/std::nullopt,
-//                                        field_idx++);
-//     struct_type.field_types.push_back(type_id.value());
-//   }
-//
-//   for (auto& [name, implementation] : symbol.declaration.interfaces) {
-//
-//
-//
-//
-//   scope_manager_.WithScope(struct_type.scope_id, [&]() {
-//     for (auto& method_id : symbol.method_symbols) {
-//       // Errors are logged from within `DefineFunction`.
-//       DefineFunction(method_id, self_id, check_function_body);
-//     }
-//   });
-// }
-
-std::optional<NamedBinding> TypeContext::DefineFunction(
-    SymbolId symbol_id,
-    std::optional<TypeId> self_id,
-    CheckFunctionBody check_function_body) {
-  // auto& symbol = type_registry_.GetSymbolChecked<FunctionSymbol>(symbol_id);
-  //
-  // FunctionDeclaration& fn = symbol.declaration;
-  //
-  // std::optional<TypeInstance> instance;
-  // if ((instance = DeclareFunctionType(symbol, check_function_body, self_id)))
-  // { } else {
-  //   // Errors logged in DeclareFunctionType()
-  //   return std::nullopt;
-  // }
-  //
-  //
-  //
-  // return binding;
-  return std::nullopt;
-}
-
 std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
   return std::visit(
       Overloaded{
@@ -574,8 +509,7 @@ bool TypeContext::AreDisjointTypes(TypeId t1, TypeId t2) const {
 
 std::optional<TypeId> TypeContext::GetGenericTemplateOf(
     NamedBinding binding,
-    const std::vector<TypeId>& template_type_ids,
-    CheckFunctionBody check_function_body) {
+    const std::vector<TypeId>& template_type_ids) {
   std::vector<Metadata> template_spans;
   template_spans.reserve(template_type_ids.size());
 
@@ -585,8 +519,7 @@ std::optional<TypeId> TypeContext::GetGenericTemplateOf(
     template_spans.push_back(template_type.name.metadata);
   }
 
-  return GetTemplateOf(std::move(binding), template_type_ids, template_spans,
-                       check_function_body);
+  return GetTemplateOf(std::move(binding), template_type_ids, template_spans);
 }
 
 std::optional<TypeId> TypeContext::GetTemplateOf(
@@ -614,15 +547,13 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
   if (encountered_type_error)
     return std::nullopt;
 
-  return GetTemplateOf(std::move(binding), argument_type_ids, argument_spans,
-                       CheckFunctionBody::NO);
+  return GetTemplateOf(std::move(binding), argument_type_ids, argument_spans);
 }
 
 std::optional<TypeId> TypeContext::GetTemplateOf(
     NamedBinding binding,
     const std::vector<TypeId>& argument_type_ids,
-    const std::vector<Metadata>& argument_spans,
-    CheckFunctionBody check_fn_body) {
+    const std::vector<Metadata>& argument_spans) {
   CHECK(binding.symbol_id) << "Provided binding is missing SymbolId";
   CHECK_EQ(argument_type_ids.size(), argument_spans.size());
 
@@ -689,39 +620,12 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
 
     return type_registry_.NewStructType({*symbol, argument_type_ids},
                                         std::nullopt);
-
-    // return scope_manager_.WithScope(
-    //     symbol->static_scope_id, [&]() -> std::optional<TypeId> {
-    //       return scope_manager_.NewScope(
-    //           ScopeManager::TemplateScope,
-    //           "struct " + symbol->declaration.name.text, [&]() {
-    //             for (size_t i = 0; i < template_arguments.size(); ++i)
-    //               scope_manager_.DeclareTemplateBinding(
-    //                   template_arguments[i].name, argument_type_ids[i]);
-    //
-    //             DefineStructType(self_id, *binding.symbol_id, *symbol,
-    //                              argument_type_ids, check_fn_body);
-    //             return self_id;
-    //           });
-    //     });
   }
 
   if (FunctionSymbol* symbol =
           type_registry_.GetSymbol<FunctionSymbol>(*binding.symbol_id)) {
     if (auto it = symbol->instances.find(argument_type_ids);
         it != symbol->instances.end()) {
-      // It is possible when parsing a method signature, to recursively reparse
-      // the parent struct such that the call from `SymbolBinder` with
-      // `CheckFunctionBody::YES` follows a call with `CheckFunctionBody::NO`
-      // which results in the interned TypeId being returned here and the
-      // RealizedFunction never being added.
-      if (check_fn_body == CheckFunctionBody::YES) {
-        const auto& fn =
-            type_registry_.GetTypeChecked<FunctionType>(it->second.type_id);
-        realized_functions_.emplace_back(it->second.scope_id,
-                                         symbol->declaration, fn.return_type);
-      }
-
       return it->second.type_id;
     }
 
@@ -747,39 +651,6 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
 
     return TypeRewriter(type_registry_, *this)
         .Rewrite(symbol->canonical_type_id, type_ids);
-
-    // std::optional<ScopeId> parent_scope_id;
-    // if (binding.parent_type_id) {
-    //   const auto* const struct_type =
-    //       type_registry_.GetType<StructType>(*binding.parent_type_id);
-    //   CHECK(struct_type) << "`parent_type_id` did not map to StructType";
-    //   parent_scope_id = struct_type->symbol.instance_scope_id;
-    // }
-
-    // const ScopeId lexical_scope_id =
-    //     parent_scope_id.value_or(symbol->environment_scope_id);
-    // return scope_manager_.WithScope(
-    //     lexical_scope_id, [&]() -> std::optional<TypeId> {
-    //       // TODO: Handle `self_id` better. Define it early to prevent
-    //       cycles. auto instance = scope_manager_.NewScope(
-    //           ScopeManager::TemplateScope,
-    //           "fn " + symbol->declaration.name.text, [&]() {
-    //             for (size_t i = 0; i < template_arguments.size(); ++i)
-    //               scope_manager_.DeclareTemplateBinding(
-    //                   template_arguments[i].name, argument_type_ids[i]);
-    //             return DeclareFunctionType(*symbol, check_fn_body,
-    //                                        binding.parent_type_id);
-    //           });
-    //
-    //       if (instance) {
-    //         symbol->instances[argument_type_ids] = *instance;
-    //
-    //         LOG(INFO) << "New Function.TemplateOf("
-    //                   << symbol->declaration.name.text << ") + [" << ss.str()
-    //                   << "] => " << instance->type_id;
-    //       }
-    //       return instance->type_id;
-    //     });
   }
 
   NOTREACHED() << "Do not know how to realize binding: " << binding;

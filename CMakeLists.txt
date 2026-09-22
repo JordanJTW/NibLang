@@ -12,6 +12,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+add_compile_options("-fmacro-prefix-map=${CMAKE_SOURCE_DIR}/=")
+
 option(ENABLE_ASAN "enables Address Sanitizer in the build" OFF)
 
 if(ENABLE_ASAN)

@@ -47,7 +47,7 @@ LogMessage::LogMessage(const char* filename,
                        int line_number,
                        LogSeverity severity)
     : filename_(filename), line_number_(line_number), severity_(severity) {
-  stream_ << "[" << GetName(severity_) << "] " << GetFileName(filename_) << ":"
+  stream_ << "[" << GetName(severity_) << "] " << filename_ << ":"
           << line_number_ << ": ";
 }
 

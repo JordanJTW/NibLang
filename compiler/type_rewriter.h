@@ -6,7 +6,6 @@
 
 #include <unordered_map>
 
-#include "compiler/symbol_types.h"
 #include "compiler/type_context.h"
 #include "compiler/type_registry.h"
 
@@ -16,6 +15,8 @@ class TypeRewriter {
  public:
   explicit TypeRewriter(TypeRegistry& type_registry, TypeContext& type_context);
 
+  // Walks the type `type_id` and substitutes any types found within its tree
+  // with new types from `substitutions` (if applicable).
   TypeId Rewrite(TypeId type_id, const SubstitutionMap& substitutions);
 
  private:

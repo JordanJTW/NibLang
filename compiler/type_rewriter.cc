@@ -4,6 +4,7 @@
 
 #include "compiler/type_rewriter.h"
 
+#include "compiler/type_context.h"
 #include "compiler/type_registry.h"
 
 namespace {

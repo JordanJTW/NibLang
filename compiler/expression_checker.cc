@@ -29,6 +29,16 @@ Overloaded(Ts...) -> Overloaded<Ts...>;
 
 using LiteralType = ::TypeRegistry::LiteralType;
 
+// Builds a mapping between generic template variable TypeIds and the concrete
+// arguments assigned to them in `type` i.e. Array[T] => Array[i32].
+void PopulateInstanceTypes(const StructType& type,
+                           SubstitutionMap& substitution_map) {
+  for (size_t i = 0; i < type.instance_template_type_ids.size(); ++i) {
+    substitution_map[type.symbol.template_variable_type_ids[i]] =
+        type.instance_template_type_ids[i];
+  }
+}
+
 }  // namespace
 
 ExpressionChecker::ExpressionChecker(
@@ -591,25 +601,21 @@ std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
 
   if (const auto* const struct_type =
           type_registry_.GetType<StructType>(callable_type_id)) {
-    std::unordered_map<TypeId, TypeId> placeholder_map;
-    for (size_t i = 0; i < struct_type->instance_template_type_ids.size();
-         ++i) {
-      placeholder_map[struct_type->symbol.template_variable_type_ids[i]] =
-          struct_type->instance_template_type_ids[i];
-    }
+    SubstitutionMap substitution_map;
+    PopulateInstanceTypes(*struct_type, substitution_map);
 
     std::vector<TypeId> realized_field_types;
     realized_field_types.reserve(struct_type->symbol.field_types.size());
 
-    std::ranges::transform(struct_type->symbol.field_types,
-                           std::back_inserter(realized_field_types),
-                           [&](TypeId field_type) {
-                             TypeId substitute_type_id =
-                                 TypeRewriter(type_registry_, type_context_)
-                                     .Rewrite(field_type, placeholder_map);
-
-                             return type_resolver_.Rewrite(substitute_type_id);
-                           });
+    // Field types are generic and must be realized against `struct_type`'s
+    // template arguments and the current inference environment
+    std::ranges::transform(
+        struct_type->symbol.field_types,
+        std::back_inserter(realized_field_types), [&](TypeId field_type) {
+          // i.e. generic Array[T] => instance Array[$0] => inferred Array[i32]
+          return type_resolver_.Rewrite(
+              type_rewriter_.Rewrite(field_type, substitution_map));
+        });
 
     TypeCheckCallArguments(argument_results, realized_field_types,
                            debug_metadata,
@@ -660,35 +666,15 @@ std::optional<ExpressionResult> ExpressionChecker::HandlePrimary(
               return ExpressionResult(LiteralType::Nil);
 
             auto instantiate_result = [&](const NamedBinding& binding) {
-              const std::vector<TypeId>* template_vars = nullptr;
+              if (binding.symbol_id) {
+                SubstitutionMap substitution_map;
+                BuildPlaceholderTypes(binding.GetSymbolId(), substitution_map);
 
-              if (binding.kind == NamedBinding::Function) {
-                template_vars = &type_registry_
-                                     .GetSymbolChecked<FunctionSymbol>(
-                                         binding.GetSymbolId())
-                                     .template_variable_type_ids;
-              } else if (binding.kind == NamedBinding::Struct) {
-                template_vars =
-                    &type_registry_
-                         .GetSymbolChecked<StructSymbol>(binding.GetSymbolId())
-                         .template_variable_type_ids;
-              } else {
-                return ExpressionResult::of_binding(binding);
-              }
+                TypeId realized_type_id = type_resolver_.Rewrite(
+                    type_rewriter_.Rewrite(binding.type_id, substitution_map));
 
-              if (!template_vars->empty() && binding.type_id) {
-                std::unordered_map<TypeId, TypeId> substitution_map;
-                for (TypeId template_var_id : *template_vars) {
-                  substitution_map[template_var_id] =
-                      type_resolver_.NewPlaceholder(template_var_id);
-                }
-
-                TypeId specialized_type_id =
-                    TypeRewriter(type_registry_, type_context_)
-                        .Rewrite(binding.type_id, substitution_map);
-
-                return ExpressionResult::with_type_override(
-                    type_resolver_.Rewrite(specialized_type_id), binding);
+                return ExpressionResult::with_type_override(realized_type_id,
+                                                            binding);
               }
 
               return ExpressionResult::of_binding(binding);
@@ -830,7 +816,9 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
     if (auto binding = scope_manager_.FindBindingFor(
             member_name.text, ScopeManager::Current,
             struct_type->symbol.instance_scope_id)) {
-      std::vector<TypeId> local_template_variables;
+      SubstitutionMap substitution_map;
+      PopulateInstanceTypes(*struct_type, substitution_map);
+
       if (binding->kind == NamedBinding::Field) {
         CHECK(binding->idx)
             << "member symbol must have an index for member access";
@@ -843,76 +831,34 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
             << "MemberAccessExpression was previously resolved";
         member_access.resolved =
             ResolvedAccess{ResolvedAccess::Method{binding->GetSymbolId()}};
-
-        local_template_variables =
-            type_registry_
-                .GetSymbolChecked<FunctionSymbol>(binding->GetSymbolId())
-                .template_variable_type_ids;
+        // Ensures templated methods are instantiated with placeholders.
+        BuildPlaceholderTypes(binding->GetSymbolId(), substitution_map);
       }
 
-      if (binding->type_id) {
-        TypeId realized_type_id = binding->type_id;
-        SubstitutionMap substitution_map;
-        for (size_t i = 0; i < struct_type->instance_template_type_ids.size();
-             ++i) {
-          substitution_map.insert(
-              {struct_type->symbol.template_variable_type_ids[i],
-               struct_type->instance_template_type_ids[i]});
-        }
+      TypeId realized_type_id = type_resolver_.Rewrite(
+          type_rewriter_.Rewrite(binding->type_id, substitution_map));
 
-        for (const TypeId local_type_id : local_template_variables) {
-          substitution_map.insert(
-              {local_type_id, type_resolver_.NewPlaceholder(local_type_id)});
-        }
-
-        TypeId substitute_type_id =
-            TypeRewriter(type_registry_, type_context_)
-                .Rewrite(realized_type_id, substitution_map);
-
-        return ExpressionResult::with_type_override(
-            type_resolver_.Rewrite(substitute_type_id), *binding);
-      }
-
-      return ExpressionResult::of_binding(*binding);
+      return ExpressionResult::with_type_override(realized_type_id, *binding);
     }
 
     for (ScopeId interface_scope_id : struct_type->symbol.interface_scopes) {
       if (auto binding = scope_manager_.FindBindingFor(
               member_name.text, ScopeManager::Current, interface_scope_id)) {
-        CHECK_EQ(binding->kind,
-                 NamedBinding::Function);  // Only methods allowed
+        CHECK_EQ(binding->kind, NamedBinding::Function)
+            << "Interfaces must only contain functions";
         CHECK(!member_access.resolved)
             << "MemberAccessExpression was previously resolved";
         member_access.resolved =
             ResolvedAccess{ResolvedAccess::Method{binding->GetSymbolId()}};
 
-        if (binding->type_id) {
-          TypeId realized_type_id = binding->type_id;
-          SubstitutionMap substitution_map;
-          for (size_t i = 0; i < struct_type->instance_template_type_ids.size();
-               ++i) {
-            substitution_map.insert(
-                {struct_type->symbol.template_variable_type_ids[i],
-                 struct_type->instance_template_type_ids[i]});
-          }
+        SubstitutionMap substitution_map;
+        PopulateInstanceTypes(*struct_type, substitution_map);
+        BuildPlaceholderTypes(binding->GetSymbolId(), substitution_map);
 
-          for (const TypeId local_type_id :
-               type_registry_
-                   .GetSymbolChecked<FunctionSymbol>(binding->GetSymbolId())
-                   .template_variable_type_ids) {
-            substitution_map.insert(
-                {local_type_id, type_resolver_.NewPlaceholder(local_type_id)});
-          }
+        TypeId realized_type_id = type_resolver_.Rewrite(
+            type_rewriter_.Rewrite(binding->type_id, substitution_map));
 
-          TypeId substitute_type_id =
-              TypeRewriter(type_registry_, type_context_)
-                  .Rewrite(realized_type_id, substitution_map);
-
-          return ExpressionResult::with_type_override(
-              type_resolver_.Rewrite(substitute_type_id), *binding);
-        }
-
-        return ExpressionResult::of_binding(*binding);
+        return ExpressionResult::with_type_override(realized_type_id, *binding);
       }
     }
 
@@ -958,29 +904,13 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
       member_access.resolved =
           ResolvedAccess{ResolvedAccess::Function{binding->GetSymbolId()}};
 
-      auto local_template_variables =
-          type_registry_
-              .GetSymbolChecked<FunctionSymbol>(binding->GetSymbolId())
-              .template_variable_type_ids;
+      SubstitutionMap substitution_map;
+      BuildPlaceholderTypes(binding->GetSymbolId(), substitution_map);
 
-      if (binding->type_id) {
-        TypeId realized_type_id = binding->type_id;
-        SubstitutionMap substitution_map;
+      TypeId realized_type_id = type_resolver_.Rewrite(
+          type_rewriter_.Rewrite(binding->type_id, substitution_map));
 
-        for (const TypeId local_type_id : local_template_variables) {
-          substitution_map.insert(
-              {local_type_id, type_resolver_.NewPlaceholder(local_type_id)});
-        }
-
-        TypeId substitute_type_id =
-            TypeRewriter(type_registry_, type_context_)
-                .Rewrite(realized_type_id, substitution_map);
-
-        return ExpressionResult::with_type_override(
-            type_resolver_.Rewrite(substitute_type_id), *binding);
-      }
-
-      return ExpressionResult::of_binding(*binding);
+      return ExpressionResult::with_type_override(realized_type_id, *binding);
     }
 
     error_collector_
@@ -1013,6 +943,29 @@ std::optional<ExpressionResult> ExpressionChecker::RequireValue(
   }
 
   return result;
+}
+
+void ExpressionChecker::BuildPlaceholderTypes(
+    SymbolId symbol_id,
+    SubstitutionMap& substitution_map) {
+  const auto local_template_variables = [&]() -> std::span<TypeId> {
+    if (auto* symbol = type_registry_.GetSymbol<FunctionSymbol>(symbol_id))
+      return symbol->template_variable_type_ids;
+    if (auto* symbol = type_registry_.GetSymbol<StructSymbol>(symbol_id))
+      return symbol->template_variable_type_ids;
+    NOTREACHED() << "Template variables only exist on Function/Struct";
+    return {};
+  }();
+
+  for (TypeId template_type_id : local_template_variables) {
+    // Insert will not overwrite any previous values. There should be no overlap
+    // between an outer struct's template variable TypeIds and an inner
+    // function's as they are globally unique.
+    auto [it, success] = substitution_map.insert(
+        {template_type_id, type_resolver_.NewPlaceholder(template_type_id)});
+    CHECK(success) << type_registry_.GetNameFromTypeId(template_type_id)
+                   << " was previously mapped";
+  }
 }
 
 std::ostream& operator<<(std::ostream& os,

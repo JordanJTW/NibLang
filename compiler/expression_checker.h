@@ -14,6 +14,7 @@
 #include "compiler/type_context.h"
 #include "compiler/type_registry.h"
 #include "compiler/type_resolver.h"
+#include "compiler/type_rewriter.h"
 #include "compiler/types.h"
 
 using NarrowedBindings = std::unordered_map<BindingId, TypeId>;
@@ -103,6 +104,9 @@ class ExpressionChecker {
       std::unique_ptr<Expression>& expression,
       std::optional<SpannedType> hint_return_type = std::nullopt);
 
+  void BuildPlaceholderTypes(SymbolId symbol_id,
+                             SubstitutionMap& substitution_map);
+
   ScopeManager& scope_manager_;
   TypeContext& type_context_;
   TypeRegistry& type_registry_;
@@ -111,6 +115,7 @@ class ExpressionChecker {
   ErrorCollector& error_collector_;
 
   TypeResolver type_resolver_;
+  TypeRewriter type_rewriter_{type_registry_, type_context_};
 };
 
 std::ostream& operator<<(std::ostream& os,

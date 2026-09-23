@@ -645,7 +645,7 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
     if (check_template_constraints(symbol->template_variable_type_ids))
       return std::nullopt;
 
-    std::unordered_map<TypeId, TypeId> type_ids;
+    SubstitutionMap type_ids;
     for (size_t i = 0; i < argument_type_ids.size(); ++i) {
       type_ids[symbol->template_variable_type_ids[i]] = argument_type_ids[i];
     }

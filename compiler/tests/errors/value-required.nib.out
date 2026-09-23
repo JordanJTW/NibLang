@@ -1,0 +1,16 @@
+Error: [[PATH]]:13:11:
+  let x = Array;
+          ^~~~~ expected value, but found 'Array[$0]'
+
+Error: [[PATH]]:14:16:
+  let y = Array.of(i32);
+               ^~~~~~~~ expected value, but found 'Array[i32]'
+
+Error: [[PATH]]:16:16:
+  let a = Array.withSize;
+               ^~~~~~~~~ unable to infer types in 'fn (i32) -> Array[$1]'
+
+Error: [[PATH]]:18:11:
+  let c = identity;
+          ^~~~~~~~ unable to infer types in 'fn ($0) -> $0'
+

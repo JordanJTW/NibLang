@@ -1,0 +1,20 @@
+// RUN: %compiler %s --disable-logging 2> %t.err || true
+// RUN: sed "s|%s|[[PATH]]|g" %t.err | diff -u %s.out -
+
+@import "std/types.nib"
+
+fn identity[T](value: T) -> T {
+  return value;
+}
+
+fn foo() {}
+
+fn main()  {
+  let x = Array;
+  let y = Array.of(i32);
+
+  let a = Array.withSize;
+  let b = foo;  // This is valid
+  let c = identity;
+  let d = identity.of(i32);  // This is valid
+}

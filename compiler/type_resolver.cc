@@ -57,143 +57,6 @@ TypeResolver::~TypeResolver() {
   }
 }
 
-// bool TypeResolver::Resolve(
-//     NamedBinding binding,
-//     const std::vector<std::optional<SpannedType>>& argument_types,
-//     std::optional<SpannedType> hint_return_type,
-//     std::vector<TypeId>& bindings,
-//     std::vector<Metadata>& bound_spans,
-//     Metadata expression_metadata) {
-//   auto create_pattern_type =
-//       [this,
-//        &binding](const std::vector<TemplateVariable>& template_variables) {
-//         std::vector<TypeId> placeholder_type_ids(template_variables.size(),
-//         0); std::vector<Metadata> placeholder_metadata;
-//         placeholder_metadata.reserve(template_variables.size());
-//         for (size_t idx = 0; idx < template_variables.size(); ++idx) {
-//           placeholder_type_ids[idx] =
-//               type_registry_.NewPlaceholderType(next_placeholder_idx_++);
-//           placeholder_metadata.push_back(template_variables[idx].name.metadata);
-//         }
-//         return type_context_.GetTemplateOf(binding, placeholder_type_ids,
-//                                            placeholder_metadata,
-//                                            TypeContext::CheckFunctionBody::NO);
-//       };
-//
-//   Bindings deduced_bindings;
-//   if (const auto* symbol =
-//           type_registry_.GetSymbol<FunctionSymbol>(*binding.symbol_id)) {
-//     auto variables = symbol->declaration.template_variables;
-//
-//     if (auto pattern_type_id = create_pattern_type(variables)) {
-//       const auto* pattern_type =
-//           type_registry_.GetType<FunctionType>(*pattern_type_id);
-//       if (!pattern_type)
-//         return false;
-//
-//       for (size_t i = 0; i < pattern_type->arg_types.size(); ++i) {
-//         if (i >= argument_types.size())
-//           break;
-//
-//         if (!argument_types[i].has_value())
-//           continue;
-//
-//         Resolve(pattern_type->arg_types[i], argument_types[i]->type_id,
-//                 argument_types[i]->metadata, deduced_bindings);
-//       }
-//
-//       if (pattern_type->variadic_type) {
-//         for (size_t i = pattern_type->arg_types.size();
-//              i < argument_types.size(); ++i) {
-//           if (!argument_types[i].has_value())
-//             continue;
-//
-//           Resolve(*pattern_type->variadic_type, argument_types[i]->type_id,
-//                   argument_types[i]->metadata, deduced_bindings);
-//         }
-//       }
-//
-//       if (hint_return_type) {
-//         Resolve(pattern_type->return_type, hint_return_type->type_id,
-//                 hint_return_type->metadata, deduced_bindings);
-//       }
-//
-//       // Ensure `bindings` is sized correctly and cleared
-//       bindings.assign(variables.size(), 0);
-//       bound_spans.assign(variables.size(), {});
-//
-//       bool bound_all_variables = true;
-//       for (size_t idx = 0; idx < variables.size(); ++idx) {
-//         if (deduced_bindings.contains(idx)) {
-//           bindings[idx] = deduced_bindings[idx].type_id;
-//           bound_spans[idx] = deduced_bindings[idx].metadata;
-//         }
-//         //
-//         //   error_collector_
-//         //       .Add("unable to resolve template variable '" +
-//         //                variables[idx].name.text + "'",
-//         //            expression_metadata)
-//         //       .WithNote("declared here", variables[idx].name.metadata);
-//         //   bound_all_variables = false;
-//       }
-//
-//       return bound_all_variables;
-//     }
-//   }
-//
-//   else if (const auto* symbol =
-//                type_registry_.GetSymbol<StructSymbol>(*binding.symbol_id)) {
-//     const auto& variables = symbol->declaration.template_variables;
-//     if (auto pattern_type_id = create_pattern_type(variables)) {
-//       const auto* pattern_type =
-//           type_registry_.GetType<StructType>(*pattern_type_id);
-//
-//       for (size_t i = 0; i < pattern_type->field_types.size(); ++i) {
-//         if (i >= argument_types.size())
-//           break;
-//
-//         if (!argument_types[i].has_value())
-//           continue;
-//
-//         Resolve(pattern_type->field_types[i], argument_types[i]->type_id,
-//                 argument_types[i]->metadata, deduced_bindings);
-//       }
-//
-//       if (hint_return_type) {
-//         Resolve(*pattern_type_id, hint_return_type->type_id,
-//                 hint_return_type->metadata, deduced_bindings);
-//       }
-//
-//       // Ensure `bindings` is sized correctly and cleared
-//       bindings.assign(variables.size(), 0);
-//       bound_spans.assign(variables.size(), {});
-//
-//       bool bound_all_variables = true;
-//       for (size_t idx = 0; idx < variables.size(); ++idx) {
-//         if (deduced_bindings.contains(idx)) {
-//           bindings[idx] = deduced_bindings[idx].type_id;
-//           bound_spans[idx] = deduced_bindings[idx].metadata;
-//         }
-//
-//         // error_collector_
-//         //     .Add("unable to resolve template variable '" +
-//         //              variables[idx].name.text + "'",
-//         //          expression_metadata)
-//         //     .WithNote("declared here", variables[idx].name.metadata);
-//         // bound_all_variables = false;
-//       }
-//
-//       return bound_all_variables;
-//     }
-//   }
-//
-//   else {
-//     LOG(FATAL) << "non-template binding attempting to be instantiated: "
-//                << binding;
-//   }
-//   return false;
-// }
-
 bool TypeResolver::Resolve(TypeId pattern_type_id,
                            TypeId concrete_type_id,
                            Metadata resolution_span) {
@@ -294,39 +157,6 @@ bool TypeResolver::Resolve(TypeId pattern_type_id,
   return type_context_.IsTypeSubsetOf(concrete_type_id, pattern_type_id);
 }
 
-std::optional<TypeId> TypeResolver::NewPlaceholderTemplateOf(
-    const NamedBinding& binding) {
-  auto retrieve_template_variables = [&]() {
-    if (const auto* fn_symbol =
-            type_registry_.GetSymbol<FunctionSymbol>(*binding.symbol_id)) {
-      return std::pair{fn_symbol->declaration.template_variables,
-                       fn_symbol->template_variable_type_ids};
-    }
-
-    if (const auto* struct_symbol =
-            type_registry_.GetSymbol<StructSymbol>(*binding.symbol_id)) {
-      return std::pair{struct_symbol->declaration.template_variables,
-                       struct_symbol->template_variable_type_ids};
-    }
-    NOTREACHED() << "Unknown Symbol type";
-    return std::pair{std::vector<TemplateVariable>{}, std::vector<TypeId>{}};
-  };
-
-  const auto& [template_variables, template_type_ids] =
-      retrieve_template_variables();
-  std::vector<TypeId> placeholder_type_ids(template_variables.size(), 0);
-  std::vector<Metadata> placeholder_metadata;
-  placeholder_metadata.reserve(template_variables.size());
-  for (size_t idx = 0; idx < template_variables.size(); ++idx) {
-    placeholder_type_ids[idx] =
-        type_registry_.NewPlaceholderType(next_placeholder_idx_++);
-    placeholder_metadata.push_back(template_variables.at(idx).name.metadata);
-    template_variables_.push_back(template_type_ids.at(idx));
-  }
-  return type_context_.GetTemplateOf(binding, placeholder_type_ids,
-                                     placeholder_metadata);
-}
-
 TypeId TypeResolver::Prune(TypeId type_id) {
   if (const auto* placeholder =
           type_registry_.GetType<PlaceholderType>(type_id)) {
@@ -337,15 +167,6 @@ TypeId TypeResolver::Prune(TypeId type_id) {
     }
   }
   return type_id;
-}
-
-std::string TypeResolver::ToString() const {
-  std::stringstream ss;
-  for (const auto& [key, value] : bindings_) {
-    ss << "$" << key << " => "
-       << type_registry_.GetNameFromTypeId(value.type_id);
-  }
-  return ss.str();
 }
 
 TypeId TypeResolver::Rewrite(TypeId type_id) {

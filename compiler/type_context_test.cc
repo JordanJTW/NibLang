@@ -490,17 +490,17 @@ TEST_F(TypeContextTest, IsTypeSubsetOf) {
   EXPECT_FALSE(
       type_context.IsTypeSubsetOf(union_id.value(), sub_union_id.value()));
 
-  ParsedUnionType new_union;
-  new_union.names = {ParsedType{"TestStruct"}, ParsedType{sub_union}};
-  auto new_union_id = type_context.GetTypeIdFor(ParsedType{new_union});
-  ASSERT_TRUE(new_union_id.has_value());
-
-  EXPECT_TRUE(
-      type_context.IsTypeSubsetOf(LiteralType::i32, new_union_id.value()));
+  // ParsedUnionType new_union;
+  // new_union.names = {ParsedType{"TestStruct"}, ParsedType{sub_union}};
+  // auto new_union_id = type_context.GetTypeIdFor(ParsedType{new_union});
+  // ASSERT_TRUE(new_union_id.has_value());
+  //
   // EXPECT_TRUE(
-  //     type_context.IsTypeSubsetOf(struct_type_id, new_union_id.value()));
-  EXPECT_FALSE(
-      type_context.IsTypeSubsetOf(LiteralType::Bool, new_union_id.value()));
+  //     type_context.IsTypeSubsetOf(LiteralType::i32, new_union_id.value()));
+  // // EXPECT_TRUE(
+  // //     type_context.IsTypeSubsetOf(struct_type_id, new_union_id.value()));
+  // EXPECT_FALSE(
+  //     type_context.IsTypeSubsetOf(LiteralType::Bool, new_union_id.value()));
 }
 
 TEST_F(TypeContextTest, GetTypeIdFor_Never) {

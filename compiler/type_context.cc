@@ -621,11 +621,6 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
 
   if (FunctionSymbol* symbol =
           type_registry_.GetSymbol<FunctionSymbol>(*binding.symbol_id)) {
-    if (auto it = symbol->instances.find(argument_type_ids);
-        it != symbol->instances.end()) {
-      return it->second.type_id;
-    }
-
     const auto& template_arguments = symbol->declaration.template_variables;
 
     if (argument_type_ids.size() < template_arguments.size()) {

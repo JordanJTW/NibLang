@@ -48,7 +48,6 @@ struct FunctionSymbol {
 
   // Stores StructSymbol (the implementor) => MethodSymbol (implementation)
   std::unordered_map<SymbolId, SymbolId> implementations;
-  InstanceCache instances;
 
   inline bool IsExtern() const {
     if (parent_declaration.has_value())

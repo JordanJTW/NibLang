@@ -113,9 +113,6 @@ class GoldenTest : public ::testing::Test {
     ConstantPool constant_pool;
     for (const auto& [id, symbol] : type_registry_.symbol_table()) {
       if (const auto* fn_symbol = std::get_if<FunctionSymbol>(&symbol)) {
-        if (fn_symbol->instances.empty())
-          continue;
-
         if (!fn_symbol->IsExtern()) {
           CHECK(fn_symbol->declaration.body);
 

@@ -95,9 +95,9 @@ bool TypeResolver::Resolve(TypeId pattern_type_id,
   }
 
   if (pattern_type.index() != concrete_type.index())
-    return type_context_.IsTypeSubsetOf(concrete_type_id, pattern_type_id);
+    return false;
 
-  bool structural_match = std::visit(
+  return std::visit(
       Overloaded{
           [&](const AliasType& p, const AliasType& c) {
             return Resolve(p.target_type_id, c.target_type_id, resolution_span);
@@ -109,7 +109,7 @@ bool TypeResolver::Resolve(TypeId pattern_type_id,
             if (p.arg_types.size() != c.arg_types.size())
               return false;
             for (size_t i = 0; i < p.arg_types.size(); ++i) {
-              if (!Resolve(c.arg_types[i], p.arg_types[i], resolution_span))
+              if (!Resolve(p.arg_types[i], c.arg_types[i], resolution_span))
                 return false;
             }
             return Resolve(p.return_type, c.return_type, resolution_span);
@@ -150,11 +150,6 @@ bool TypeResolver::Resolve(TypeId pattern_type_id,
           [&](const auto&, const auto&) { return false; },
       },
       pattern_type, concrete_type);
-
-  if (structural_match)
-    return true;
-
-  return type_context_.IsTypeSubsetOf(concrete_type_id, pattern_type_id);
 }
 
 TypeId TypeResolver::Prune(TypeId type_id) {

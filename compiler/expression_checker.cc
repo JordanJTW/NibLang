@@ -491,7 +491,9 @@ void ExpressionChecker::TypeCheckCallArguments(
       continue;
 
     if (!type_resolver_.Resolve(expected_type, argument_result->type_id,
-                                argument_result->metadata)) {
+                                argument_result->metadata) &&
+        !type_context_.IsTypeSubsetOf(argument_result->type_id,
+                                      expected_type)) {
       TypeId resolved_expected = type_resolver_.Prune(expected_type);
       TypeId resolved_actual = type_resolver_.Prune(argument_result->type_id);
 

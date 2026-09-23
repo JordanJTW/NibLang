@@ -286,7 +286,7 @@ void SymbolBinder::BindStructSymbol(StructSymbol& struct_symbol,
     TypeId substituted_type =
         TypeRewriter(type_registry_, type_context_)
             .Rewrite(interface_binding->type_id, substitution_map);
-    struct_symbol.interface_types.insert(substituted_type);
+    struct_symbol.interface_types.push_back(substituted_type);
   }
 }
 

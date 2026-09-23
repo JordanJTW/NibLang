@@ -37,13 +37,18 @@ struct FunctionSymbol {
   FunctionDeclaration& declaration;
   const std::optional<const StructDeclaration*> parent_declaration;
   SymbolId symbol_id;
+  std::vector<TypeId> template_variable_type_ids;
+
   // The lexical environment this symbol was declared in
   ScopeId instance_scope_id;
 
-  std::vector<TypeId> template_variable_type_ids;
+  // The concrete type representing this symbol without substitutions
+  // i.e. `fn (i32) -> i32` (non-templated) or `fn (T, T) -> N`
+  TypeId canonical_type_id;
+
+  // Stores StructSymbol (the implementor) => MethodSymbol (implementation)
   std::unordered_map<SymbolId, SymbolId> implementations;
   InstanceCache instances;
-  TypeId canonical_type_id;
 
   inline bool IsExtern() const {
     if (parent_declaration.has_value())
@@ -80,14 +85,12 @@ struct StructSymbol {
   // Instance scope holding things that take `self`
   ScopeId instance_scope_id;
 
-  std::vector<SymbolId> method_symbols;
   std::vector<TypeId> template_variable_type_ids;
-  InstanceCache instances;
 
+  // All the following are represented in the canonical form:
   // A separate _ordered_ list of field types used for constructors.
   std::vector<TypeId> field_types;
   // The interfaces implemented by this struct.
-  std::unordered_set<TypeId> interface_types;
-
+  std::vector<TypeId> interface_types;
   std::vector<ScopeId> interface_scopes;
 };

@@ -450,7 +450,8 @@ bool TypeContext::IsTypeSubsetOf(TypeId sub_type_id,
 
     if (!sub.symbol.declaration.IsInterface() &&
         super.symbol.declaration.IsInterface()) {
-      return sub.symbol.interface_types.contains(super_type_id);
+      return std::ranges::find(sub.symbol.interface_types, super_type_id) !=
+             sub.symbol.interface_types.end();
     }
     // Intentional fall-through
   }
@@ -599,11 +600,6 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
 
   if (StructSymbol* symbol =
           type_registry_.GetSymbol<StructSymbol>(*binding.symbol_id)) {
-    if (auto it = symbol->instances.find(argument_type_ids);
-        it != symbol->instances.end()) {
-      return it->second.type_id;
-    }
-
     const auto& template_arguments = symbol->declaration.template_variables;
 
     if (argument_type_ids.size() < template_arguments.size()) {
@@ -687,7 +683,9 @@ void TypeContext::FlattenSubtypesUnion(std::set<TypeId>& types) const {
         if (type_id == potential_interface)
           continue;
 
-        if (struct_type->symbol.interface_types.contains(potential_interface)) {
+        if (std::ranges::find(struct_type->symbol.interface_types,
+                              potential_interface) !=
+            struct_type->symbol.interface_types.end()) {
           type_ids_to_remove.insert(type_id);
           break;
         }

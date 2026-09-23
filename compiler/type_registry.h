@@ -75,15 +75,21 @@ struct UnionType {
   };
 };
 
-using Type = std::variant<AliasType,
-                          BuiltInType,
-                          FunctionType,
-                          IntersectionType,
-                          OptionalType,
-                          PlaceholderType,
-                          StructType,
-                          TemplateVariableType,
-                          UnionType>;
+using TypeVariant = std::variant<AliasType,
+                                 BuiltInType,
+                                 FunctionType,
+                                 IntersectionType,
+                                 OptionalType,
+                                 PlaceholderType,
+                                 StructType,
+                                 TemplateVariableType,
+                                 UnionType>;
+
+struct Type {
+  TypeVariant variant;
+  std::unordered_set<TypeId> template_variable_types;
+  std::unordered_set<TypeId> placeholder_types;
+};
 
 // A global registry of all Types/Symbols created during compilation.
 //
@@ -156,7 +162,8 @@ class TypeRegistry {
   template <typename T>
   const T* GetType(TypeId type_id) const {
     auto it = type_table_.find(type_id);
-    return it != type_table_.end() ? std::get_if<T>(&it->second) : nullptr;
+    return it != type_table_.end() ? std::get_if<T>(&it->second.variant)
+                                   : nullptr;
   }
 
   template <typename T>
@@ -194,12 +201,8 @@ class TypeRegistry {
 
   std::string ToJson() const;
 
-  const auto& GetContainedVariables(TypeId type_id) {
-    return variable_info_.at(type_id).template_variables;
-  }
-
-  bool HasUnboundTemplateVariables(TypeId type_id) const {
-    return !variable_info_.at(type_id).template_variables.empty();
+  bool HasPlaceholderTypes(TypeId type_id) const {
+    return !type_table_.at(type_id).placeholder_types.empty();
   }
 
  private:
@@ -216,17 +219,12 @@ class TypeRegistry {
   std::unordered_map<TypeId, TypeId> interned_optional_type_;
   std::unordered_map<SymbolId, InstanceCache> struct_instance_cache_;
 
-  struct VariableInfo {
-    std::unordered_set<TypeId> template_variables;
-  };
-
   std::unordered_map<TypeId, Type> type_table_;
-  std::unordered_map<TypeId, VariableInfo> variable_info_;
   TypeId next_type_id_{LiteralType::kCount};  // TypeIds start after built-ins
 
-  void AppendTemplateVariablesFrom(
-      TypeId type_id,
-      std::unordered_set<TypeId>& template_variables);
+  void AppendVariablesFrom(TypeId type_id,
+                           std::unordered_set<TypeId>& template_variables,
+                           std::unordered_set<TypeId>& placeholder_variables);
 
   using Symbol = std::variant<FunctionSymbol, StructSymbol>;
   std::unordered_map<SymbolId, Symbol> symbol_table_;

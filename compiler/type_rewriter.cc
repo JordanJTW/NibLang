@@ -125,5 +125,5 @@ TypeId TypeRewriter::Rewrite(TypeId type_id,
           [&](const AliasType&) { return type_id; },
           [&](const PlaceholderType&) { return type_id; },
           [&](const TemplateVariableType&) { return type_id; }},
-      type_registry_.type_table().at(type_id));
+      type_registry_.type_table().at(type_id).variant);
 }

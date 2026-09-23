@@ -70,8 +70,8 @@ class ExpressionChecker {
                              std::vector<NamedBinding>& required_captures,
                              ErrorCollector& error_collector);
 
-  std::optional<ExpressionResult> RequireConcreteValue(
-      std::unique_ptr<Expression>& expression,
+  std::optional<ExpressionResult> CheckChain(
+      std::unique_ptr<Expression>& root_expression,
       std::optional<SpannedType> hint_return_type = std::nullopt);
 
  private:
@@ -82,6 +82,10 @@ class ExpressionChecker {
     std::optional<ExpressionResult> result;
     std::optional<Metadata> metadata;
   };
+
+  std::optional<ExpressionResult> RequireValue(
+      std::unique_ptr<Expression>& expression,
+      std::optional<SpannedType> hint_return_type = std::nullopt);
 
   void TypeCheckCallArguments(
       const std::vector<std::optional<SpannedType>>& call_argument_results,

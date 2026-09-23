@@ -125,7 +125,7 @@ FlowResult SemanticAnalyzer::Check(const std::unique_ptr<Statement>& statement,
         ExpressionChecker(scope_manager_, type_context_, type_registry_,
                           existing_bindings, function_context.required_captures,
                           error_collector_)
-            .RequireConcreteValue(expression, hint_return_type);
+            .CheckChain(expression, hint_return_type);
 
     if (!result)
       return result;

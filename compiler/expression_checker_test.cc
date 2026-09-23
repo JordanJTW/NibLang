@@ -53,7 +53,7 @@ TEST_F(SemanticAnalyzerTest, Expression_PrimaryExpr_BuiltInValue) {
        kPrimaryExpressionToTypeId) {
     SCOPED_TRACE("Testing PrimaryExpression for: " + name);
     auto expr = std::make_unique<Expression>(Expression{primary_expr});
-    auto result = expression_checker.RequireConcreteValue(expr);
+    auto result = expression_checker.CheckChain(expr);
 
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(result->type_id, expected_type_id);

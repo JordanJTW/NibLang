@@ -46,6 +46,24 @@ ExpressionChecker::ExpressionChecker(
       error_collector_(error_collector),
       type_resolver_(type_registry_, type_context_, error_collector_) {}
 
+std::optional<ExpressionResult> ExpressionChecker::CheckChain(
+    std::unique_ptr<Expression>& root_expression,
+    std::optional<SpannedType> hint_return_type) {
+  auto result = RequireValue(root_expression, hint_return_type);
+
+  if (!result)
+    return std::nullopt;
+
+  if (type_registry_.HasPlaceholderTypes(result->type_id)) {
+    error_collector_.Add("unable to infer types in " +
+                             type_registry_.GetNameFromTypeId(result->type_id),
+                         root_expression->meta);
+    return std::nullopt;
+  }
+
+  return result;
+}
+
 std::optional<ExpressionResult> ExpressionChecker::Check(
     std::unique_ptr<Expression>& expression,
     std::optional<SpannedType> hint_return_type) {
@@ -55,8 +73,8 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
             return HandlePrimary(primary, expression->meta);
           },
           [&](BinaryExpression& binary) -> std::optional<ExpressionResult> {
-            auto lhs = RequireConcreteValue(binary.lhs);
-            auto rhs = RequireConcreteValue(binary.rhs);
+            auto lhs = RequireValue(binary.lhs);
+            auto rhs = RequireValue(binary.rhs);
 
             if (!lhs || !rhs)
               return std::nullopt;
@@ -149,7 +167,7 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
           },
           [&](AssignmentExpression& assign) -> std::optional<ExpressionResult> {
             auto lhs = Check(assign.lhs);
-            auto rhs = RequireConcreteValue(assign.rhs);
+            auto rhs = RequireValue(assign.rhs);
 
             if (!lhs.has_value() || !rhs.has_value())
               return std::nullopt;
@@ -191,8 +209,8 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
           },
           [&](ArrayAccessExpression& array_access)
               -> std::optional<ExpressionResult> {
-            auto object = RequireConcreteValue(array_access.array);
-            auto index = RequireConcreteValue(array_access.index);
+            auto object = RequireValue(array_access.array);
+            auto index = RequireValue(array_access.index);
 
             if (!object || !index)
               return std::nullopt;
@@ -209,8 +227,8 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
             return ExpressionResult{LiteralType::Any};
           },
           [&](LogicExpression& logic) -> std::optional<ExpressionResult> {
-            auto lhs = RequireConcreteValue(logic.lhs);
-            auto rhs = RequireConcreteValue(logic.rhs);
+            auto lhs = RequireValue(logic.lhs);
+            auto rhs = RequireValue(logic.rhs);
 
             if (!lhs || !rhs)
               return std::nullopt;
@@ -296,18 +314,18 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
           },
           [&](PrefixUnaryExpression& prefix)
               -> std::optional<ExpressionResult> {
-            auto operand = RequireConcreteValue(prefix.operand);
+            auto operand = RequireValue(prefix.operand);
             // TODO: Check that `op` is valid for `operand`.
             return operand;
           },
           [&](PostfixUnaryExpression& postfix)
               -> std::optional<ExpressionResult> {
-            auto operand = RequireConcreteValue(postfix.operand);
+            auto operand = RequireValue(postfix.operand);
             // TODO: Check that `op` is valid for `operand`.
             return operand;
           },
           [&](TypeCastExpression& cast) -> std::optional<ExpressionResult> {
-            auto result = RequireConcreteValue(cast.expr);
+            auto result = RequireValue(cast.expr);
             if (!result.has_value())
               return std::nullopt;
 
@@ -363,7 +381,7 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
             // OptionalChainExpression is a "pseudo-AST node" which represents
             // the END of a chain of ?. accesses (i.e. where to jump to in case
             // of Nil) and resolves to the final type wrapped as an Optional.
-            auto result = RequireConcreteValue(optional_chain.root);
+            auto result = RequireValue(optional_chain.root);
             if (!result.has_value())
               return std::nullopt;
 
@@ -377,8 +395,8 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
           },
           [&](NilCoalescingExpression& coalescing)
               -> std::optional<ExpressionResult> {
-            auto lhs = RequireConcreteValue(coalescing.lhs);
-            auto rhs = RequireConcreteValue(coalescing.rhs);
+            auto lhs = RequireValue(coalescing.lhs);
+            auto rhs = RequireValue(coalescing.rhs);
 
             if (!lhs || !rhs)
               return std::nullopt;
@@ -403,7 +421,7 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
           },
           [&](OptionalAccessExpression& optional_access)
               -> std::optional<ExpressionResult> {
-            auto result = RequireConcreteValue(optional_access.target);
+            auto result = RequireValue(optional_access.target);
 
             if (!result)
               return std::nullopt;
@@ -534,43 +552,12 @@ std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
       call_expr.arguments.begin(), call_expr.arguments.end(),
       std::back_inserter(argument_results),
       [&](std::unique_ptr<Expression>& expr) -> std::optional<SpannedType> {
-        if (auto result = RequireConcreteValue(expr))
+        if (auto result = RequireValue(expr))
           return SpannedType{result->type_id, expr->meta};
         return std::nullopt;
       });
 
   TypeId callable_type_id = callee_result.type_id;
-
-  // if (!callable_type_id) {
-  //   CHECK(callee_result.binding && callee_result.binding->symbol_id)
-  //       << "SymbolId is required for templates";
-  //
-  //   callable_type_id =
-  //       type_resolver_.NewPlaceholderTemplateOf(*callee_result.binding);
-  // } else if (auto variables =
-  //                type_registry_.GetContainedVariables(*callable_type_id);
-  //            !variables.empty()) {
-  //   SubstitutionMap substitution_map;
-  //   substitution_map.reserve(variables.size());
-  //   for (const auto& variable : variables) {
-  //     substitution_map.insert(
-  //         {variable, type_resolver_.NewPlaceholder(variable)});
-  //   }
-  //   callable_type_id = TypeRewriter(type_registry_, type_context_)
-  //                          .Rewrite(*callable_type_id, substitution_map);
-  // }
-
-  // else if (auto& template_variables =
-  //                type_registry_.GetContainedVariables(*callable_type_id);
-  //            !template_variables.empty()) {
-  //   std::unordered_map<TypeId, TypeId> types;
-  //   for (const auto& template_variable : template_variables) {
-  //     types.insert({template_variable,
-  //                   type_resolver_.NewPlaceholder(template_variable)});
-  //   }
-  //   callable_type_id = TypeRewriter(type_registry_, type_context_)
-  //                          .Rewrite(*callable_type_id, types);
-  // }
 
   if (const auto* const fn_type =
           type_registry_.GetType<FunctionType>(callable_type_id)) {
@@ -1008,7 +995,7 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
   return std::nullopt;
 }
 
-std::optional<ExpressionResult> ExpressionChecker::RequireConcreteValue(
+std::optional<ExpressionResult> ExpressionChecker::RequireValue(
     std::unique_ptr<Expression>& expression,
     std::optional<SpannedType> hint_expected_type) {
   auto result = Check(expression, hint_expected_type);
@@ -1018,32 +1005,12 @@ std::optional<ExpressionResult> ExpressionChecker::RequireConcreteValue(
 
   // Ensure it is an instance i.e. 123, x, fn foo().
   if (!result->is_value()) {
-    if (result->binding) {
-      error_collector_
-          .Add("expected value, but found '" + result->binding->name.text + "'",
-               expression->meta)
-          .WithNote("declared here", result->binding->name.metadata);
-      return std::nullopt;
-    }
-
     std::string type_name = type_registry_.GetNameFromTypeId(result->type_id);
 
     error_collector_.Add("expected value, but found " + type_name,
                          expression->meta);
     return std::nullopt;
   }
-
-  // Ensure that the instance is fully instantiated (handles fn foo[T]() refs).
-  // if (!result->has_type_id()) {
-  //   CHECK(result->binding) << "MUST set TypeId and/or Binding";
-  //   error_collector_
-  //       .Add(result->binding->name.text +
-  //                " must be instantiated with template arguments "
-  //                "before it can be used as a value",
-  //            expression->meta)
-  //       .WithNote("declared here", result->binding->name.metadata);
-  //   return std::nullopt;
-  // }
 
   return result;
 }

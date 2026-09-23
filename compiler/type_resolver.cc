@@ -66,8 +66,10 @@ bool TypeResolver::Resolve(TypeId pattern_type_id,
   if (pattern_type_id == concrete_type_id)
     return true;
 
-  const Type& pattern_type = type_registry_.type_table().at(pattern_type_id);
-  const Type& concrete_type = type_registry_.type_table().at(concrete_type_id);
+  const TypeVariant& pattern_type =
+      type_registry_.type_table().at(pattern_type_id).variant;
+  const TypeVariant& concrete_type =
+      type_registry_.type_table().at(concrete_type_id).variant;
 
   if (const auto* placeholder = std::get_if<PlaceholderType>(&pattern_type)) {
     CHECK(placeholder->idx < template_variables_.size());

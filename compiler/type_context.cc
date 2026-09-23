@@ -399,8 +399,9 @@ bool TypeContext::IsTypeSubsetOf(TypeId sub_type_id,
   if (sub_type_id == LiteralType::Error || super_type_id == LiteralType::Error)
     return true;
 
-  const Type& sub_type = type_registry_.type_table().at(sub_type_id);
-  const Type& super_type = type_registry_.type_table().at(super_type_id);
+  const auto& sub_type = type_registry_.type_table().at(sub_type_id).variant;
+  const auto& super_type =
+      type_registry_.type_table().at(super_type_id).variant;
 
   if (!std::holds_alternative<UnionType>(sub_type) &&
       std::holds_alternative<UnionType>(super_type)) {

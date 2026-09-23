@@ -816,9 +816,6 @@ std::unique_ptr<Expression> Parser::ParsePostFix() {
         std::vector<ParsedType> template_types =
             ParseTypeList(TokenKind::kCloseParen);
 
-        if (template_types.empty())
-          return nullptr;
-
         expr = std::make_unique<Expression>(Expression{
             TemplateInstantiationExpression{std::move(expr),
                                             std::move(template_types)},
@@ -1205,11 +1202,8 @@ std::optional<ParsedType> Parser::ParsePrimaryType() {
 std::vector<ParsedType> Parser::ParseTypeList(TokenKind end_of_list_token) {
   std::vector<ParsedType> return_types;
   while (true) {
-    auto type = ParseType();
-    if (!type)
-      return {};
-
-    return_types.push_back(std::move(type.value()));
+    if (auto type = ParseType())
+      return_types.push_back(std::move(type.value()));
 
     if (current_token_.kind == TokenKind::kComma) {
       AdvanceToken();  // consume ,

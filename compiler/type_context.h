@@ -48,21 +48,13 @@ class TypeContext {
   // Returns the TypeId for the intersection of `types`.
   TypeId GetIntersectionOf(const std::vector<TypeId>& types);
 
-  // Realizes a template of a struct or function pointed to by `binding` into a
-  // concrete TypeId using `argument_type_ids` as template arguments.
-  // `binding` MUST have a `symbol_id` of the template Symbol to realize.
+  // Realizes a template of a struct or function pointed to by `symbol_id` into
+  // a concrete TypeId using `argument_type_ids` as template arguments.
+  // `instantiation_span` is the expression/type annotations span for errors
   std::optional<TypeId> GetTemplateOf(
-      NamedBinding binding,
-      const std::vector<TypeId>& argument_type_ids,
-      const std::vector<Metadata>& argument_spans);
-
-  std::optional<TypeId> GetGenericTemplateOf(
-      NamedBinding binding,
-      const std::vector<TypeId>& template_type_ids);
-
-  std::optional<TypeId> GetTemplateOf(
-      NamedBinding binding,
-      const std::vector<ParsedType>& argument_types);
+      SymbolId symbol_id,
+      const std::vector<ParsedType>& argument_types,
+      Metadata instantiation_span);
 
   // Returns if TypeId is Nil or could be Nil i.e. Nil + Optional.
   bool IsTypeNilable(TypeId type_id) const;

@@ -176,8 +176,8 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
               return std::nullopt;
             }
 
-            return GetTemplateOf(binding.value(),
-                                 parameterized_type.parameters);
+            return GetTemplateOf(binding->GetSymbolId(),
+                                 parameterized_type.parameters, type.metadata);
           }},
       type.type);
 }
@@ -509,27 +509,13 @@ bool TypeContext::AreDisjointTypes(TypeId t1, TypeId t2) const {
   return true;
 }
 
-std::optional<TypeId> TypeContext::GetGenericTemplateOf(
-    NamedBinding binding,
-    const std::vector<TypeId>& template_type_ids) {
-  std::vector<Metadata> template_spans;
-  template_spans.reserve(template_type_ids.size());
-
-  for (const auto& type_id : template_type_ids) {
-    const auto& template_type =
-        type_registry_.GetTypeChecked<TemplateVariableType>(type_id);
-    template_spans.push_back(template_type.name.metadata);
-  }
-
-  return GetTemplateOf(std::move(binding), template_type_ids, template_spans);
-}
-
 std::optional<TypeId> TypeContext::GetTemplateOf(
-    NamedBinding binding,
-    const std::vector<ParsedType>& argument_types) {
+    SymbolId symbol_id,
+    const std::vector<ParsedType>& argument_types,
+    Metadata instantiation_span) {
   std::vector<TypeId> argument_type_ids;
-  std::vector<Metadata> argument_spans;
   argument_type_ids.reserve(argument_types.size());
+  std::vector<Metadata> argument_spans;
   argument_spans.reserve(argument_types.size());
 
   bool encountered_type_error = false;
@@ -537,45 +523,22 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
     if (auto type_id = GetTypeIdFor(type)) {
       argument_type_ids.push_back(type_id.value());
       argument_spans.push_back(type.metadata);
-    } else {
-      // Keep parsing the rest of the types even if an error is
-      // encountered with one to give as many errors as possible.
-      std::stringstream ss;
-      ss << "unknown type used as template argument: " << type;
-      error_collector_.Add(ss.str(), type.metadata);
-      encountered_type_error = true;
+      continue;
     }
+
+    // Continue parsing template arguments to catch ALL errors
+    std::stringstream ss;
+    ss << "unknown type used as template argument: " << type;
+    error_collector_.Add(ss.str(), type.metadata);
+    encountered_type_error = true;
   }
   if (encountered_type_error)
     return std::nullopt;
 
-  return GetTemplateOf(std::move(binding), argument_type_ids, argument_spans);
-}
-
-std::optional<TypeId> TypeContext::GetTemplateOf(
-    NamedBinding binding,
-    const std::vector<TypeId>& argument_type_ids,
-    const std::vector<Metadata>& argument_spans) {
-  CHECK(binding.symbol_id) << "Provided binding is missing SymbolId";
-  CHECK_EQ(argument_type_ids.size(), argument_spans.size());
-
-  std::stringstream ss;
-  for (size_t i = 0; i < argument_type_ids.size(); ++i) {
-    if (i > 0)
-      ss << ", ";
-
-    TypeRegistry::FormatOptions options{.is_embedded_type = true};
-    ss << type_registry_.GetNameFromTypeId(argument_type_ids[i], options);
-  }
-
-  auto check_template_constraints =
+  auto has_valid_constraints =
       [&](const std::vector<TypeId>& template_variable_type_ids) -> bool {
     bool violated_constraint = false;
     for (size_t i = 0; i < argument_type_ids.size(); ++i) {
-      // TODO: Should this be a CHECK error? Can this happen normally?
-      if (i >= template_variable_type_ids.size())
-        return false;
-
       const auto& template_variable_type =
           type_registry_.GetTypeChecked<TemplateVariableType>(
               template_variable_type_ids[i]);
@@ -595,57 +558,51 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
         violated_constraint = true;
       }
     }
-    return violated_constraint;
+    return !violated_constraint;
   };
 
-  if (StructSymbol* symbol =
-          type_registry_.GetSymbol<StructSymbol>(*binding.symbol_id)) {
-    const auto& template_arguments = symbol->declaration.template_variables;
-
-    if (argument_type_ids.size() < template_arguments.size()) {
-      error_collector_.Add(
-          "Template struct " + symbol->declaration.name.text + " requires " +
-              std::to_string(template_arguments.size()) +
-              " template arguments but only " +
-              std::to_string(argument_type_ids.size()) + " were provided",
-          {});
-      return std::nullopt;
+  auto validate_template_arguments =
+      [&](const SpannedText& symbol_name,
+          const std::vector<TypeId>& template_variable_type_ids) -> bool {
+    if (argument_type_ids.size() != template_variable_type_ids.size()) {
+      error_collector_
+          .Add("template '" + symbol_name.text + "' requires " +
+                   std::to_string(template_variable_type_ids.size()) +
+                   " template argument(s) but " +
+                   std::to_string(argument_type_ids.size()) + " were provided",
+               instantiation_span)
+          .WithNote("declared here", symbol_name.metadata);
+      return false;
     }
 
-    if (check_template_constraints(symbol->template_variable_type_ids))
-      return std::nullopt;
+    return has_valid_constraints(template_variable_type_ids);
+  };
 
-    return type_registry_.NewStructType({*symbol, argument_type_ids},
-                                        std::nullopt);
+  if (auto* symbol = type_registry_.GetSymbol<StructSymbol>(symbol_id)) {
+    if (validate_template_arguments(symbol->declaration.name,
+                                    symbol->template_variable_type_ids)) {
+      return type_registry_.NewStructType({*symbol, argument_type_ids},
+                                          std::nullopt);
+    }
+
+    return std::nullopt;
   }
 
-  if (FunctionSymbol* symbol =
-          type_registry_.GetSymbol<FunctionSymbol>(*binding.symbol_id)) {
-    const auto& template_arguments = symbol->declaration.template_variables;
+  if (auto* symbol = type_registry_.GetSymbol<FunctionSymbol>(symbol_id)) {
+    if (validate_template_arguments(symbol->declaration.name,
+                                    symbol->template_variable_type_ids)) {
+      SubstitutionMap type_ids;
+      for (size_t i = 0; i < argument_type_ids.size(); ++i) {
+        type_ids[symbol->template_variable_type_ids[i]] = argument_type_ids[i];
+      }
 
-    if (argument_type_ids.size() < template_arguments.size()) {
-      error_collector_.Add("Template fn " + symbol->GetName() + " requires " +
-                               std::to_string(template_arguments.size()) +
-                               " template arguments but only " +
-                               std::to_string(argument_type_ids.size()) +
-                               " were provided",
-                           {});
-      return std::nullopt;
+      return TypeRewriter(type_registry_, *this)
+          .Rewrite(symbol->canonical_type_id, type_ids);
     }
-
-    if (check_template_constraints(symbol->template_variable_type_ids))
-      return std::nullopt;
-
-    SubstitutionMap type_ids;
-    for (size_t i = 0; i < argument_type_ids.size(); ++i) {
-      type_ids[symbol->template_variable_type_ids[i]] = argument_type_ids[i];
-    }
-
-    return TypeRewriter(type_registry_, *this)
-        .Rewrite(symbol->canonical_type_id, type_ids);
+    return std::nullopt;
   }
 
-  NOTREACHED() << "Do not know how to realize binding: " << binding;
+  NOTREACHED() << "Do not know how to realize symbol: " << symbol_id;
   return std::nullopt;
 }
 

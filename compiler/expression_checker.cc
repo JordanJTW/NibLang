@@ -461,23 +461,23 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
               return std::nullopt;
             }
 
-            // if
-            // (!type_registry_.HasUnboundTemplateVariables(*result->type_id)) {
-            //   error_collector_
-            //       .Add("'" + result->binding->name.text +
-            //                "' is a fully realized type",
-            //            template_expr.generic_target->meta)
-            //       .WithNote("declared here", result->binding->name.metadata);
-            //   return std::nullopt;
-            // }
-
-            if (auto type_id = type_context_.GetTemplateOf(
-                    *result->binding, template_expr.template_types)) {
-              return ExpressionResult::with_type_override(*type_id,
-                                                          *result->binding);
+            if (!type_registry_.HasPlaceholderTypes(result->type_id)) {
+              error_collector_.Add(
+                  type_registry_.GetNameFromTypeId(result->type_id) +
+                      " is a concrete type",
+                  template_expr.generic_target->meta);
+              return std::nullopt;
             }
 
-            return std::nullopt;
+            auto concrete_type_id = type_context_.GetTemplateOf(
+                result->binding->GetSymbolId(), template_expr.template_types,
+                expression->meta);
+
+            if (!concrete_type_id)  // Errors logged in `GetTemplateOf()`
+              return std::nullopt;
+
+            return ExpressionResult::with_type_override(*concrete_type_id,
+                                                        result->binding);
           },
       },
       expression->as);

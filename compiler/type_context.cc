@@ -52,6 +52,8 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
                     {"bool", LiteralType::Bool},
                     {"any", LiteralType::Any},
                     {"never", LiteralType::Never},
+                    // Only before late-binding of stdlib struct
+                    {"String", LiteralType::String},
                     // Nil is used with Optional types (T?), NEVER standalone
                     // {"Nil", LiteralType::Nil},
                 };
@@ -448,10 +450,10 @@ bool TypeContext::IsTypeSubsetOf(TypeId sub_type_id,
     const auto& sub = std::get<StructType>(sub_type);
     const auto& super = std::get<StructType>(super_type);
 
-    if (!sub.symbol.declaration.IsInterface() &&
-        super.symbol.declaration.IsInterface()) {
-      return std::ranges::find(sub.symbol.interface_types, super_type_id) !=
-             sub.symbol.interface_types.end();
+    if (!sub.symbol->declaration.IsInterface() &&
+        super.symbol->declaration.IsInterface()) {
+      return std::ranges::find(sub.symbol->interface_types, super_type_id) !=
+             sub.symbol->interface_types.end();
     }
     // Intentional fall-through
   }
@@ -462,7 +464,7 @@ bool TypeContext::IsTypeSubsetOf(TypeId sub_type_id,
     const auto& super = std::get<StructType>(super_type);
     const auto& sub = std::get<TemplateVariableType>(sub_type);
 
-    if (super.symbol.declaration.IsInterface() && sub.constraint_type_id) {
+    if (super.symbol->declaration.IsInterface() && sub.constraint_type_id) {
       return sub.constraint_type_id->type_id == super_type_id;
     }
     // Intentional fall-through
@@ -485,21 +487,21 @@ bool TypeContext::AreDisjointTypes(TypeId t1, TypeId t2) const {
   auto* t1_type = type_registry_.GetType<StructType>(t1);
   auto* t2_type = type_registry_.GetType<StructType>(t2);
 
-  bool t1_is_interface = t1_type && t1_type->symbol.declaration.IsInterface();
-  bool t2_is_interface = t2_type && t2_type->symbol.declaration.IsInterface();
+  bool t1_is_interface = t1_type && t1_type->symbol->declaration.IsInterface();
+  bool t2_is_interface = t2_type && t2_type->symbol->declaration.IsInterface();
 
   if (t1_is_interface && t2_is_interface)  // i.e. Hashable & Printable
     return false;
 
   if (t1_is_interface && t2_type) {  // i.e. Hashable & Foo
-    for (auto implemented_id : t2_type->symbol.interface_types) {
+    for (auto implemented_id : t2_type->symbol->interface_types) {
       if (implemented_id == t1)
         return false;
     }
   }
 
   if (t2_is_interface && t1_type) {  // i.e. Foo & Hashable
-    for (auto implemented_id : t1_type->symbol.interface_types) {
+    for (auto implemented_id : t1_type->symbol->interface_types) {
       if (implemented_id == t2)
         return false;
     }
@@ -581,7 +583,7 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
   if (auto* symbol = type_registry_.GetSymbol<StructSymbol>(symbol_id)) {
     if (validate_template_arguments(symbol->declaration.name,
                                     symbol->template_variable_type_ids)) {
-      return type_registry_.NewStructType({*symbol, argument_type_ids},
+      return type_registry_.NewStructType({symbol, argument_type_ids},
                                           std::nullopt);
     }
 
@@ -635,9 +637,9 @@ void TypeContext::FlattenSubtypesUnion(std::set<TypeId>& types) const {
         if (type_id == potential_interface)
           continue;
 
-        if (std::ranges::find(struct_type->symbol.interface_types,
+        if (std::ranges::find(struct_type->symbol->interface_types,
                               potential_interface) !=
-            struct_type->symbol.interface_types.end()) {
+            struct_type->symbol->interface_types.end()) {
           type_ids_to_remove.insert(type_id);
           break;
         }

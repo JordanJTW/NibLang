@@ -34,7 +34,7 @@ using LiteralType = ::TypeRegistry::LiteralType;
 void PopulateInstanceTypes(const StructType& type,
                            SubstitutionMap& substitution_map) {
   for (size_t i = 0; i < type.instance_template_type_ids.size(); ++i) {
-    substitution_map[type.symbol.template_variable_type_ids[i]] =
+    substitution_map[type.symbol->template_variable_type_ids[i]] =
         type.instance_template_type_ids[i];
   }
 }
@@ -608,12 +608,12 @@ std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
     PopulateInstanceTypes(*struct_type, substitution_map);
 
     std::vector<TypeId> realized_field_types;
-    realized_field_types.reserve(struct_type->symbol.field_types.size());
+    realized_field_types.reserve(struct_type->symbol->field_types.size());
 
     // Field types are generic and must be realized against `struct_type`'s
     // template arguments and the current inference environment
     std::ranges::transform(
-        struct_type->symbol.field_types,
+        struct_type->symbol->field_types,
         std::back_inserter(realized_field_types), [&](TypeId field_type) {
           // i.e. generic Array[T] => instance Array[$0] => inferred Array[i32]
           return type_resolver_.Rewrite(
@@ -626,7 +626,7 @@ std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
     CHECK(!call_expr.resolved) << "CallExpression was previously resolved";
     call_expr.resolved =
         ResolvedCall{callee_result.binding->GetSymbolId(),
-                     struct_type->symbol.interface_types.empty()
+                     struct_type->symbol->interface_types.empty()
                          ? FunctionKind::Constructor
                          : FunctionKind::ConstructorVirtual};
 
@@ -656,13 +656,7 @@ std::optional<ExpressionResult> ExpressionChecker::HandlePrimary(
   return std::visit(
       Overloaded{
           [&](const StringLiteral&) -> std::optional<ExpressionResult> {
-            if (auto binding = scope_manager_.FindBindingFor(
-                    "String", ScopeManager::All)) {
-              return ExpressionResult(binding->type_id);
-            }
-
-            error_collector_.Add("unknown identifier: String", metadata);
-            return std::nullopt;
+            return ExpressionResult(LiteralType::String);
           },
           [&](Identifier& ident) -> std::optional<ExpressionResult> {
             if (ident.name == "Nil")
@@ -819,7 +813,7 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
 
     if (auto binding = scope_manager_.FindBindingFor(
             member_name.text, ScopeManager::Current,
-            struct_type->symbol.instance_scope_id)) {
+            struct_type->symbol->instance_scope_id)) {
       SubstitutionMap substitution_map;
       PopulateInstanceTypes(*struct_type, substitution_map);
 
@@ -845,7 +839,7 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
       return ExpressionResult::with_type_override(realized_type_id, *binding);
     }
 
-    for (ScopeId interface_scope_id : struct_type->symbol.interface_scopes) {
+    for (ScopeId interface_scope_id : struct_type->symbol->interface_scopes) {
       if (auto binding = scope_manager_.FindBindingFor(
               member_name.text, ScopeManager::Current, interface_scope_id)) {
         CHECK_EQ(binding->kind, NamedBinding::Function)
@@ -871,7 +865,7 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
                  type_registry_.GetNameFromTypeId(type_id),
              member_name.metadata)
         .WithNote("declared here",
-                  struct_type->symbol.declaration.name.metadata);
+                  struct_type->symbol->declaration.name.metadata);
     return std::nullopt;
   }
 

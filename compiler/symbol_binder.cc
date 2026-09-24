@@ -51,11 +51,13 @@ void SymbolBinder::Process(const Block& block) {
 
 SymbolBinder::StructBinding SymbolBinder::ForwardDeclareStruct(
     StructDeclaration& declaration) {
-  TypeId type_id = type_registry_.NewTypeId();
+  // Allow late-binding String while keeping consistent ID for "string literal"
+  TypeId type_id =
+      (declaration.name.text == "String" ? TypeRegistry::String
+                                         : type_registry_.NewTypeId());
   auto [symbol_id, symbol_ref] = type_registry_.NewStructSymbol(declaration);
   auto binding = scope_manager_.InsertNameIntoScope(
       declaration.name, NamedBinding::Struct, type_id, symbol_id);
-  ;
   return {std::move(binding), symbol_ref};
 }
 
@@ -141,7 +143,7 @@ void SymbolBinder::BindStructSymbol(StructSymbol& struct_symbol,
   // fields because they might reference themselves and end up with a different
   // TypeId in that case.
   self_id = type_registry_.NewStructType(
-      StructType{struct_symbol, struct_symbol.template_variable_type_ids},
+      StructType{&struct_symbol, struct_symbol.template_variable_type_ids},
       self_id);
 
   for (auto& fn : declaration.methods | std::views::values) {
@@ -239,7 +241,7 @@ void SymbolBinder::BindStructSymbol(StructSymbol& struct_symbol,
         ScopeManager::BlockScope, "impl " + interface_name.text, [&]() {
           for (auto& [method_name, fn] : implements_decl.impls) {
             // TODO: `parent` should incorporate interface somehow for naming?
-             if (auto binding = NewFunctionSymbol(fn, &declaration, *self_id)) {
+            if (auto binding = NewFunctionSymbol(fn, &declaration, *self_id)) {
               method_bindings.emplace(method_name.text, *binding);
             }
           }

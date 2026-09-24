@@ -97,7 +97,7 @@ SymbolId TypeRegistry::NewFunctionSymbol(
 
 TypeId TypeRegistry::NewStructType(StructType type,
                                    std::optional<TypeId> self_id) {
-  InstanceCache& cache = struct_instance_cache_[type.symbol.symbol_id];
+  InstanceCache& cache = struct_instance_cache_[type.symbol->symbol_id];
   if (auto it = cache.find(type.instance_template_type_ids); it != cache.end())
     return it->second.type_id;
 
@@ -110,8 +110,12 @@ TypeId TypeRegistry::NewStructType(StructType type,
   TypeId type_id = self_id.has_value() ? *self_id : NewTypeId();
   cache[type.instance_template_type_ids] = TypeInstance{type_id};
 
-  type_table_.emplace(type_id,
-                      Type{type, template_variables, placeholder_variables});
+  // Allows for late-binding of String from the standard library
+  auto [it, success] = type_table_.try_emplace(
+      type_id, type, template_variables, placeholder_variables);
+  if (!success) {
+    it->second = Type{type, template_variables, placeholder_variables};
+  }
   return type_id;
 }
 
@@ -261,6 +265,7 @@ std::string TypeRegistry::GetNameFromTypeId(TypeId type_id,
                     {LiteralType::Any, "any"},
                     {LiteralType::Never, "never"},
                     {LiteralType::Nil, "Nil"},
+                    {LiteralType::String, "String"},
                 };
             if (options.is_embedded_type)
               return kBuiltInTypeNames.at(type_id);
@@ -297,7 +302,7 @@ std::string TypeRegistry::GetNameFromTypeId(TypeId type_id,
             std::stringstream ss;
 
             bool must_include_final_quote = false;
-            const auto& declaration = type.symbol.declaration;
+            const auto& declaration = type.symbol->declaration;
             if (options.use_debug_names) {
               ss << declaration.kind << " " << declaration.name.text;
             } else if (options.is_embedded_type) {

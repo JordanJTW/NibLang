@@ -124,7 +124,7 @@ bool TypeResolver::Resolve(TypeId pattern_type_id,
           },
           [&](const StructType& p, const StructType& c) {
             // Ensures the same base class by comparing the stable AST pointers.
-            if (&p.symbol != &c.symbol)
+            if (p.symbol != c.symbol)
               return false;
 
             if (p.instance_template_type_ids.size() !=

@@ -56,7 +56,7 @@ struct PlaceholderType {
 };
 
 struct StructType {
-  const StructSymbol& symbol;
+  const StructSymbol* symbol;
   std::vector<TypeId> instance_template_type_ids;
 };
 
@@ -108,6 +108,7 @@ class TypeRegistry {
     Any,    // The "top" type (every type can be treated as ⊤)
     Never,  // The "bottom" type (⊥ can be treated as every type)
     Nil,
+    String,
     kCount
   };
 

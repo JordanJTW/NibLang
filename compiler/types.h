@@ -246,13 +246,17 @@ struct ParsedParameterizedType {
   std::vector<ParsedType> parameters;
 };
 
+// A special sentinel that represents a type parsing error
+struct ParserErrorType {};
+
 struct ParsedType {
   std::variant<std::string,
                ParsedUnionType,
                ParsedIntersectionType,
                ParsedFunctionType,
                ParsedOptionalType,
-               ParsedParameterizedType>
+               ParsedParameterizedType,
+               ParserErrorType>
       type;
   Metadata metadata;
 };

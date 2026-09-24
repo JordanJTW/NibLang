@@ -178,7 +178,11 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
 
             return GetTemplateOf(binding->GetSymbolId(),
                                  parameterized_type.parameters, type.metadata);
-          }},
+          },
+          [](const ParserErrorType&) -> std::optional<TypeId> {
+            return LiteralType::Error;
+          },
+      },
       type.type);
 }
 
@@ -340,35 +344,31 @@ std::optional<TypeInstance> TypeContext::DeclareFunctionType(
 
   std::vector<TypeId> argument_types;
   for (const auto& [name, type] : fn.arguments) {
-    if (auto type_id = GetTypeIdFor(type); type_id.has_value()) {
-      scope_manager_.DeclareArgumentBinding(name, *type_id);
-      argument_types.push_back(*type_id);
-    } else {
-      return std::nullopt;
-    }
+    auto type_id = GetTypeIdFor(type);
+    scope_manager_.DeclareArgumentBinding(name,
+                                          type_id.value_or(LiteralType::Error));
+    argument_types.push_back(type_id.value_or(LiteralType::Error));
   }
 
-  std::optional<TypeId> return_type = GetTypeIdFor(fn.return_type);
   // Missing return types are already handled in the Parser (resolving to
   // Void) so if `return_type` has no value here it is truly an unknown type.
-  if (!return_type.has_value())
-    return std::nullopt;
+  TypeId return_type =
+      GetTypeIdFor(fn.return_type).value_or(LiteralType::Error);
 
   std::optional<TypeId> variadic_type;
   if (fn.variadic_type.has_value()) {
-    variadic_type = GetTypeIdFor(fn.variadic_type->type);
-
-    if (!variadic_type.has_value())
-      return std::nullopt;
+    variadic_type =
+        GetTypeIdFor(fn.variadic_type->type).value_or(LiteralType::Error);
   }
 
   ScopeId scope_id = scope_manager_.GetActiveScopeId();
 
   if (check_fn_body == CheckFunctionBody::YES)
-    realized_functions_.push_back(RealizedFunction{scope_id, fn, *return_type});
+    realized_functions_.push_back(RealizedFunction{
+        scope_id, fn, SpannedType{return_type, fn.return_type.metadata}});
 
-  auto key = FunctionType{std::move(argument_types), return_type.value(),
-                          std::move(variadic_type)};
+  auto key =
+      FunctionType{std::move(argument_types), return_type, variadic_type};
   TypeId type_id = type_registry_.NewFunctionType(std::move(key));
   return TypeInstance{type_id, scope_id};
 }

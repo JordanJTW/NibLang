@@ -80,7 +80,10 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
   std::optional<ExpressionResult> result = std::visit(
       Overloaded{
           [&](PrimaryExpression& primary) -> std::optional<ExpressionResult> {
-            return HandlePrimary(primary, expression->meta);
+            auto result = HandlePrimary(primary, expression->meta);
+            if (!result || result->type_id == LiteralType::Error)
+              return std::nullopt;
+            return result;
           },
           [&](BinaryExpression& binary) -> std::optional<ExpressionResult> {
             auto lhs = RequireValue(binary.lhs);
@@ -746,7 +749,8 @@ std::optional<ExpressionResult> ExpressionChecker::HandlePrimary(
               }
             }
 
-            error_collector_.Add("unknown identifier: " + ident.name, metadata);
+            error_collector_.Add("unknown identifier: '" + ident.name + "'",
+                                 metadata);
             return std::nullopt;
           },
           [&](int32_t) -> std::optional<ExpressionResult> {

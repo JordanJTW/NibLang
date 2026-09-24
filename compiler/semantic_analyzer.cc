@@ -82,22 +82,23 @@ FlowResult SemanticAnalyzer::Check(Block& block,
     if (function_bodies.empty())
       break;
 
-    for (auto [scope_id, declaration, return_type_id] : function_bodies) {
+    for (auto [scope_id, declaration, return_type] : function_bodies) {
       if (!declaration.body)
         continue;
 
       scope_manager_.WithScope(scope_id, [&]() {
-        FunctionContext fn_context{{}, return_type_id};
+        FunctionContext fn_context{{}, return_type};
         FlowResult result =
             Check(*declaration.body, fn_context, NarrowedBindings{});
 
-        if (result.is_fallthrough()) {
-          if (return_type_id == LiteralType::Unit) {
+        bool has_valid_return_type = return_type.type_id != LiteralType::Error;
+        if (result.is_fallthrough() && has_valid_return_type) {
+          if (return_type.type_id == LiteralType::Unit) {
             declaration.resolved->should_insert_unit_return = true;
           } else {
             error_collector_.Add(
                 "function with return type " +
-                    type_registry_.GetNameFromTypeId(return_type_id) +
+                    type_registry_.GetNameFromTypeId(return_type.type_id) +
                     " does not return on all paths",
                 declaration.name.metadata);
           }
@@ -160,30 +161,24 @@ FlowResult SemanticAnalyzer::Check(const std::unique_ptr<Statement>& statement,
                               updated_bindings};
           },
           [&](ReturnStatement& ret) {
+            TypeId type_id = LiteralType::Unit;
             if (ret.value) {
               if (auto result = check_expression(
-                      ret.value,
-                      SpannedType{function_context.return_type_id, {}})) {
-                if (!type_context_.IsTypeSubsetOf(
-                        result->type_id, function_context.return_type_id)) {
-                  error_collector_.Add(
-                      "Returning " +
-                          type_registry_.GetNameFromTypeId(result->type_id) +
-                          " from function with return type " +
-                          type_registry_.GetNameFromTypeId(
-                              function_context.return_type_id),
-                      statement->meta);
-                }
+                      ret.value, function_context.return_type)) {
+                type_id = result->type_id;
+              } else {
+                return FlowResult{FlowResult::Status::Terminate};
               }
-            } else {
-              if (!type_context_.IsTypeSubsetOf(
-                      TypeRegistry::Unit, function_context.return_type_id)) {
-                error_collector_.Add(
-                    "Returning `Unit` from function with return type " +
-                        type_registry_.GetNameFromTypeId(
-                            function_context.return_type_id),
-                    statement->meta);
-              }
+            }
+
+            if (!type_context_.IsTypeSubsetOf(
+                    type_id, function_context.return_type.type_id)) {
+              error_collector_.Add(
+                  "Returning " + type_registry_.GetNameFromTypeId(type_id) +
+                      " from function with return type " +
+                      type_registry_.GetNameFromTypeId(
+                          function_context.return_type.type_id),
+                  ret.value->meta);
             }
             return FlowResult{FlowResult::Status::Terminate};
           },
@@ -291,7 +286,7 @@ FlowResult SemanticAnalyzer::Check(const std::unique_ptr<Statement>& statement,
             }
 
             if (declared_type) {
-               if (!type_context_.IsTypeSubsetOf(result->type_id,
+              if (!type_context_.IsTypeSubsetOf(result->type_id,
                                                 declared_type->type_id)) {
                 std::string expected_type =
                     type_registry_.GetNameFromTypeId(declared_type->type_id);

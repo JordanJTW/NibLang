@@ -23,7 +23,7 @@ struct FlowResult {
 
 struct FunctionContext {
   std::vector<NamedBinding> required_captures;
-  const TypeId return_type_id;
+  const SpannedType return_type;
 };
 
 struct LoopContext {

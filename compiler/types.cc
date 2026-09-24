@@ -38,8 +38,8 @@ std::ostream& operator<<(std::ostream& os, const NamedBinding& symbol) {
 }
 
 std::ostream& operator<<(std::ostream& os, const ParsedType& type) {
-  std::visit(
-      Overloaded{[&](const std::string& type_name) { os << "#" << type_name; },
+  std::visit(Overloaded{
+                 [&](const std::string& type_name) { os << "#" << type_name; },
                  [&](const ParsedUnionType& type) {
                    os << "#";
                    for (size_t i = 0; i < type.names.size(); ++i) {
@@ -82,8 +82,10 @@ std::ostream& operator<<(std::ostream& os, const ParsedType& type) {
                      os << type.parameters[i];
                    }
                    os << "]";
-                 }},
-      type.type);
+                 },
+                 [&](const ParserErrorType&) { os << "#ERROR"; },
+             },
+             type.type);
   return os;
 }
 

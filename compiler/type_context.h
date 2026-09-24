@@ -69,7 +69,7 @@ class TypeContext {
   struct RealizedFunction {
     ScopeId scope_id;
     FunctionDeclaration& declaration;
-    TypeId return_type_id;
+    SpannedType return_type;
   };
 
   std::vector<RealizedFunction> GetRealizedFunctions() {

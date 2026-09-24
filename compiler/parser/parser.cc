@@ -1619,7 +1619,8 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
   }
 
   if (!return_type.has_value()) {
-    error_collector_.Add("parsed invalid return type", current_token_.meta);
+    error_collector_.Add("unable to parse return type", current_token_.meta);
+    return_type = ParsedType{ParserErrorType{}, return_type_metadate};
 
     auto is_body_or_end = [](TokenKind kind) {
       return kind == TokenKind::kOpenBrace || kind == TokenKind::kEndExpr;
@@ -1700,30 +1701,45 @@ Parser::ParseFunctionArgumentList() {
       break;  // variadic MUST be the last argument
     }
 
-#define HANDLE_ERROR_IN_ARGUMENT()                                          \
-  if (!SynchronizeOnError([](TokenKind kind) {                              \
-        return kind == TokenKind::kComma || kind == TokenKind::kCloseParen; \
-      })) {                                                                 \
-    return std::nullopt;                                                    \
-  }                                                                         \
-  if (current_token_.kind == TokenKind::kComma)                             \
-    AdvanceToken();                                                         \
-  continue
+    auto sync_to_next_arg = [&]() -> bool {
+      if (!SynchronizeOnError([](TokenKind kind) {
+            return kind == TokenKind::kComma || kind == TokenKind::kCloseParen;
+          })) {
+        return false;
+      }
+      if (current_token_.kind == TokenKind::kComma)
+        AdvanceToken();
+      return true;
+    };
 
     Token arg_name = current_token_;
     if (!ConsumeToken(TokenKind::kIdent, "expected argument name")) {
-      HANDLE_ERROR_IN_ARGUMENT();
+      if (!sync_to_next_arg())
+        return std::nullopt;
+      continue;
     }
 
     if (!ConsumeToken(TokenKind::kColon, "expected ':' after argument name")) {
-      HANDLE_ERROR_IN_ARGUMENT();
+      // If `:<type>` is missing, create an argument so it has a binding later
+      arguments.emplace_back(
+          SpannedText::FromToken(std::move(arg_name)),
+          ParsedType{ParserErrorType{}, current_token_.meta});
+      if (!sync_to_next_arg())
+        return std::nullopt;
+      continue;
     }
 
     std::optional<ParsedType> arg_type = ParseType();
     if (!arg_type.has_value()) {
       error_collector_.Add("expected valid type name for argument",
                            current_token_.meta);
-      HANDLE_ERROR_IN_ARGUMENT();
+      // If `:<type>` is missing, create an argument so it has a binding later
+      arguments.emplace_back(
+          SpannedText::FromToken(arg_name),
+          ParsedType{ParserErrorType{}, current_token_.meta});
+      if (!sync_to_next_arg())
+        return std::nullopt;
+      continue;
     }
 
     arguments.emplace_back(SpannedText::FromToken(std::move(arg_name)),

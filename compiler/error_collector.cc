@@ -31,9 +31,11 @@ void print_error(std::string_view path,
 
   std::string_view line = contents.substr(line_start, line_end - line_start);
 
-  CHECK_LT(line_start, metadata.column_range.start) << "Error: '" << message << "' has invalid span";
+  CHECK_LE(line_start, metadata.column_range.start)
+      << "Error: '" << message << "' has invalid span";
   size_t relative_offset = metadata.column_range.start - line_start;
-  CHECK_LT(metadata.column_range.start, metadata.column_range.end) << "Error: '" << message << "' has invalid span";
+  CHECK_LE(metadata.column_range.start, metadata.column_range.end)
+      << "Error: '" << message << "' has invalid span";
   size_t span_length = metadata.column_range.end - metadata.column_range.start;
 
   std::string header = std::string(prefix) + ": " + std::string(path) + ":" +

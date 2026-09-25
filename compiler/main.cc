@@ -198,6 +198,12 @@ int main(int argc, char* argv[]) {
   std::vector<File> files =
       CalculateImportsFor(opts.input_path, env_search_path, error_collector);
 
+  // Bail out early if there were parsing errors to prevent cascades
+  if (error_collector.HasErrors()) {
+    error_collector.PrintAllErrors(files);
+    return 1;
+  }
+
   ScopeManager scope_manager(error_collector);
   TypeRegistry type_registry{scope_manager};
 

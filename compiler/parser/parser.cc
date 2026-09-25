@@ -149,13 +149,11 @@ void Parser::ParseBlock(Block& block, BlockType block_type) {
 
       auto condition_expression = ParseBlockCondition();
 
-      if (!ConsumeToken(TokenKind::kOpenBrace,
-                        "expected '{' before while body")) {
-        SynchronizeOnError(
-            [](TokenKind kind) { return kind == TokenKind::kCloseBrace; });
-        // If we hit '}' do not consume it since there was never '{'
-        continue;
-      }
+      // The alternatives are 1) try to sync to a closing '}'; may sync to the
+      // middle of the intended block and  skips statements or 2) attribute the
+      // following statements to the outer scope; since the programmer clearly
+      // wrote a while/if this is not a safe assumption.
+      ConsumeToken(TokenKind::kOpenBrace, "expected '{' before while body");
 
       WhileStatement while_stmt{std::move(condition_expression), Block{}};
       ParseBlock(while_stmt.body);
@@ -171,12 +169,11 @@ void Parser::ParseBlock(Block& block, BlockType block_type) {
 
       auto condition_expression = ParseBlockCondition();
 
-      if (!ConsumeToken(TokenKind::kOpenBrace, "expected '{' before if body")) {
-        SynchronizeOnError(
-            [](TokenKind kind) { return kind == TokenKind::kCloseBrace; });
-        // If we hit '}' do not consume it since there was never '{'
-        continue;
-      }
+      // The alternatives are 1) try to sync to a closing '}'; may sync to the
+      // middle of the intended block and  skips statements or 2) attribute the
+      // following statements to the outer scope; since the programmer clearly
+      // wrote a while/if this is not a safe assumption.
+      ConsumeToken(TokenKind::kOpenBrace, "expected '{' before if body");
 
       IfStatement if_stmt{std::move(condition_expression), Block{}, Block{}};
 
@@ -186,13 +183,11 @@ void Parser::ParseBlock(Block& block, BlockType block_type) {
       if (current_token_.kind == TokenKind::kKwElse) {
         AdvanceToken();
 
-        if (!ConsumeToken(TokenKind::kOpenBrace,
-                          "expected '{' before if body")) {
-          SynchronizeOnError(
-              [](TokenKind kind) { return kind == TokenKind::kCloseBrace; });
-          // If we hit '}' do not consume it since there was never '{'
-          continue;
-        }
+        // The alternatives are 1) try to sync to a closing '}'; may sync to the
+        // middle of the intended block and  skips statements or 2) attribute
+        // the following statements to the outer scope; since the programmer
+        // clearly wrote a while/if this is not a safe assumption.
+        ConsumeToken(TokenKind::kOpenBrace, "expected '{' before if body");
 
         ParseBlock(if_stmt.else_body);
       }
@@ -217,11 +212,10 @@ void Parser::ParseBlock(Block& block, BlockType block_type) {
       }
 
       if (auto expr = ParseExpression()) {
-        if (!ConsumeToken(TokenKind::kEndExpr,
-                          "expected ';' after expression")) {
-          SynchronizeOnError();
-          // Intentional fall-through as an expression was parsed
-        }
+        Token end_token = current_token_;
+        // If ';' is missing there is no need to sync; let outer loop pick-up
+        // the next statement or report "unexpected token"  until one is found.
+        ConsumeToken(TokenKind::kEndExpr, "expected ';' after expression");
 
         block.statements.push_back(std::make_unique<Statement>(
             Statement{ReturnStatement{std::move(expr)},
@@ -234,11 +228,10 @@ void Parser::ParseBlock(Block& block, BlockType block_type) {
       AdvanceToken();  // consume 'throw'
 
       if (auto expr = ParseExpression()) {
-        if (!ConsumeToken(TokenKind::kEndExpr,
-                          "expected ';' after expression")) {
-          SynchronizeOnError();
-          // Intentional fall-through as an expression was parsed
-        }
+        Token end_token = current_token_;
+        // If ';' is missing there is no need to sync; let outer loop pick-up
+        // the next statement or report "unexpected token"  until one is found.
+        ConsumeToken(TokenKind::kEndExpr, "expected ';' after expression");
         block.statements.push_back(std::make_unique<Statement>(
             Statement{ThrowStatement{std::move(expr)},
                       Metadata::fromTokens(start_token, current_token_)}));
@@ -249,10 +242,9 @@ void Parser::ParseBlock(Block& block, BlockType block_type) {
     if (current_token_.kind == TokenKind::kKwBreak) {
       AdvanceToken();  // consume 'break'
 
-      if (!ConsumeToken(TokenKind::kEndExpr, "expected ';' after break")) {
-        SynchronizeOnError();
-        // Intentional fall-through as an expression was parsed
-      }
+      // If ';' is missing there is no need to sync; let outer loop pick-up
+      // the next statement or report "unexpected token"  until one is found.
+      ConsumeToken(TokenKind::kEndExpr, "expected ';' after break");
 
       block.statements.push_back(std::make_unique<Statement>(
           Statement{BreakStatement{},
@@ -263,10 +255,9 @@ void Parser::ParseBlock(Block& block, BlockType block_type) {
     if (current_token_.kind == TokenKind::kKwContinue) {
       AdvanceToken();  // consume 'continue'
 
-      if (!ConsumeToken(TokenKind::kEndExpr, "expected ';' after continue")) {
-        SynchronizeOnError();
-        // Intentional fall-through as an expression was parsed
-      }
+      // If ';' is missing there is no need to sync; let outer loop pick-up
+      // the next statement or report "unexpected token"  until one is found.
+      ConsumeToken(TokenKind::kEndExpr, "expected ';' after break");
 
       block.statements.push_back(std::make_unique<Statement>(
           Statement{ContinueStatement{},

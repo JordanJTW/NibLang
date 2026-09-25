@@ -1288,6 +1288,8 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
 
   Token name_token = current_token_;
   if (!ConsumeToken(TokenKind::kIdent, "requires a struct name")) {
+    name_token = Token{TokenKind::kIdent, "<unknown>", name_token.meta};
+
     // Synchronize to the start of template parameters or body
     auto is_body_or_templates = [](TokenKind kind) {
       return kind == TokenKind::kSquareOpen || kind == TokenKind::kOpenBrace;

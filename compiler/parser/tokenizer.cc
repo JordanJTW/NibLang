@@ -145,7 +145,7 @@ Token Tokenizer::next() {
   char ch = data_[offset_];
 
   // Identifier
-  if (ch == '$' || ch == '@' || std::isalpha(ch)) {
+  if (ch == '$' || ch == '@' || ch == '_' || std::isalpha(ch)) {
     ++offset_;  // Skip initial char
     while (offset_ < data_.size() &&
            (std::isalnum(data_[offset_]) || data_[offset_] == '_'))

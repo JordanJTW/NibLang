@@ -440,7 +440,11 @@ void Printer::Print(const Expression& expr, size_t indent) {
             }
             std::cout << std::endl;
           },
-      },
+          [&](const SizeOfExpression& size_expr) {
+            std::cout << std::string(indent, ' ')
+                      << "SizeOfExpression(type: " << size_expr.type << ")"
+                      << std::endl;
+          }},
       expr.as);
 }
 

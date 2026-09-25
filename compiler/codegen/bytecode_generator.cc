@@ -399,6 +399,10 @@ void ByteCodeGenerator::EmitExpression(
           [&](TemplateInstantiationExpression& template_expr) {
             EmitExpression(template_expr.generic_target);
           },
+        [&](SizeOfExpression& size_expr) {
+          CHECK(size_expr.resolved) << "unresolved sizeof";
+          bytecode_.PushInt32(*size_expr.resolved);
+        }
       },
       expr->as);
 }

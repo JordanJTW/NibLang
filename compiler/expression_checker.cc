@@ -482,7 +482,26 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
             return ExpressionResult::with_type_override(*concrete_type_id,
                                                         result->binding);
           },
-      },
+          [&](SizeOfExpression& size_expr) -> std::optional<ExpressionResult> {
+            auto get_type_size = [](TypeId type_id) {
+              switch (type_id) {
+                case LiteralType::Error:
+                case LiteralType::Unit:
+                case LiteralType::Never:
+                case LiteralType::Nil:
+                  return 0;
+                default:
+                  return 4;  // Everything has a uniform size right now
+              }
+            };
+
+            if (auto type_id = type_context_.GetTypeIdFor(size_expr.type)) {
+              size_expr.resolved = get_type_size(*type_id);
+              return ExpressionResult(LiteralType::i32);
+            }
+
+            return std::nullopt;
+          }},
       expression->as);
 
   if (result) {

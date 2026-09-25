@@ -286,6 +286,11 @@ struct TypeCastExpression {
   TypeCastStrategy strategy;
 };
 
+struct SizeOfExpression {
+  ParsedType type;
+  std::optional<size_t> resolved;
+};
+
 struct NilCoalescingExpression {
   std::unique_ptr<Expression> lhs;
   std::unique_ptr<Expression> rhs;
@@ -344,7 +349,8 @@ struct Expression {
                OptionalChainExpression,
                NilCoalescingExpression,
                OptionalAccessExpression,
-               TemplateInstantiationExpression>
+               TemplateInstantiationExpression,
+               SizeOfExpression>
       as;
 
   Metadata meta;

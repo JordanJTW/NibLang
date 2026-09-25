@@ -952,6 +952,25 @@ std::unique_ptr<Expression> Parser::ParsePrimary() {
       return nullptr;
     }
 
+    case TokenKind::kKwSizeOf: {
+      auto start_token = current_token_;
+      AdvanceToken();  // consume 'sizeof'
+
+      if (!ConsumeToken(TokenKind::kSquareOpen, "expected '['")) {
+        return nullptr;
+      }
+
+      auto parsed_type = ParseType().value_or(ParsedType{ParserErrorType{}});
+
+      Token end_token = current_token_;
+      ConsumeToken(TokenKind::kSquareClose,
+                   "expected ']' after type in 'sizeof'");
+
+      return std::make_unique<Expression>(
+          Expression{SizeOfExpression{parsed_type},
+                     Metadata::fromTokens(start_token, end_token)});
+    }
+
     default:
       error_collector_.Add("expected expression", current_token_.meta);
       return nullptr;

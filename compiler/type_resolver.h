@@ -39,7 +39,7 @@ class TypeResolver {
   TypeId Prune(TypeId type_id);
 
   // Rewrites `type_id` to replace any placeholders in it with inferred types.
-  TypeId Rewrite(TypeId type_id);
+  TypeId Rewrite(TypeId type_id) const;
 
  private:
   using Bindings = std::unordered_map<SlotId, SpannedType>;

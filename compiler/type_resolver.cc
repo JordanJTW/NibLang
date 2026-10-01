@@ -166,7 +166,7 @@ TypeId TypeResolver::Prune(TypeId type_id) {
   return type_id;
 }
 
-TypeId TypeResolver::Rewrite(TypeId type_id) {
+TypeId TypeResolver::Rewrite(TypeId type_id) const {
   std::unordered_map<TypeId, TypeId> rewritten_types;
   rewritten_types.reserve(bindings_.size());
   for (const auto& [key, value] : bindings_) {

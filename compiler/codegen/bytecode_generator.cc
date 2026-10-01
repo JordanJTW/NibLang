@@ -61,7 +61,7 @@ ByteCodeGenerator::FunctionObject ByteCodeGenerator::Build(
   }
 
   called_symbols = std::move(called_symbols_);
-  return FunctionObject{&symbol, std::move(bytecode_), argument_count,
+  return FunctionObject{&symbol, bytecode_, argument_count,
                         symbol_to_local_idx_.size()};
 }
 
@@ -399,45 +399,40 @@ void ByteCodeGenerator::EmitExpression(
           [&](TemplateInstantiationExpression& template_expr) {
             EmitExpression(template_expr.generic_target);
           },
-        [&](SizeOfExpression& size_expr) {
-          CHECK(size_expr.resolved) << "unresolved sizeof";
-          bytecode_.PushInt32(*size_expr.resolved);
-        }
-      },
+          [&](SizeOfExpression& size_expr) {
+            CHECK(size_expr.resolved) << "unresolved sizeof";
+            bytecode_.PushInt32(*size_expr.resolved);
+          }},
       expr->as);
 }
 
 void ByteCodeGenerator::EmitCall(
     const CallExpression& call,
-    std::optional<OptionalChainContext> optional_chain_ctx) {
+    const std::optional<OptionalChainContext>& optional_chain_ctx) {
+  size_t argc = call.arguments.size();
+
   if (call.resolved) {
     switch (call.resolved->kind) {
+      case Method:
+        EmitExpression(call.callee, optional_chain_ctx,
+                       AccessMode::OBJECT_ONLY);
+        argc += 1;  // Account for `self`
+        // Intentional fall-through to function call logic
       case Free:
       case Extern:
       case StaticMethod: {
         for (const auto& argument : call.arguments)
           EmitExpression(argument);
-        bytecode_.PatchCall(call.resolved->target_symbol_id,
-                            call.arguments.size());
-        called_symbols_.push_back(call.resolved->target_symbol_id);
+
+        bytecode_.PatchCall(call.resolved->target.symbol_id, argc);
+        called_symbols_.push_back(call.resolved->target.symbol_id);
         break;
       }
       case Anonymous: {
         for (const auto& argument : call.arguments)
           EmitExpression(argument);
         EmitExpression(call.callee);
-        bytecode_.CallDynamic(call.arguments.size());
-        break;
-      }
-      case Method: {
-        EmitExpression(call.callee, optional_chain_ctx,
-                       AccessMode::OBJECT_ONLY);
-        for (const auto& argument : call.arguments)
-          EmitExpression(argument);
-
-        bytecode_.PatchCall(call.resolved->target_symbol_id,
-                            call.arguments.size() + 1);
-        called_symbols_.push_back(call.resolved->target_symbol_id);
+        bytecode_.CallDynamic(argc);
         break;
       }
       case Virtual: {
@@ -446,23 +441,22 @@ void ByteCodeGenerator::EmitCall(
         for (const auto& argument : call.arguments)
           EmitExpression(argument);
 
-        bytecode_.PatchCallVirtual(call.resolved->target_symbol_id,
-                                   call.arguments.size() + 1);
-        called_symbols_.push_back(call.resolved->target_symbol_id);
+        bytecode_.PatchCallVirtual(call.resolved->target.symbol_id,
+                                   argc + 1 /*self*/);
+        called_symbols_.push_back(call.resolved->target.symbol_id);
         break;
       }
       case Constructor: {
         for (const auto& argument : call.arguments)
           EmitExpression(argument);
-        bytecode_.Call(VM_BUILTIN_ARRAY_INIT, call.arguments.size());
+        bytecode_.Call(VM_BUILTIN_ARRAY_INIT, argc);
         break;
       }
       case ConstructorVirtual: {
         for (const auto& argument : call.arguments)
           EmitExpression(argument);
 
-        bytecode_.PatchNewObject(call.resolved->target_symbol_id,
-                                 call.arguments.size());
+        bytecode_.PatchNewObject(call.resolved->target.symbol_id, argc);
         break;
       }
     }

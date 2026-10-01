@@ -23,6 +23,8 @@ class Printer {
  private:
   const TypeRegistry* const type_registry_;
 
+  void Print(const std::optional<ResolvedCall>& call, size_t indent = 0);
+
   std::string GetTypeName(std::optional<TypeId> type_id) const {
     return (type_registry_ && type_id)
                ? type_registry_->GetNameFromTypeId(*type_id)

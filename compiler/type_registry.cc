@@ -386,6 +386,26 @@ std::string TypeRegistry::GetNameFromTypeId(TypeId type_id,
       it->second.variant);
 }
 
+std::string TypeRegistry::GetNameFromSymbolId(SymbolId symbol_id) const {
+  auto it = symbol_table_.find(symbol_id);
+  if (it == symbol_table_.end()) {
+    return "'Unknown'";
+  }
+
+  return std::visit(
+      Overloaded{[&](const FunctionSymbol& symbol) {
+                   return "'" + symbol.GetName() + "' " +
+                          GetNameFromTypeId(symbol.canonical_type_id);
+                 },
+                 [&](const StructSymbol& symbol) {
+                   std::stringstream ss;
+                   ss << "'" << symbol.declaration.kind << " "
+                      << symbol.declaration.name.text << "'";
+                   return ss.str();
+                 }},
+      it->second);
+}
+
 std::string TypeRegistry::ToJson() const {
   nlohmann::json dict;
   for (const auto& [type_id, type] : type_table_) {

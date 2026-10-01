@@ -116,6 +116,8 @@ class ExpressionChecker {
 
   TypeResolver type_resolver_;
   TypeRewriter type_rewriter_{type_registry_, type_context_};
+
+  std::vector<std::function<void()>> deferred_type_resolution_;
 };
 
 std::ostream& operator<<(std::ostream& os,

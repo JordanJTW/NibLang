@@ -162,9 +162,14 @@ enum FunctionKind {
   ConstructorVirtual,  // Assigned to objects participating in dispatch
 };
 
+struct CallSymbolicTarget {
+  SymbolId symbol_id;
+  TypeId type_id;
+};
+
 struct ResolvedCall {
-  SymbolId target_symbol_id;
   FunctionKind kind;
+  CallSymbolicTarget target;
 };
 
 struct CallExpression {

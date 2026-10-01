@@ -47,36 +47,6 @@ const char* ToString(FunctionKind kind) {
   return "?";
 }
 
-std::ostream& operator<<(std::ostream& os,
-                         const ResolvedBinary::Specialization& specialization) {
-#define CASE($name)                           \
-  case ResolvedBinary::Specialization::$name: \
-    return os << #$name
-
-  switch (specialization) {
-    CASE(String);
-    CASE(Number);
-    CASE(Nil);
-  }
-#undef CASE
-
-  __builtin_unreachable();  // All Specializations MUST be handled above.
-  return os;
-}
-
-void print_resolved_call(const std::optional<ResolvedCall>& r, size_t indent) {
-  if (!r.has_value()) {
-    std::cout << std::string(indent, ' ') << "ResolvedCall: UNRESOLVED"
-              << std::endl;
-  } else {
-    std::cout << std::string(indent, ' ') << "ResolvedCall:" << std::endl;
-    std::cout << std::string(indent + 2, ' ')
-              << "target_symbol_id: " << r->target_symbol_id << std::endl;
-    std::cout << std::string(indent + 2, ' ')
-              << "function_kind: " << ToString(r->kind) << std::endl;
-  }
-}
-
 void print_resolved_access(const std::optional<ResolvedAccess>& r,
                            size_t indent) {
   if (!r.has_value()) {
@@ -97,18 +67,6 @@ void print_resolved_access(const std::optional<ResolvedAccess>& r,
       std::cout << std::string(indent + 2, ' ')
                 << "Static(symbol_id: " << fn->symbol_id << ")" << std::endl;
     }
-  }
-}
-
-void print_resolved_binary(const std::optional<ResolvedBinary>& r,
-                           size_t indent) {
-  if (!r.has_value()) {
-    std::cout << std::string(indent, ' ') << "ResolvedBinary: UNRESOLVED"
-              << std::endl;
-  } else {
-    std::cout << std::string(indent, ' ') << "ResolvedBinary:" << std::endl;
-    std::cout << std::string(indent + 2, ' ')
-              << "specialization: " << r->specialization << std::endl;
   }
 }
 
@@ -304,7 +262,6 @@ void Printer::Print(const Expression& expr, size_t indent) {
                       << ")" << std::endl;
             std::cout << std::string(indent + 2, ' ')
                       << "Type: " << GetTypeName(expr.type_id) << std::endl;
-            print_resolved_binary(binary.resolved, indent + 2);
 
             std::cout << std::string(indent + 2, ' ') << "LHS:" << std::endl;
             Print(*binary.lhs, indent + 4);
@@ -337,7 +294,7 @@ void Printer::Print(const Expression& expr, size_t indent) {
             for (const auto& arg : call.arguments)
               Print(*arg, indent + 4);
 
-            print_resolved_call(call.resolved, indent + 2);
+            Print(call.resolved, indent + 2);
           },
           [&](const MemberAccessExpression& member_access) {
             std::cout << std::string(indent, ' ') << "MemberAccessExpression: "
@@ -466,5 +423,21 @@ void Printer::Print(const FunctionDeclaration& fn, size_t indent) {
 
   } else {
     std::cout << std::string(indent + 2, ' ') << "Body: Extern" << std::endl;
+  }
+}
+
+void Printer::Print(const std::optional<ResolvedCall>& call, size_t indent) {
+  if (!call.has_value()) {
+    std::cout << std::string(indent, ' ') << "ResolvedCall: UNRESOLVED"
+              << std::endl;
+  } else {
+    std::cout << std::string(indent, ' ') << "ResolvedCall:" << std::endl;
+    std::cout << std::string(indent + 2, ' ') << "target: { symbol: "
+              << type_registry_->GetNameFromSymbolId(call->target.symbol_id)
+              << ", type: " << GetTypeName(call->target.type_id) << " }"
+              << std::endl;
+
+    std::cout << std::string(indent + 2, ' ')
+              << "function_kind: " << ToString(call->kind) << std::endl;
   }
 }

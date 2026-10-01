@@ -71,6 +71,10 @@ std::optional<ExpressionResult> ExpressionChecker::CheckChain(
     return std::nullopt;
   }
 
+  for (const auto& deferred_type_cb : deferred_type_resolution_) {
+    deferred_type_cb();
+  }
+
   return result;
 }
 
@@ -506,6 +510,11 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
 
   if (result) {
     expression->type_id = result->type_id;
+
+    deferred_type_resolution_.emplace_back(
+        [this, type_id = &expression->type_id]() {
+          *type_id = type_resolver_.Rewrite(type_id->value());
+        });
   }
   return result;
 }
@@ -597,15 +606,22 @@ std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
         callee_result.binding->kind == NamedBinding::Function) {
       const auto& symbol = type_registry_.GetSymbolChecked<FunctionSymbol>(
           callee_result.binding->GetSymbolId());
+
       CHECK(!call_expr.resolved) << "CallExpression was previously resolved";
-      call_expr.resolved = ResolvedCall{callee_result.binding->GetSymbolId(),
-                                        symbol.RequiresVirtualDispatch()
-                                            ? FunctionKind::Virtual
-                                            : symbol.declaration.function_kind};
+      call_expr.resolved = ResolvedCall{
+          symbol.RequiresVirtualDispatch() ? FunctionKind::Virtual
+                                           : symbol.declaration.function_kind,
+          CallSymbolicTarget{callee_result.binding->GetSymbolId(),
+                             callable_type_id}};
+
+      deferred_type_resolution_.emplace_back(
+          [this, type_id = &call_expr.resolved->target.type_id]() {
+            *type_id = type_resolver_.Rewrite(*type_id);
+          });
     } else {
       CHECK(!call_expr.resolved) << "CallExpression was previously resolved";
       // Assume a bound closure on the stack so no `target_symbol_id` is needed.
-      call_expr.resolved = ResolvedCall{0, FunctionKind::Anonymous};
+      call_expr.resolved = ResolvedCall{FunctionKind::Anonymous};
     }
 
     TypeCheckCallArguments(argument_results, fn_type->arg_types, debug_metadata,
@@ -644,10 +660,16 @@ std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
                            /*variadic_type=*/std::nullopt);
     CHECK(!call_expr.resolved) << "CallExpression was previously resolved";
     call_expr.resolved =
-        ResolvedCall{callee_result.binding->GetSymbolId(),
-                     struct_type->symbol->interface_types.empty()
+        ResolvedCall{struct_type->symbol->interface_types.empty()
                          ? FunctionKind::Constructor
-                         : FunctionKind::ConstructorVirtual};
+                         : FunctionKind::ConstructorVirtual,
+                     CallSymbolicTarget{callee_result.binding->GetSymbolId(),
+                                        callable_type_id}};
+
+    deferred_type_resolution_.emplace_back(
+        [this, type_id = &call_expr.resolved->target.type_id]() {
+          *type_id = type_resolver_.Rewrite(*type_id);
+        });
 
     if (hint_return_type) {
       type_resolver_.Resolve(callable_type_id, hint_return_type->type_id,

@@ -160,6 +160,8 @@ class TypeRegistry {
   std::string GetNameFromTypeId(TypeId type_id,
                                 FormatOptions options = {}) const;
 
+  std::string GetNameFromSymbolId(SymbolId symbol_id) const;
+
   template <typename T>
   const T* GetType(TypeId type_id) const {
     auto it = type_table_.find(type_id);

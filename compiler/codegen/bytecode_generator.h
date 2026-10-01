@@ -75,7 +75,7 @@ class ByteCodeGenerator {
       AccessMode access_mode = AccessMode::LOAD);
 
   void EmitCall(const CallExpression& call,
-                std::optional<OptionalChainContext> optional_chain_ctx);
+                const std::optional<OptionalChainContext>& optional_chain_ctx);
   void EmitOp(const Token& op, bool is_string);
 
   const ScopeManager& scope_manager_;

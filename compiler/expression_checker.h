@@ -111,7 +111,7 @@ class ExpressionChecker {
   ScopeManager& scope_manager_;
   TypeContext& type_context_;
   TypeRegistry& type_registry_;
-  const NarrowedBindings narrowed_bindings_;
+  NarrowedBindings narrowed_bindings_;
   std::vector<NamedBinding>& required_captures_;
   ErrorCollector& error_collector_;
 

@@ -244,23 +244,20 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
             return ExpressionResult{LiteralType::Any};
           },
           [&](LogicExpression& logic) -> std::optional<ExpressionResult> {
-            auto lhs = RequireValue(logic.lhs);
-            auto rhs = RequireValue(logic.rhs);
+            auto require_bool = [this](std::unique_ptr<Expression>& expr)
+                -> std::optional<ExpressionResult> {
+              auto result = RequireValue(expr);
+              if (result && result->type_id != LiteralType::Bool) {
+                error_collector_.Add("expression MUST evaluate to a boolean",
+                                     expr->meta);
+                return std::nullopt;
+              }
+              return result;
+            };
 
-            if (!lhs || !rhs)
+            auto lhs = require_bool(logic.lhs);
+            if (!lhs)
               return std::nullopt;
-
-            if (lhs->type_id != rhs->type_id) {
-              error_collector_
-                  .Add("LHS and RHS are not compatible", expression->meta)
-                  .WithNote("LHS type is " +
-                                type_registry_.GetNameFromTypeId(lhs->type_id),
-                            logic.lhs->meta)
-                  .WithNote("But RHS type is " +
-                                type_registry_.GetNameFromTypeId(rhs->type_id),
-                            logic.rhs->meta);
-              return std::nullopt;
-            }
 
             NarrowedBindings true_bindings, false_bindings;
             // AND requires both sides to be true. `true_bindings` uses the
@@ -268,6 +265,19 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
             // of types for any overlapping keys to satisfy both constraints
             // simultaneously. `false_bindings` use the opposite.
             if (logic.kind == LogicExpression::Kind::AND) {
+              for (const auto& [id, type_id] : lhs->true_bindings) {
+                if (narrowed_bindings_.contains(id)) {
+                  narrowed_bindings_[id] = type_context_.GetIntersectionOf(
+                      {narrowed_bindings_[id], type_id});
+                } else {
+                  narrowed_bindings_[id] = type_id;
+                }
+              }
+
+              auto rhs = require_bool(logic.rhs);
+              if (!rhs)
+                return std::nullopt;
+
               true_bindings = lhs->true_bindings;  // Conflicts overwritten
               for (const auto& [id, type_id] : rhs->true_bindings) {
                 if (lhs->true_bindings.contains(id)) {
@@ -290,6 +300,19 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
             // executed), and the union of types for overlapping keys (as either
             // type may be valid). `false_bindings` use the opposite.
             else if (logic.kind == LogicExpression::Kind::OR) {
+              for (const auto& [id, type_id] : lhs->false_bindings) {
+                if (narrowed_bindings_.contains(id)) {
+                  narrowed_bindings_[id] = type_context_.GetIntersectionOf(
+                      {narrowed_bindings_[id], type_id});
+                } else {
+                  narrowed_bindings_[id] = type_id;
+                }
+              }
+
+              auto rhs = RequireValue(logic.rhs);
+              if (!rhs)
+                return std::nullopt;
+
               for (const auto& [id, type_id] : lhs->true_bindings) {
                 if (rhs->true_bindings.contains(id)) {
                   true_bindings[id] = type_context_.GetUnionOf(
@@ -297,7 +320,7 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
                 }
               }
 
-              false_bindings = lhs->true_bindings;  // Conflicts overwritten
+              false_bindings = lhs->false_bindings;  // Conflicts overwritten
               for (const auto& [id, type_id] : rhs->false_bindings) {
                 if (lhs->false_bindings.contains(id)) {
                   false_bindings[id] = type_context_.GetIntersectionOf(

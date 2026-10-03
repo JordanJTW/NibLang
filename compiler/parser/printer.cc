@@ -224,6 +224,9 @@ void Printer::Print(const Statement& stmt, size_t indent) {
             for (const auto& [name, interface] : struct_decl.interfaces) {
               std::cout << std::string(indent + 4, ' ') << name.text
                         << std::endl;
+              for (const auto& [name, method] : interface.impls) {
+                Print(method, indent + 6);
+              }
             }
           },
           [&](const ImportStatement& import) {

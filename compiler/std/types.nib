@@ -2,6 +2,18 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause
 
+interface EqualTo {
+  fn equalTo(other: Self) -> bool;
+}
+
+interface CompareTo {
+  fn compareTo(other: Self) -> i32;
+}
+
+interface Hashable {
+  fn hash() -> i32;
+}
+
 extern struct Array[T] {
   static fn new[F]() -> Array[F];
   static fn init[F](...F) -> Array[F];
@@ -98,4 +110,16 @@ extern struct String {
 
   static fn hash(value: String) -> i32;
   static fn equals(v1: String, v2: String) -> bool;
+
+  implements Hashable {
+    fn hash() -> i32 {
+      return String.hash(self);
+    }
+  }
+
+  implements EqualTo {
+    fn equalTo(other: String) -> bool {
+      return String.equals(self, other);
+    }
+  }
 }

@@ -29,10 +29,6 @@ class TypeContext {
                        TypeRegistry& type_registry,
                        ErrorCollector& error_collector);
 
-  // Whether a function (or struct's method) should have the body type-checked
-  // or only the signature (only the signature is needed for type deduction).
-  enum class CheckFunctionBody { YES, NO };
-
   // Returns the TypeId for a given ParsedType if it can be resolved.
   std::optional<TypeId> GetTypeIdFor(const ParsedType& type);
 
@@ -79,7 +75,6 @@ class TypeContext {
   }
 
   TypeId DeclareFunctionType(FunctionSymbol& symbol,
-                             CheckFunctionBody check_fn_body,
                              std::optional<TypeId> self_id = std::nullopt);
 
  private:

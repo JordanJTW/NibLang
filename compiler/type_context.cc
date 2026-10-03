@@ -318,7 +318,6 @@ bool TypeContext::IsTypeNilable(TypeId type_id) const {
 }
 
 TypeId TypeContext::DeclareFunctionType(FunctionSymbol& symbol,
-                                        CheckFunctionBody check_fn_body,
                                         std::optional<TypeId> self_id) {
   auto& fn = symbol.declaration;
 
@@ -352,7 +351,7 @@ TypeId TypeContext::DeclareFunctionType(FunctionSymbol& symbol,
   }
 
   // Missing return types are already handled in the Parser (resolving to
-  // Void) so if `return_type` has no value here it is truly an unknown type.
+  // Unit) so if `return_type` has no value here it is truly an unknown type.
   TypeId return_type =
       GetTypeIdFor(fn.return_type).value_or(LiteralType::Error);
 
@@ -364,9 +363,8 @@ TypeId TypeContext::DeclareFunctionType(FunctionSymbol& symbol,
 
   ScopeId scope_id = scope_manager_.GetActiveScopeId();
 
-  if (check_fn_body == CheckFunctionBody::YES)
-    realized_functions_.push_back(RealizedFunction{
-        scope_id, fn, SpannedType{return_type, fn.return_type.metadata}});
+  realized_functions_.push_back(RealizedFunction{
+      scope_id, fn, SpannedType{return_type, fn.return_type.metadata}});
 
   auto key =
       FunctionType{std::move(argument_types), return_type, variadic_type};

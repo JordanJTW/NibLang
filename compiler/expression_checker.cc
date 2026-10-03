@@ -345,8 +345,7 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
 
             auto& symbol =
                 type_registry_.GetSymbolChecked<FunctionSymbol>(symbol_id);
-            TypeId type_id = type_context_.DeclareFunctionType(
-                symbol, TypeContext::CheckFunctionBody::YES);
+            TypeId type_id = type_context_.DeclareFunctionType(symbol);
             return ExpressionResult(type_id);
           },
           [&](PrefixUnaryExpression& prefix)

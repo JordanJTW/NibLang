@@ -313,8 +313,7 @@ std::optional<NamedBinding> SymbolBinder::NewFunctionSymbol(
                          declaration.variadic_type->variadic_span);
   }
 
-  TypeId type_id = type_context_.DeclareFunctionType(
-      symbol, TypeContext::CheckFunctionBody::YES, self_id);
+  TypeId type_id = type_context_.DeclareFunctionType(symbol, self_id);
   symbol.canonical_type_id = type_id;
 
   NamedBinding binding = scope_manager_.InsertNameIntoScope(

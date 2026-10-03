@@ -260,7 +260,7 @@ void SymbolBinder::BindStructSymbol(StructSymbol& struct_symbol,
         error_collector_
             .Add("interface expects method '" + binding.name.text +
                      "' with type " +
-                     type_registry_.GetNameFromTypeId(binding.type_id),
+                     type_registry_.GetNameFromTypeId(substituted_type),
                  binding.name.metadata)
             .WithNote("instead has type " +
                           type_registry_.GetNameFromTypeId(

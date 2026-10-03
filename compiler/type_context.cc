@@ -54,6 +54,7 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
                     {"never", LiteralType::Never},
                     // Only before late-binding of stdlib struct
                     {"String", LiteralType::String},
+                    {"Self", LiteralType::Self},
                     // Nil is used with Optional types (T?), NEVER standalone
                     // {"Nil", LiteralType::Nil},
                 };

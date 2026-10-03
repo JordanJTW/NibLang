@@ -1,0 +1,8 @@
+// RUN: %compiler %s --disable-logging 2> %t.err || true
+// RUN: sed "s|%s|[[PATH]]|g" %t.err | diff -u %s.out -
+
+interface Bad[T] {}
+
+struct Foo {
+  implements Bad[Foo] {}
+}

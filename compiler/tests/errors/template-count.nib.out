@@ -1,0 +1,7 @@
+Error: [[PATH]]:7:16:
+  let x = Array.of().new();
+               ^~~~~ template 'Array' requires 1 template argument(s) but 0 were provided
+Note: /Users/jordan/Workspace/NibLang/compiler/std/types.nib:5:15:
+extern struct Array[T] {
+              ^~~~~ declared here
+

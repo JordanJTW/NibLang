@@ -266,6 +266,7 @@ std::string TypeRegistry::GetNameFromTypeId(TypeId type_id,
                     {LiteralType::Never, "never"},
                     {LiteralType::Nil, "Nil"},
                     {LiteralType::String, "String"},
+                    {LiteralType::Self, "Self"},
                 };
             if (options.is_embedded_type)
               return kBuiltInTypeNames.at(type_id);

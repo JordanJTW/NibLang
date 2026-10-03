@@ -109,6 +109,7 @@ class TypeRegistry {
     Never,  // The "bottom" type (⊥ can be treated as every type)
     Nil,
     String,
+    Self,  // Meta-type within a Struct representing its type
     kCount
   };
 

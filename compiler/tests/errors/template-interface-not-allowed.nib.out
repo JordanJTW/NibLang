@@ -1,0 +1,8 @@
+Error: [[PATH]]:4:11:
+interface Bad[T] {}
+          ^~~ template variables are not allowed on `interface` declarations
+
+Error: [[PATH]]:7:14:
+  implements Bad[Foo] {}
+             ^~~ template variables are not allowed on `interface` declarations
+

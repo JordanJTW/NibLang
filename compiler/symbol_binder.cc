@@ -134,6 +134,14 @@ void SymbolBinder::BindStructSymbol(StructSymbol& struct_symbol,
       scope_manager_.NewScope(ScopeManager::StructSymbolScope, scope_name);
   struct_symbol.static_scope_id = scope_manager_.GetActiveScopeId();
 
+  if (struct_symbol.declaration.IsInterface() &&
+      !struct_symbol.declaration.template_variables.empty()) {
+    error_collector_.Add(
+        "template variables are not allowed on `interface` declarations",
+        struct_symbol.declaration.name.metadata);
+    // Intentional fall-through to prevent cascading missing symbol errors
+  }
+
   // Ensure that `template_variable_type_ids` is bound before processing
   // static methods as they may instantiate this template indirectly.
   struct_symbol.template_variable_type_ids =
@@ -183,6 +191,13 @@ void SymbolBinder::BindStructSymbol(StructSymbol& struct_symbol,
 
   for (auto& fn : declaration.methods | std::views::values) {
     if (fn.function_kind == FunctionKind::Method) {
+      if (declaration.IsInterface() && !fn.template_variables.empty()) {
+        error_collector_.Add(
+            "template variables are not allowed on `interface` methods",
+            fn.name.metadata);
+        // Intentional fall-through to prevent cascading missing symbol errors
+      }
+
       NewFunctionSymbol(fn, &declaration, self_id);
     }
   }
@@ -198,43 +213,12 @@ void SymbolBinder::BindStructSymbol(StructSymbol& struct_symbol,
       continue;
     }
 
-    const auto& interface_symbol =
-        type_registry_.GetSymbolChecked<StructSymbol>(
-            interface_binding->GetSymbolId());
-
-    if (interface_symbol.template_variable_type_ids.size() !=
-        implements_decl.template_types.size()) {
-      error_collector_
-          .Add("mismatched template argument count",
-               implements_decl.name.metadata)
-          .WithNote("declared here",
-                    interface_symbol.declaration.name.metadata);
+    if (!implements_decl.template_types.empty()) {
+      error_collector_.Add(
+          "template variables are not allowed on `interface` declarations",
+          implements_decl.name.metadata);
       continue;
     }
-
-    SubstitutionMap substitution_map;
-    substitution_map.reserve(
-        interface_symbol.template_variable_type_ids.size());
-    bool encountered_error = false;
-    for (size_t i = 0; i < interface_symbol.template_variable_type_ids.size();
-         ++i) {
-      auto type_id =
-          type_context_.GetTypeIdFor(implements_decl.template_types[i]);
-      if (!type_id.has_value()) {
-        std::stringstream ss;
-        ss << "unknown type used as template argument: "
-           << implements_decl.template_types[i];
-        error_collector_.Add(ss.str(),
-                             implements_decl.template_types[i].metadata);
-        encountered_error = true;
-        break;
-      }
-
-      substitution_map.insert(
-          {interface_symbol.template_variable_type_ids[i], *type_id});
-    }
-    if (encountered_error)
-      continue;
 
     std::unordered_map<std::string, NamedBinding> method_bindings;
     scope_manager_.NewScope(
@@ -249,6 +233,12 @@ void SymbolBinder::BindStructSymbol(StructSymbol& struct_symbol,
               scope_manager_.GetActiveScopeId());
         });
 
+    const auto& interface_symbol =
+        type_registry_.GetSymbolChecked<StructSymbol>(
+            interface_binding->GetSymbolId());
+
+    SubstitutionMap substitution_map;
+    substitution_map[TypeRegistry::Self] = self_id;
     for (const auto& binding : scope_manager_.GetBindingsForScope(
              interface_symbol.instance_scope_id)) {
       CHECK_EQ(binding.kind, NamedBinding::Function)

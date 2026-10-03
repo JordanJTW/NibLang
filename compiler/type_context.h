@@ -78,10 +78,9 @@ class TypeContext {
     return current_functions;
   }
 
-  std::optional<TypeInstance> DeclareFunctionType(
-      FunctionSymbol& symbol,
-      CheckFunctionBody check_fn_body,
-      std::optional<TypeId> self_id = std::nullopt);
+  TypeId DeclareFunctionType(FunctionSymbol& symbol,
+                             CheckFunctionBody check_fn_body,
+                             std::optional<TypeId> self_id = std::nullopt);
 
  private:
   friend std::ostream& operator<<(std::ostream&, const TypeContext&);

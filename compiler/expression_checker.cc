@@ -345,12 +345,9 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
 
             auto& symbol =
                 type_registry_.GetSymbolChecked<FunctionSymbol>(symbol_id);
-            if (auto instance = type_context_.DeclareFunctionType(
-                    symbol, TypeContext::CheckFunctionBody::YES)) {
-              return ExpressionResult(instance->type_id);
-            }
-            CHECK(false) << "Failed to declare symbol for closure";
-            return std::nullopt;
+            TypeId type_id = type_context_.DeclareFunctionType(
+                symbol, TypeContext::CheckFunctionBody::YES);
+            return ExpressionResult(type_id);
           },
           [&](PrefixUnaryExpression& prefix)
               -> std::optional<ExpressionResult> {

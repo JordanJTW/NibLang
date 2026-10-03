@@ -125,7 +125,7 @@ void SymbolBinder::ForwardDeclareTypeAlias(const TypeAliasStatement& alias) {
 }
 
 void SymbolBinder::BindStructSymbol(StructSymbol& struct_symbol,
-                                    std::optional<TypeId> self_id) {
+                                    TypeId self_id) {
   auto& declaration = struct_symbol.declaration;
   const std::string scope_name = "struct " + declaration.name.text;
 
@@ -183,7 +183,7 @@ void SymbolBinder::BindStructSymbol(StructSymbol& struct_symbol,
 
   for (auto& fn : declaration.methods | std::views::values) {
     if (fn.function_kind == FunctionKind::Method) {
-      NewFunctionSymbol(fn, &declaration, *self_id);
+      NewFunctionSymbol(fn, &declaration, self_id);
     }
   }
 
@@ -241,7 +241,7 @@ void SymbolBinder::BindStructSymbol(StructSymbol& struct_symbol,
         ScopeManager::BlockScope, "impl " + interface_name.text, [&]() {
           for (auto& [method_name, fn] : implements_decl.impls) {
             // TODO: `parent` should incorporate interface somehow for naming?
-            if (auto binding = NewFunctionSymbol(fn, &declaration, *self_id)) {
+            if (auto binding = NewFunctionSymbol(fn, &declaration, self_id)) {
               method_bindings.emplace(method_name.text, *binding);
             }
           }
@@ -313,18 +313,13 @@ std::optional<NamedBinding> SymbolBinder::NewFunctionSymbol(
                          declaration.variadic_type->variadic_span);
   }
 
-  std::optional<TypeInstance> instance = type_context_.DeclareFunctionType(
+  TypeId type_id = type_context_.DeclareFunctionType(
       symbol, TypeContext::CheckFunctionBody::YES, self_id);
-  if (!instance.has_value())
-    return std::nullopt;
+  symbol.canonical_type_id = type_id;
 
-  symbol.canonical_type_id = instance->type_id;
-
-  auto type_id = instance ? instance->type_id : TypeRegistry::Error;
   NamedBinding binding = scope_manager_.InsertNameIntoScope(
       declaration.name, NamedBinding::Function, type_id, symbol_id,
       /*idx=*/std::nullopt, self_id);
-
   declaration.resolved = ResolvedFunction{.function_symbol_id = symbol_id};
   return binding;
 }

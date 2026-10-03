@@ -99,7 +99,7 @@ TypeId TypeRegistry::NewStructType(StructType type,
                                    std::optional<TypeId> self_id) {
   InstanceCache& cache = struct_instance_cache_[type.symbol->symbol_id];
   if (auto it = cache.find(type.instance_template_type_ids); it != cache.end())
-    return it->second.type_id;
+    return it->second;
 
   std::unordered_set<TypeId> template_variables, placeholder_variables;
   for (const auto& argument_type_id : type.instance_template_type_ids) {
@@ -108,7 +108,7 @@ TypeId TypeRegistry::NewStructType(StructType type,
   }
 
   TypeId type_id = self_id.has_value() ? *self_id : NewTypeId();
-  cache[type.instance_template_type_ids] = TypeInstance{type_id};
+  cache[type.instance_template_type_ids] = type_id;
 
   // Allows for late-binding of String from the standard library
   auto [it, success] = type_table_.try_emplace(

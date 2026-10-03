@@ -30,8 +30,7 @@ class SymbolBinder {
   std::vector<TypeId> BindTemplateVariables(
       const std::vector<TemplateVariable>& template_variables);
 
-  void BindStructSymbol(StructSymbol& struct_symbol,
-                        std::optional<TypeId> self_id);
+  void BindStructSymbol(StructSymbol& struct_symbol, TypeId self_id);
   std::optional<NamedBinding> NewFunctionSymbol(
       FunctionDeclaration& declaration,
       std::optional<const StructDeclaration*> parent_declaration,

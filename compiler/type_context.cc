@@ -317,10 +317,9 @@ bool TypeContext::IsTypeNilable(TypeId type_id) const {
   return type_id == LiteralType::Nil || UnwrapOptional(type_id);
 }
 
-std::optional<TypeInstance> TypeContext::DeclareFunctionType(
-    FunctionSymbol& symbol,
-    CheckFunctionBody check_fn_body,
-    std::optional<TypeId> self_id) {
+TypeId TypeContext::DeclareFunctionType(FunctionSymbol& symbol,
+                                        CheckFunctionBody check_fn_body,
+                                        std::optional<TypeId> self_id) {
   auto& fn = symbol.declaration;
 
   std::unique_ptr<ScopeGuard> template_scope_guard;
@@ -371,8 +370,7 @@ std::optional<TypeInstance> TypeContext::DeclareFunctionType(
 
   auto key =
       FunctionType{std::move(argument_types), return_type, variadic_type};
-  TypeId type_id = type_registry_.NewFunctionType(std::move(key));
-  return TypeInstance{type_id, scope_id};
+  return type_registry_.NewFunctionType(std::move(key));
 }
 
 bool TypeContext::IsTypeSubsetOf(TypeId sub_type_id,

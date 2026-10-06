@@ -105,7 +105,7 @@ std::vector<uint8_t> ProgramBuilder::GenerateImage(
   for (auto& obj : objects) {
     debug_offset.push_back(debug_info.size());
 
-    const auto& name = obj.symbol->GetName();
+    const auto& name = obj.symbol->qualified_name;
 
     if (name.empty()) {
       debug_info.push_back('\0');
@@ -133,11 +133,11 @@ std::vector<uint8_t> ProgramBuilder::GenerateImage(
   }
 
   for (const auto* symbol : external_functions) {
-    if (auto call_idx = LinkExternalCallIdx(symbol->GetName())) {
+    if (auto call_idx = LinkExternalCallIdx(symbol->qualified_name)) {
       call_idx_remapping[symbol->symbol_id] = *call_idx;
     } else {
-      LOG(FATAL) << "Unable to link external function: `" << symbol->GetName()
-                 << "`";
+      LOG(FATAL) << "Unable to link external function: `"
+                 << symbol->qualified_name << "`";
     }
   }
 

@@ -87,9 +87,12 @@ std::pair<SymbolId, StructSymbol*> TypeRegistry::NewStructSymbol(
 
 SymbolId TypeRegistry::NewFunctionSymbol(
     FunctionDeclaration& declaration,
-    std::optional<const StructDeclaration*> parent_declaration) {
+    std::optional<const StructDeclaration*> parent_declaration,
+    std::string_view qualified_name) {
   SymbolId symbol_id = next_symbol_id_++;
-  FunctionSymbol symbol{declaration, parent_declaration, symbol_id};
+  FunctionSymbol symbol{declaration, parent_declaration, symbol_id,
+                        qualified_name.empty() ? declaration.name.text
+                                               : std::string(qualified_name)};
   auto [it, success] = symbol_table_.emplace(symbol_id, std::move(symbol));
   CHECK(success) << "SymbolId already exists in SymbolTable";
   return symbol_id;
@@ -395,7 +398,7 @@ std::string TypeRegistry::GetNameFromSymbolId(SymbolId symbol_id) const {
 
   return std::visit(
       Overloaded{[&](const FunctionSymbol& symbol) {
-                   return "'" + symbol.GetName() + "' " +
+                   return "'" + symbol.qualified_name + "' " +
                           GetNameFromTypeId(symbol.canonical_type_id);
                  },
                  [&](const StructSymbol& symbol) {
@@ -418,7 +421,7 @@ std::string TypeRegistry::ToJson() const {
       auto to_json = [](const FunctionSymbol* symbol) -> nlohmann::json {
         nlohmann::json dict;
         dict["kind"] = "function";
-        dict["name"] = symbol->GetName();
+        dict["name"] = symbol->qualified_name;
         return dict;
       };
 

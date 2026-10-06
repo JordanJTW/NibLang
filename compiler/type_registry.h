@@ -123,9 +123,10 @@ class TypeRegistry {
   // Creates a new FunctionSymbol for `declaration` in the symbol table and adds
   // a NamedBinding to it in the current scope. `parent_declaration` MUST be set
   // for method FunctionSymbols and should point to the owning parent struct.
-  SymbolId NewFunctionSymbol(FunctionDeclaration& declaration,
-                             std::optional<const StructDeclaration*>
-                                 parent_declaration = std::nullopt);
+  SymbolId NewFunctionSymbol(
+      FunctionDeclaration& declaration,
+      std::optional<const StructDeclaration*> parent_declaration = std::nullopt,
+      std::string_view qualified_name = "");
 
   // Interns `type` into the registry as `self_id` (or a newly generated TypeId
   // if one is not provided). Returns the TypeId for `type`.

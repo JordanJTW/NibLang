@@ -34,7 +34,8 @@ class SymbolBinder {
   std::optional<NamedBinding> NewFunctionSymbol(
       FunctionDeclaration& declaration,
       std::optional<const StructDeclaration*> parent_declaration,
-      std::optional<TypeId> self_id);
+      std::optional<TypeId> self_id,
+      std::string_view namespace_prefix);
 
   ScopeManager& scope_manager_;
   TypeRegistry& type_registry_;

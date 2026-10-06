@@ -32,6 +32,7 @@ struct FunctionSymbol {
   FunctionDeclaration& declaration;
   const std::optional<const StructDeclaration*> parent_declaration;
   SymbolId symbol_id;
+  std::string qualified_name;
   std::vector<TypeId> template_variable_type_ids;
 
   // The lexical environment this symbol was declared in
@@ -60,14 +61,6 @@ struct FunctionSymbol {
       return parent_declaration.value()->IsInterface();
 
     return false;
-  }
-
-  inline std::string GetName() const {
-    if (parent_declaration.has_value())
-      return parent_declaration.value()->name.text + "_" +
-             declaration.name.text;
-
-    return declaration.name.text;
   }
 };
 

@@ -11,6 +11,18 @@
 #include "compiler/type_registry.h"
 #include "compiler/type_rewriter.h"
 
+namespace {
+
+std::string AppendQualifiedName(const std::string_view prefix,
+                                const std::string_view name) {
+  if (prefix.empty())
+    return std::string(name);
+
+  return std::string(prefix) + "_" + std::string(name);
+}
+
+}  // namespace
+
 SymbolBinder::SymbolBinder(ScopeManager& scope_manager,
                            TypeRegistry& type_registry,
                            TypeContext& type_context,
@@ -44,7 +56,9 @@ void SymbolBinder::Process(const Block& block) {
 
   for (auto& statement : block.statements) {
     if (auto* declaration = std::get_if<FunctionDeclaration>(&statement->as)) {
-      NewFunctionSymbol(*declaration, std::nullopt, std::nullopt);
+      NewFunctionSymbol(*declaration, /*parent_declaration=*/std::nullopt,
+                        /*self_id=*/std::nullopt,
+                        /*namespace_prefix=*/"");
     }
   }
 }
@@ -127,7 +141,8 @@ void SymbolBinder::ForwardDeclareTypeAlias(const TypeAliasStatement& alias) {
 void SymbolBinder::BindStructSymbol(StructSymbol& struct_symbol,
                                     TypeId self_id) {
   auto& declaration = struct_symbol.declaration;
-  const std::string scope_name = "struct " + declaration.name.text;
+  const std::string struct_name = declaration.name.text;
+  const std::string scope_name = "struct " + struct_name;
 
   // Static Scope
   auto static_scope_guard =
@@ -157,7 +172,8 @@ void SymbolBinder::BindStructSymbol(StructSymbol& struct_symbol,
   for (auto& fn : declaration.methods | std::views::values) {
     if (fn.function_kind == FunctionKind::StaticMethod) {
       // Intentionally not passing `self_id` for `static` methods.
-      NewFunctionSymbol(fn, &declaration, std::nullopt);
+      NewFunctionSymbol(fn, &declaration, std::nullopt,
+                        /*namespace_prefix=*/struct_name);
     }
   }
 
@@ -198,7 +214,8 @@ void SymbolBinder::BindStructSymbol(StructSymbol& struct_symbol,
         // Intentional fall-through to prevent cascading missing symbol errors
       }
 
-      NewFunctionSymbol(fn, &declaration, self_id);
+      NewFunctionSymbol(fn, &declaration, self_id,
+                        /*namespace_prefix=*/struct_name);
     }
   }
 
@@ -225,7 +242,9 @@ void SymbolBinder::BindStructSymbol(StructSymbol& struct_symbol,
         ScopeManager::BlockScope, "impl " + interface_name.text, [&]() {
           for (auto& [method_name, fn] : implements_decl.impls) {
             // TODO: `parent` should incorporate interface somehow for naming?
-            if (auto binding = NewFunctionSymbol(fn, &declaration, self_id)) {
+            if (auto binding = NewFunctionSymbol(
+                    fn, &declaration, self_id,
+                    AppendQualifiedName(struct_name, interface_name.text))) {
               method_bindings.emplace(method_name.text, *binding);
             }
           }
@@ -285,9 +304,11 @@ void SymbolBinder::BindStructSymbol(StructSymbol& struct_symbol,
 std::optional<NamedBinding> SymbolBinder::NewFunctionSymbol(
     FunctionDeclaration& declaration,
     std::optional<const StructDeclaration*> parent_declaration,
-    std::optional<TypeId> self_id) {
-  SymbolId symbol_id =
-      type_registry_.NewFunctionSymbol(declaration, parent_declaration);
+    std::optional<TypeId> self_id,
+    std::string_view namespace_prefix) {
+  SymbolId symbol_id = type_registry_.NewFunctionSymbol(
+      declaration, parent_declaration,
+      AppendQualifiedName(namespace_prefix, declaration.name.text));
 
   auto& symbol = type_registry_.GetSymbolChecked<FunctionSymbol>(symbol_id);
   symbol.template_variable_type_ids =

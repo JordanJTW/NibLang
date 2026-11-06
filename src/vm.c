@@ -1075,7 +1075,7 @@ vm_t* init_vm(const uint8_t* program,
   size_t parsed_constants = 0;
   size_t parsed_functions = 0;
   size_t bytecode_offset = 0;
-  while (offset + sizeof(vm_section_t) < program_size) {
+  while (offset + sizeof(vm_section_t) <= program_size) {
     vm_section_t section;
     memcpy(&section, program + offset, sizeof(vm_section_t));
 

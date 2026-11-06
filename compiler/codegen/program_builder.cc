@@ -261,7 +261,7 @@ bool ProgramBuilder::DumpImage(std::vector<uint8_t> program) {
   std::vector<uint32_t> row_displacements;
   std::vector<uint32_t> dispatch_table;
 
-  while (offset + sizeof(vm_section_t) < program.size()) {
+  while (offset + sizeof(vm_section_t) <= program.size()) {
     vm_section_t section;
     memcpy(&section, program.data() + offset, sizeof(vm_section_t));
     offset += sizeof(vm_section_t);

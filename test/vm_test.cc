@@ -1,6 +1,14 @@
-// Copyright (c) 2026, Jordan Werthman <jordanwerthman@gmail.com>
-//
-// SPDX-License-Identifier: BSD-2-Clause
+/*
+ * Copyright (C) 2026, Jordan Werthman <jordanwerthman@gmail.com>.
+ *
+ * This software is dual-licensed. You may use this file under the terms of
+ * the GNU General Public License v3.0 (GPL-3.0) OR under a commercial
+ * license obtained directly from the copyright holder.
+ *
+ * See the LICENSE.md.md file in the project root for full licensing details.
+ *
+ * SPDX-License-Identifier: GPL-3.0-only OR LicenseRef-Commercial
+ */
 
 #include "src/vm.h"
 

@@ -62,8 +62,10 @@ void print_error(std::string_view path,
 
 }  // namespace
 
-ErrorBuilder ErrorCollector::Add(std::string message, Metadata span) {
-  return ErrorBuilder(*this, std::move(message), span);
+ErrorBuilder ErrorCollector::Add(std::string message,
+                                 Metadata span,
+                                 Location location) {
+  return ErrorBuilder(*this, std::move(message), span, std::move(location));
 }
 
 void ErrorCollector::PrintAllErrors(const std::vector<File>& files) const {
@@ -72,6 +74,8 @@ void ErrorCollector::PrintAllErrors(const std::vector<File>& files) const {
     ordered_files[file.file_id] = &file;
 
   for (const auto& error : errors) {
+    LOG(INFO) << "From: " << error.location.path << ":" << error.location.line;
+
     const File* file = ordered_files[error.message.span.file_id];
     print_error(file->resolved_path, file->file_contents, error.message.span,
                 error.message.text, "Error");

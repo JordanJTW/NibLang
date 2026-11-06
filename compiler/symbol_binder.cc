@@ -113,14 +113,14 @@ void SymbolBinder::ForwardDeclareTypeAlias(const TypeAliasStatement& alias) {
         scope_manager_.FindBindingFor(*target, ScopeManager::All);
     if (!target_binding) {
       error_collector_.Add("unknown type `" + *target + "`",
-                           alias.type->metadata);
+                           alias.type->metadata, FROM_HERE);
       return;
     }
 
     if (!target_binding->IsTypeRef()) {
       error_collector_.Add("Cannot create type alias '" + alias.name.text +
                                "' from value identifier '" + *target + "'",
-                           alias.type->metadata);
+                           alias.type->metadata, FROM_HERE);
       return;
     }
 
@@ -161,7 +161,7 @@ void SymbolBinder::BindStructSymbol(StructSymbol& struct_symbol,
       !struct_symbol.declaration.template_variables.empty()) {
     error_collector_.Add(
         "template variables are not allowed on `interface` declarations",
-        struct_symbol.declaration.name.metadata);
+        struct_symbol.declaration.name.metadata, FROM_HERE);
     // Intentional fall-through to prevent cascading missing symbol errors
   }
 
@@ -204,7 +204,7 @@ void SymbolBinder::BindStructSymbol(StructSymbol& struct_symbol,
     auto type_id = type_context_.GetTypeIdFor(type);
     if (!type_id.has_value()) {
       error_collector_.Add("Unknown type for struct field: " + name.text,
-                           type.metadata);
+                           type.metadata, FROM_HERE);
       type_id = TypeRegistry::Error;
     }
 
@@ -218,7 +218,7 @@ void SymbolBinder::BindStructSymbol(StructSymbol& struct_symbol,
       if (declaration.IsInterface() && !fn.template_variables.empty()) {
         error_collector_.Add(
             "template variables are not allowed on `interface` methods",
-            fn.name.metadata);
+            fn.name.metadata, FROM_HERE);
         // Intentional fall-through to prevent cascading missing symbol errors
       }
 
@@ -234,14 +234,14 @@ void SymbolBinder::BindStructSymbol(StructSymbol& struct_symbol,
     if (!interface_binding || interface_binding->kind != NamedBinding::Struct) {
       error_collector_.Add(
           "unable to find interface '" + interface_name.text + "'",
-          interface_name.metadata);
+          interface_name.metadata, FROM_HERE);
       continue;
     }
 
     if (!implements_decl.template_types.empty()) {
       error_collector_.Add(
           "template variables are not allowed on `interface` declarations",
-          implements_decl.name.metadata);
+          implements_decl.name.metadata, FROM_HERE);
       continue;
     }
 
@@ -276,7 +276,7 @@ void SymbolBinder::BindStructSymbol(StructSymbol& struct_symbol,
             .Add("implementation of '" +
                      interface_symbol.declaration.name.text +
                      "' is missing method: '" + binding.name.text + "'",
-                 implements_decl.name.metadata)
+                 implements_decl.name.metadata, FROM_HERE)
             .WithNote("defined here", binding.name.metadata);
         continue;
       }
@@ -288,7 +288,7 @@ void SymbolBinder::BindStructSymbol(StructSymbol& struct_symbol,
             .Add("interface expects method '" + binding.name.text +
                      "' with type " +
                      type_registry_.GetNameFromTypeId(substituted_type),
-                 binding.name.metadata)
+                 binding.name.metadata, FROM_HERE)
             .WithNote("instead has type " +
                           type_registry_.GetNameFromTypeId(
                               method_bindings[binding.name.text].type_id),
@@ -324,12 +324,12 @@ std::optional<NamedBinding> SymbolBinder::NewFunctionSymbol(
 
   if (symbol.IsMethodBodyRequired() && !declaration.body) {
     error_collector_.Add("non-extern functions MUST have a body",
-                         declaration.name.metadata);
+                         declaration.name.metadata, FROM_HERE);
   }
 
   if (!symbol.IsExtern() && declaration.variadic_type) {
     error_collector_.Add("'...' is only allowed in extern functions",
-                         declaration.variadic_type->variadic_span);
+                         declaration.variadic_type->variadic_span, FROM_HERE);
   }
 
   TypeId type_id = type_context_.DeclareFunctionType(symbol, self_id);

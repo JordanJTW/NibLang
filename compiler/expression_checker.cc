@@ -75,7 +75,7 @@ std::optional<ExpressionResult> ExpressionChecker::CheckChain(
   if (type_registry_.HasPlaceholderTypes(result->type_id)) {
     error_collector_.Add("unable to infer types in " +
                              type_registry_.GetNameFromTypeId(result->type_id),
-                         root_expression->meta);
+                         root_expression->meta, FROM_HERE);
     return std::nullopt;
   }
 
@@ -110,7 +110,7 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
                   (lhs->type_id == LiteralType::Nil &&
                    type_context_.IsTypeSubsetOf(lhs->type_id, rhs->type_id)))) {
               error_collector_
-                  .Add("LHS and RHS are not compatible", expression->meta)
+                  .Add("LHS and RHS are not compatible", expression->meta, FROM_HERE)
                   .WithNote("LHS type is " +
                                 type_registry_.GetNameFromTypeId(lhs->type_id),
                             binary.lhs->meta)
@@ -201,13 +201,13 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
               if (lhs->binding) {
                 error_collector_
                     .Add("cannot assign to '" + lhs->binding->name.text + "'",
-                         assign.lhs->meta)
+                         assign.lhs->meta, FROM_HERE)
                     .WithNote("declared here", lhs->binding->name.metadata);
                 return std::nullopt;
               }
 
               error_collector_.Add("cannot assign to this expression",
-                                   assign.lhs->meta);
+                                   assign.lhs->meta, FROM_HERE);
               return std::nullopt;
             }
 
@@ -216,12 +216,13 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
             TypeId storage_type_id =
                 lhs->storage_type_id.value_or(lhs->type_id);
             if (!type_context_.IsTypeSubsetOf(rhs->type_id, storage_type_id)) {
-              error_collector_.Add(
-                  "expected " +
-                      type_registry_.GetNameFromTypeId(storage_type_id) +
-                      ", but found " +
-                      type_registry_.GetNameFromTypeId(rhs->type_id),
-                  expression->meta);
+              error_collector_
+                  .Add("expected " +
+                           type_registry_.GetNameFromTypeId(storage_type_id) +
+                           ", but found " +
+                           type_registry_.GetNameFromTypeId(rhs->type_id),
+                       expression->meta, FROM_HERE)
+                  .WithNote("declared here", lhs->binding->name.metadata);
               return std::nullopt;
             }
             if (lhs->binding->type_id != rhs->type_id) {
@@ -244,7 +245,7 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
               error_collector_.Add(
                   "index must be i32 but instead type is: " +
                       type_registry_.GetNameFromTypeId(index->type_id),
-                  array_access.index->meta);
+                  array_access.index->meta, FROM_HERE);
               // Continue parsing to collect more errors.
             }
 
@@ -257,7 +258,7 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
               auto result = RequireValue(expr);
               if (result && result->type_id != LiteralType::Bool) {
                 error_collector_.Add("expression MUST evaluate to a boolean",
-                                     expr->meta);
+                                     expr->meta, FROM_HERE);
                 return std::nullopt;
               }
               return result;
@@ -376,13 +377,14 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
             std::optional<TypeId> as_type =
                 type_context_.GetTypeIdFor(cast.as_type);
             if (!as_type) {
-              error_collector_.Add("unknown 'as' type", cast.as_type.metadata);
+              error_collector_.Add("unknown 'as' type", cast.as_type.metadata,
+                                   FROM_HERE);
               return std::nullopt;
             }
 
             if (type_context_.UnwrapOptional(*as_type)) {
               error_collector_.Add("casts must be to non-nilable types",
-                                   cast.as_type.metadata);
+                                   cast.as_type.metadata, FROM_HERE);
               return std::nullopt;
             }
 
@@ -408,7 +410,7 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
                   "Invalid type cast from " +
                       type_registry_.GetNameFromTypeId(result->type_id) +
                       " to " + type_registry_.GetNameFromTypeId(*as_type),
-                  cast.as_type.metadata);
+                  cast.as_type.metadata, FROM_HERE);
               return std::nullopt;
             }
 
@@ -447,7 +449,7 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
 
             if (type_context_.IsTypeNilable(rhs->type_id)) {
               error_collector_.Add("right-hand side of ?? cannot be nilable",
-                                   coalescing.rhs->meta);
+                                   coalescing.rhs->meta, FROM_HERE);
               // Continue parsing to catch more errors...
             }
 
@@ -456,7 +458,7 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
             if (!lhs_type_id) {
               error_collector_.Add(
                   "left-hand side of ?? is not optional; operator is a no-op",
-                  coalescing.lhs->meta);
+                  coalescing.lhs->meta, FROM_HERE);
               return std::nullopt;
             }
 
@@ -477,7 +479,7 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
 
             error_collector_.Add("Unable to unwrap non-optional type: " +
                                      type_registry_.GetNameFromTypeId(type_id),
-                                 optional_access.target->meta);
+                                 optional_access.target->meta, FROM_HERE);
             return std::nullopt;
           },
           [&](TemplateInstantiationExpression& template_expr)
@@ -491,7 +493,8 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
                 (result->binding->kind != NamedBinding::Struct &&
                  result->binding->kind != NamedBinding::Function)) {
               error_collector_.Add(".of() used on non-templated type",
-                                   template_expr.generic_target->meta);
+                                   template_expr.generic_target->meta,
+                                   FROM_HERE);
               return std::nullopt;
             }
 
@@ -499,7 +502,7 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
               error_collector_.Add(
                   type_registry_.GetNameFromTypeId(result->type_id) +
                       " is a concrete type",
-                  template_expr.generic_target->meta);
+                  template_expr.generic_target->meta, FROM_HERE);
               return std::nullopt;
             }
 
@@ -556,10 +559,12 @@ void ExpressionChecker::TypeCheckCallArguments(
 
   if ((variadic_type && supplied_argc < expected_argc) ||
       (!variadic_type && supplied_argc != expected_argc)) {
-    error_collector_.Add("Wrong number of arguments expected " +
-                             std::to_string(expected_argc) + " but got " +
-                             std::to_string(supplied_argc),
-                         debug_metadata);
+    error_collector_
+        .Add("wrong number of arguments expected " +
+                 std::to_string(expected_argc) + " but got " +
+                 std::to_string(supplied_argc),
+             debug_metadata, FROM_HERE)
+        .WithNote("declared here", debug_metadata);
     return;
   }
   // If more arguments are supplied than expected, this is a variadic function
@@ -590,7 +595,7 @@ void ExpressionChecker::TypeCheckCallArguments(
 
       error_collector_.Add(
           "expected " + expected_name + ", but got " + actual_name,
-          argument_result->metadata);
+          argument_result->metadata, FROM_HERE);
     }
   }
 }
@@ -607,8 +612,8 @@ std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
         callee_result.binding->GetSymbolId());
     if (struct_symbol->declaration.kind != StructDeclaration::Structure) {
       error_collector_.Add(
-          "`opaque` or `interface` structs have no constructor",
-          debug_metadata);
+          "`opaque` or `interface` structs have no constructor", debug_metadata,
+          FROM_HERE);
       return std::nullopt;
     }
   }
@@ -714,7 +719,7 @@ std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
 
   error_collector_.Add("type is not callable: " +
                            type_registry_.GetNameFromTypeId(callable_type_id),
-                       debug_metadata);
+                       debug_metadata, FROM_HERE);
   return std::nullopt;
 }
 
@@ -806,13 +811,13 @@ std::optional<ExpressionResult> ExpressionChecker::HandlePrimary(
                 case NamedBinding::Field:
                 case NamedBinding::Variable:
                   error_collector_.Add("refers to variable out of scope",
-                                       metadata);
+                                       metadata, FROM_HERE);
                   return std::nullopt;
               }
             }
 
             error_collector_.Add("unknown identifier: '" + ident.name + "'",
-                                 metadata);
+                                 metadata, FROM_HERE);
             return std::nullopt;
           },
           [&](int32_t) -> std::optional<ExpressionResult> {
@@ -852,7 +857,7 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
             .Add("no member '" + member_name.text +
                      "' found on unconstrained template variable '" +
                      template_variable_type->name.text + "'",
-                 member_name.metadata)
+                 member_name.metadata, FROM_HERE)
             .WithNote("defined here", template_variable_type->name.metadata);
         return std::nullopt;
       }
@@ -865,7 +870,7 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
       error_collector_.Add("optional type " +
                                type_registry_.GetNameFromTypeId(type_id) +
                                " must be unwrapped",
-                           member_access.object->meta);
+                           member_access.object->meta, FROM_HERE);
 
       // Proceed with the unwrapped type to collect any further errors
       type_id = optional_type->wrapped_type;
@@ -875,7 +880,7 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
     if (!struct_type) {
       error_collector_.Add("type " + type_registry_.GetNameFromTypeId(type_id) +
                                " does not support member access",
-                           member_access.object->meta);
+                           member_access.object->meta, FROM_HERE);
       return std::nullopt;
     }
 
@@ -931,7 +936,7 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
     error_collector_
         .Add("no member '" + member_name.text + "' found on instance of " +
                  type_registry_.GetNameFromTypeId(type_id),
-             member_name.metadata)
+             member_name.metadata, FROM_HERE)
         .WithNote("declared here",
                   struct_type->symbol->declaration.name.metadata);
     return std::nullopt;
@@ -943,7 +948,7 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
       std::stringstream ss;
       ss << "binding of kind '" << object_result->binding->kind
          << "' does not support member access";
-      error_collector_.Add(ss.str(), member_access.object->meta);
+      error_collector_.Add(ss.str(), member_access.object->meta, FROM_HERE);
       return std::nullopt;
     }
 
@@ -960,7 +965,8 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
         ss << "binding of type '" << binding->kind
            << "' can only be accessed on an instance of "
            << struct_symbol.declaration.name.text;
-        error_collector_.Add(ss.str(), member_access.member_name.metadata)
+        error_collector_
+            .Add(ss.str(), member_access.member_name.metadata, FROM_HERE)
             .WithNote("declared here", binding->name.metadata);
         return std::nullopt;
       }
@@ -980,9 +986,9 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
     }
 
     error_collector_
-        .Add("no member '" + member_name.text + "' found on type '" +
-                 struct_symbol.declaration.name.text + "'",
-             member_name.metadata)
+        .Add("no static member '" + member_name.text + "' found on " +
+                 type_registry_.GetNameFromTypeId(object_result->type_id),
+             member_name.metadata, FROM_HERE)
         .WithNote("declared here", struct_symbol.declaration.name.metadata);
     return std::nullopt;
   }
@@ -1004,7 +1010,7 @@ std::optional<ExpressionResult> ExpressionChecker::RequireValue(
     std::string type_name = type_registry_.GetNameFromTypeId(result->type_id);
 
     error_collector_.Add("expected value, but found " + type_name,
-                         expression->meta);
+                         expression->meta, FROM_HERE);
     return std::nullopt;
   }
 

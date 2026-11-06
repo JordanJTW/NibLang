@@ -138,7 +138,7 @@ void Parser::ParseBlock(Block& block, BlockType block_type) {
 
     if (is_extern) {
       error_collector_.Add("extern is only valid before struct/fn",
-                           extern_metadata);
+                           extern_metadata, FROM_HERE);
       SynchronizeOnError();  // Sync to start of next statement
       continue;
     }
@@ -291,7 +291,7 @@ void Parser::ParseBlock(Block& block, BlockType block_type) {
         var_type = ParseType();
         if (!var_type.has_value()) {
           error_collector_.Add("expected well formed type after ':'",
-                               type_metadata);
+                               type_metadata, FROM_HERE);
           // Fallthrough to attempt to keep parsing as types are optional
         }
       }
@@ -329,7 +329,7 @@ void Parser::ParseBlock(Block& block, BlockType block_type) {
 
       if (current_token_.kind != TokenKind::kIdent) {
         error_collector_.Add("expected type alias name after 'alias'",
-                             current_token_.meta);
+                             current_token_.meta, FROM_HERE);
         SynchronizeOnError();
         continue;
       }
@@ -351,7 +351,7 @@ void Parser::ParseBlock(Block& block, BlockType block_type) {
       std::optional<ParsedType> type = ParseType();
       if (!type.has_value()) {
         error_collector_.Add("expected valid type after '='",
-                             current_token_.meta);
+                             current_token_.meta, FROM_HERE);
         SynchronizeOnError();
         continue;
       }
@@ -379,14 +379,14 @@ void Parser::ParseBlock(Block& block, BlockType block_type) {
 
       if (block_type != BlockType::Root) {
         error_collector_.Add("@imports can only appear in the root scope",
-                             import_token.meta);
+                             import_token.meta, FROM_HERE);
         SynchronizeOnError();
         continue;
       }
 
       if (current_token_.kind != TokenKind::kString) {
         error_collector_.Add("@import missing \"path/to/import\"",
-                             current_token_.meta);
+                             current_token_.meta, FROM_HERE);
         if (!SynchronizeOnError(
                 [](TokenKind kind) { return kind == TokenKind::kString; })) {
           continue;
@@ -422,7 +422,7 @@ void Parser::ParseBlock(Block& block, BlockType block_type) {
       continue;
     }
 
-    error_collector_.Add("unexpected token", current_token_.meta);
+    error_collector_.Add("unexpected token", current_token_.meta, FROM_HERE);
     AdvanceToken();
   }
 
@@ -469,14 +469,15 @@ std::unique_ptr<Expression> Parser::ParseValue() {
         auto res = unescape_codepoint(current_token_.value.substr(i));
 
         if (res.error_message.has_value()) {
-          error_collector_.Add(res.error_message.value(), current_token_.meta);
+          error_collector_.Add(res.error_message.value(), current_token_.meta,
+                               FROM_HERE);
           return nullptr;
         }
 
         if (res.codepoint > 0x7F) {
           error_collector_.Add(
               "non-ASCII characters are not supported in string literals",
-              current_token_.meta);
+              current_token_.meta, FROM_HERE);
           return nullptr;
         }
 
@@ -489,19 +490,21 @@ std::unique_ptr<Expression> Parser::ParseValue() {
     case TokenKind::kChar: {
       auto res = unescape_codepoint(current_token_.value);
       if (res.error_message.has_value()) {
-        error_collector_.Add(res.error_message.value(), current_token_.meta);
+        error_collector_.Add(res.error_message.value(), current_token_.meta,
+                             FROM_HERE);
         return nullptr;
       }
 
       if (res.codepoint > 0x7F) {
         error_collector_.Add(
             "non-ASCII characters are not supported in char literals",
-            current_token_.meta);
+            current_token_.meta, FROM_HERE);
         return nullptr;
       }
 
       if (res.bytes_consumed != current_token_.value.size()) {
-        error_collector_.Add("char literal is too long", current_token_.meta);
+        error_collector_.Add("char literal is too long", current_token_.meta,
+                             FROM_HERE);
         return nullptr;
       }
 
@@ -519,7 +522,8 @@ std::unique_ptr<Expression> Parser::ParseValue() {
       return make_primary_expression(Nil{}, current_token_);
     }
     default:
-      error_collector_.Add("unknown literal type", current_token_.meta);
+      error_collector_.Add("unknown literal type", current_token_.meta,
+                           FROM_HERE);
       return nullptr;
   }
 }
@@ -824,7 +828,7 @@ std::unique_ptr<Expression> Parser::ParsePostFix() {
 
       if (current_token_.kind != TokenKind::kIdent) {
         error_collector_.Add("expected identifier after '.'",
-                             current_token_.meta);
+                             current_token_.meta, FROM_HERE);
         if (!SynchronizeOnError([](TokenKind k) {
               return k == TokenKind::kDot || k == TokenKind::kOpenParen ||
                      k == TokenKind::kSquareOpen;
@@ -888,7 +892,7 @@ std::unique_ptr<Expression> Parser::ParsePostFix() {
       error_collector_.Add(
           "optional chaining is only supported for member access (?.), "
           "subscript (?[]), and function call fn?()",
-          *optional_access_metadata);
+          *optional_access_metadata, FROM_HERE);
       continue;
     }
 
@@ -980,7 +984,8 @@ std::unique_ptr<Expression> Parser::ParsePrimary() {
     }
 
     default:
-      error_collector_.Add("expected expression", current_token_.meta);
+      error_collector_.Add("expected expression", current_token_.meta,
+                           FROM_HERE);
       return nullptr;
   }
 }
@@ -1011,7 +1016,7 @@ std::unique_ptr<Expression> Parser::ParseCall(
         AdvanceToken();  // consume ','
       } else if (current_token_.kind != TokenKind::kCloseParen) {
         error_collector_.Add("expected ',' or ')' after argument",
-                             current_token_.meta);
+                             current_token_.meta, FROM_HERE);
 
         if (!SynchronizeOnError([](TokenKind kind) {
               return kind == TokenKind::kComma ||
@@ -1266,7 +1271,7 @@ Parser::ParseTemplateDeclarationList() {
       if (!constraint.has_value()) {
         error_collector_.Add(
             "expected valid type constraint after ':' in template variable",
-            current_token_.meta);
+            current_token_.meta, FROM_HERE);
         // Intentional fall-through to continue parsing since optional
       }
     }
@@ -1279,7 +1284,7 @@ Parser::ParseTemplateDeclarationList() {
       if (!default_type.has_value()) {
         error_collector_.Add(
             "expected valid type after '=' in template variable",
-            current_token_.meta);
+            current_token_.meta, FROM_HERE);
         // Intentional fall-through to continue parsing since optional
       }
     }
@@ -1292,7 +1297,7 @@ Parser::ParseTemplateDeclarationList() {
       AdvanceToken();  // consume ,
     } else if (current_token_.kind != TokenKind::kSquareClose) {
       error_collector_.Add("expected ',' or ']' after template variable",
-                           current_token_.meta);
+                           current_token_.meta, FROM_HERE);
       if (!SynchronizeOnError([](TokenKind kind) {
             return kind == TokenKind::kComma || kind == TokenKind::kSquareClose;
           })) {
@@ -1382,7 +1387,7 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
 
     if (static_modifier_token) {
       error_collector_.Add("'static' is only valid on method declarations",
-                           static_modifier_token->meta);
+                           static_modifier_token->meta, FROM_HERE);
       // This line is fundamentally borked at this point so try to sync past it.
       if (!SynchronizeOnError([&](TokenKind kind) {
             return kind == TokenKind::kEndExpr || is_strong_anchor(kind);
@@ -1419,7 +1424,7 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
       std::optional<ParsedType> type = ParseType();
       if (!type.has_value()) {
         error_collector_.Add("expected type name for field",
-                             current_token_.meta);
+                             current_token_.meta, FROM_HERE);
         if (!handle_member_error())
           return std::nullopt;
         continue;
@@ -1438,7 +1443,7 @@ std::optional<StructDeclaration> Parser::ParseStructDeclaration(
 
     // Dead-end fallthrough fallback
     error_collector_.Add("invalid struct member declaration",
-                         current_token_.meta);
+                         current_token_.meta, FROM_HERE);
     if (!handle_member_error())
       return std::nullopt;
   }
@@ -1501,7 +1506,7 @@ std::optional<ImplementsDeclaration> Parser::ParseImplementsDeclaration() {
 
     // Dead-end fallthrough fallback
     error_collector_.Add("invalid start of interface method",
-                         current_token_.meta);
+                         current_token_.meta, FROM_HERE);
     if (!handle_member_error())
       return std::nullopt;
   }
@@ -1564,7 +1569,7 @@ std::optional<StructDeclaration> Parser::ParseInterfaceDeclaration() {
 
     // Dead-end fallthrough fallback
     error_collector_.Add("invalid start of interface method",
-                         current_token_.meta);
+                         current_token_.meta, FROM_HERE);
     if (!handle_member_error())
       return std::nullopt;
   }
@@ -1584,7 +1589,7 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
     // Perform single-token deletion recovery to try to keep parsing happy...
     if (current_token_.kind == TokenKind::kIdent) {
       error_collector_.Add("Anonymous functions should not have a name",
-                           current_token_.meta);
+                           current_token_.meta, FROM_HERE);
       AdvanceToken();  // skip name
     }
     function_name = SpannedText{
@@ -1592,7 +1597,8 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
   } else {
     Token name_token = current_token_;
     if (current_token_.kind != TokenKind::kIdent) {
-      error_collector_.Add("requires a function name", current_token_.meta);
+      error_collector_.Add("requires a function name", current_token_.meta,
+                           FROM_HERE);
 
       // Synchronize to the start of the template parameters or arguments list
       auto is_arguments = [](TokenKind kind) {
@@ -1632,14 +1638,15 @@ std::optional<FunctionDeclaration> Parser::ParseFunctionDeclaration(
     // The next token SHOULD be a '{' so if an ident is found instead it is a
     // pretty good guess that the user is intending to supply a return type.
     error_collector_.Add("expected '->' before return type specifier",
-                         current_token_.meta);
+                         current_token_.meta, FROM_HERE);
     return_type = ParseType();
   } else {
     return_type = ParsedType{"Unit", return_type_metadate};
   }
 
   if (!return_type.has_value()) {
-    error_collector_.Add("unable to parse return type", current_token_.meta);
+    error_collector_.Add("unable to parse return type", current_token_.meta,
+                         FROM_HERE);
     return_type = ParsedType{ParserErrorType{}, return_type_metadate};
 
     auto is_body_or_end = [](TokenKind kind) {
@@ -1706,12 +1713,12 @@ Parser::ParseFunctionArgumentList() {
                                      std::move(variadic_token.meta)};
       } else {
         error_collector_.Add("variadic requires a type to be specified",
-                             expected_type_token.meta);
+                             expected_type_token.meta, FROM_HERE);
       }
 
       if (current_token_.kind != TokenKind::kCloseParen) {
         error_collector_.Add("'...' must be the last argument in a function",
-                             current_token_.meta);
+                             current_token_.meta, FROM_HERE);
         if (!SynchronizeOnError([](TokenKind kind) {
               return kind == TokenKind::kCloseParen;
             })) {
@@ -1752,7 +1759,7 @@ Parser::ParseFunctionArgumentList() {
     std::optional<ParsedType> arg_type = ParseType();
     if (!arg_type.has_value()) {
       error_collector_.Add("expected valid type name for argument",
-                           current_token_.meta);
+                           current_token_.meta, FROM_HERE);
       // If `:<type>` is missing, create an argument so it has a binding later
       arguments.emplace_back(
           SpannedText::FromToken(arg_name),
@@ -1769,7 +1776,7 @@ Parser::ParseFunctionArgumentList() {
       AdvanceToken();  // consume ','
     } else if (current_token_.kind != TokenKind::kCloseParen) {
       error_collector_.Add("expected ',' or ')' after argument",
-                           current_token_.meta);
+                           current_token_.meta, FROM_HERE);
 
       if (!SynchronizeOnError([](TokenKind kind) {
             return kind == TokenKind::kComma || kind == TokenKind::kCloseParen;
@@ -1791,14 +1798,15 @@ void Parser::AdvanceToken() {
   current_token_ = tokenizer_.next();
   while (true) {
     if (current_token_.kind == TokenKind::kTokenError) {
-      error_collector_.Add(current_token_.value, current_token_.meta);
+      error_collector_.Add(current_token_.value, current_token_.meta,
+                           FROM_HERE);
       current_token_ = tokenizer_.next();
       continue;
     }
 
     if (current_token_.kind == TokenKind::kUnknown) {
       error_collector_.Add("unknown token: \"" + current_token_.value + "\"",
-                           current_token_.meta);
+                           current_token_.meta, FROM_HERE);
       current_token_ = tokenizer_.next();
       continue;
     }
@@ -1814,7 +1822,8 @@ void Parser::AdvanceToken() {
 
 bool Parser::ConsumeToken(TokenKind expected_kind, std::string error_message) {
   if (current_token_.kind != expected_kind) {
-    error_collector_.Add(std::move(error_message), current_token_.meta);
+    error_collector_.Add(std::move(error_message), current_token_.meta,
+                         FROM_HERE);
     return false;
   }
 

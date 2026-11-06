@@ -126,7 +126,7 @@ NamedBinding ScopeManager::InsertNameIntoScope(
           FindBindingFor(name.text, ScopeToCheck::Current)) {
     error_collector_
         .Add("Binding for '" + name.text + "' conflicts with existing binding",
-             name.metadata)
+             name.metadata, FROM_HERE)
         .WithNote("original binding for: '" + existing_binding->name.text + "'",
                   existing_binding->name.metadata);
     return *existing_binding;

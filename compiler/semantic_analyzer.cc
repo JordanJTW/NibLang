@@ -71,7 +71,7 @@ FlowResult SemanticAnalyzer::Check(Block& block,
   for (auto& statement : block.statements) {
     // `exit_status` should be terminated exactly once per flow.
     if (exit_result.is_terminated()) {
-      error_collector_.Add("unreachable statement", statement->meta);
+      error_collector_.Add("unreachable statement", statement->meta, FROM_HERE);
       continue;
     }
 
@@ -108,7 +108,7 @@ FlowResult SemanticAnalyzer::Check(Block& block,
                 "function with return type " +
                     type_registry_.GetNameFromTypeId(return_type.type_id) +
                     " does not return on all paths",
-                declaration.name.metadata);
+                declaration.name.metadata, FROM_HERE);
           }
         }
 
@@ -186,7 +186,7 @@ FlowResult SemanticAnalyzer::Check(const std::unique_ptr<Statement>& statement,
                       " from function with return type " +
                       type_registry_.GetNameFromTypeId(
                           function_context.return_type.type_id),
-                  ret.value->meta);
+                  ret.value->meta, FROM_HERE);
             }
             return FlowResult{FlowResult::Status::Terminate};
           },
@@ -258,7 +258,7 @@ FlowResult SemanticAnalyzer::Check(const std::unique_ptr<Statement>& statement,
           [&](const BreakStatement&) {
             if (!loop_context.has_value()) {
               error_collector_.Add("`break` must exist within a loop",
-                                   statement->meta);
+                                   statement->meta, FROM_HERE);
               // `break` outside a loop means nothing, just ignore it
               return FlowResult{FlowResult::Status::Fallthrough};
             }
@@ -305,7 +305,7 @@ FlowResult SemanticAnalyzer::Check(const std::unique_ptr<Statement>& statement,
                             declared_type->type_id) +
                         ", but found " +
                         type_registry_.GetNameFromTypeId(result->type_id),
-                    assign.type->metadata);
+                    assign.type->metadata, FROM_HERE);
                 // Intentional fallthrough to prevent error cascades.
               }
             } else {

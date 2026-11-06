@@ -81,7 +81,7 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
                 // This can only happen in edge-cases like a variable appearing
                 // in the scope from an import or when instantiating a template.
                 error_collector_.Add("variable can not be used as a type",
-                                     type.metadata);
+                                     type.metadata, FROM_HERE);
                 return std::nullopt;
               }
 
@@ -98,7 +98,7 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
                   error_collector_.Add("invalid use of template-name '" +
                                            type_name +
                                            "' without an argument list",
-                                       type.metadata);
+                                       type.metadata, FROM_HERE);
                   return std::nullopt;
                 }
                 return binding->type_id;
@@ -110,7 +110,7 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
             }
 
             error_collector_.Add("unknown type '" + type_name + "'",
-                                 type.metadata);
+                                 type.metadata, FROM_HERE);
             return std::nullopt;
           },
           [&](const ParsedUnionType& type) -> std::optional<TypeId> {
@@ -183,7 +183,7 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
             if (!binding || !binding->symbol_id) {
               error_collector_.Add(
                   "unknown base type `" + base_type_identifier + "`",
-                  parameterized_type.type->metadata);
+                  parameterized_type.type->metadata, FROM_HERE);
               return std::nullopt;
             }
 
@@ -536,7 +536,7 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
     // Continue parsing template arguments to catch ALL errors
     std::stringstream ss;
     ss << "unknown type used as template argument: " << type;
-    error_collector_.Add(ss.str(), type.metadata);
+    error_collector_.Add(ss.str(), type.metadata, FROM_HERE);
     encountered_type_error = true;
   }
   if (encountered_type_error)
@@ -560,7 +560,7 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
             .Add(type_registry_.GetNameFromTypeId(argument_type_ids[i]) +
                      " does not satisfy interface constraint " +
                      type_registry_.GetNameFromTypeId(constraint_type_id),
-                 argument_spans[i])
+                 argument_spans[i], FROM_HERE)
             .WithNote("constraint declared here", constraint_span);
         violated_constraint = true;
       }
@@ -577,7 +577,7 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
                    std::to_string(template_variable_type_ids.size()) +
                    " template argument(s) but " +
                    std::to_string(argument_type_ids.size()) + " were provided",
-               instantiation_span)
+               instantiation_span, FROM_HERE)
           .WithNote("declared here", symbol_name.metadata);
       return false;
     }

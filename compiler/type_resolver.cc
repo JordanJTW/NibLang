@@ -58,7 +58,7 @@ TypeResolver::~TypeResolver() {
       error_collector_
           .Add(inferred_type_name + " does not satisfy interface constraint " +
                    constraint_type_name,
-               inferred_type.metadata)
+               inferred_type.metadata, FROM_HERE)
           .WithNote("constraint declared here",
                     template_variable.constraint_type_id->metadata);
     }

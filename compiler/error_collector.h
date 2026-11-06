@@ -25,16 +25,29 @@ struct Message {
   Metadata span;
 };
 
+struct Location {
+  const char* path;
+  size_t line;
+};
+
 struct Error {
   Message message;
   std::vector<Message> notes;
+  Location location;
 };
+
+#define FROM_HERE      \
+  Location {           \
+    __FILE__, __LINE__ \
+  }
 
 class ErrorCollector {
  public:
   virtual ~ErrorCollector() = default;
 
-  virtual ErrorBuilder Add(std::string message, Metadata meta);
+  virtual ErrorBuilder Add(std::string message,
+                           Metadata meta,
+                           Location location);
   virtual void PrintAllErrors(const std::vector<File>& files) const;
   virtual bool HasErrors() const;
 
@@ -50,9 +63,10 @@ class ErrorBuilder {
  public:
   ErrorBuilder(ErrorCollector& error_collector,
                std::string message,
-               Metadata span)
+               Metadata span,
+               Location location)
       : error_collector_(error_collector),
-        error_({std::move(message), span}, {}) {}
+        error_({std::move(message), span}, {}, location) {}
   ~ErrorBuilder();
 
   ErrorBuilder(const ErrorBuilder&) = delete;

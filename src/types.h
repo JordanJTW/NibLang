@@ -97,7 +97,7 @@ typedef struct vm_string_t {
   char c_str[];
 } String;
 
-typedef struct vm_map_t {
+typedef struct vm_hash_map_t {
   ref_count_t rc;
   uint32_t id;
   size_t element_count;

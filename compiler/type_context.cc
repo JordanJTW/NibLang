@@ -576,7 +576,9 @@ std::optional<TypeId> TypeContext::GetTemplateOf(
           .Add("template '" + symbol_name.text + "' requires " +
                    std::to_string(template_variable_type_ids.size()) +
                    " template argument(s) but " +
-                   std::to_string(argument_type_ids.size()) + " were provided",
+                   std::to_string(argument_type_ids.size()) +
+                   (argument_type_ids.size() == 1 ? " was" : " were") +
+                   " provided",
                instantiation_span, FROM_HERE)
           .WithNote("declared here", symbol_name.metadata);
       return false;

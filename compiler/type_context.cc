@@ -198,7 +198,7 @@ std::optional<TypeId> TypeContext::GetTypeIdFor(const ParsedType& type) {
 }
 
 TypeId TypeContext::GetOptionalOf(TypeId type_id) {
-  return type_registry_.NewOptionalType(type_id);
+  return GetUnionOf({type_id, LiteralType::Nil});
 }
 
 std::optional<TypeId> TypeContext::UnwrapOptional(TypeId type_id) const {
@@ -242,7 +242,7 @@ TypeId TypeContext::GetUnionOf(const std::vector<TypeId>& types) {
   // If after normalization the union is just a single type, then return it.
   if (normalized_types.size() == 1) {
     const TypeId type_id = *normalized_types.begin();
-    return wrap_in_optional ? GetOptionalOf(type_id) : type_id;
+    return wrap_in_optional ? type_registry_.NewOptionalType(type_id) : type_id;
   }
 
   // Intern unions structurally to a TypeId for faster comparisons.

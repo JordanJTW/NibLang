@@ -163,7 +163,6 @@ class TypeRegistry {
 
   struct FormatOptions {
     bool is_embedded_type;
-    bool use_debug_names;
   };
 
   // Returns a human-readable representation of an interned `type_id`.

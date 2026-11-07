@@ -231,15 +231,6 @@ TEST_F(TypeRegistryTest, GetNameFromTypeId_AliasType_Production) {
   EXPECT_EQ(type_registry.GetNameFromTypeId(self_id), "alias 'foo'");
 }
 
-TEST_F(TypeRegistryTest, GetNameFromTypeId_AliasType_Debug) {
-  TypeId self_id = type_registry.NewTypeId();
-  type_registry.NewAliasType("foo", self_id,
-                             /*target_id=*/LiteralType::Codepoint);
-
-  TypeRegistry::FormatOptions options{.use_debug_names = true};
-  EXPECT_EQ(type_registry.GetNameFromTypeId(self_id, options), "Alias[foo]");
-}
-
 TEST_F(TypeRegistryTest, GetNameFromTypeId_Unknown) {
   TypeId unassigned_id = type_registry.NewTypeId();
   EXPECT_EQ(type_registry.GetNameFromTypeId(unassigned_id), "'Unknown'");

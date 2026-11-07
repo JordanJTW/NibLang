@@ -315,9 +315,7 @@ std::string TypeRegistry::GetNameFromTypeId(TypeId type_id,
 
             bool must_include_final_quote = false;
             const auto& declaration = type.symbol->declaration;
-            if (options.use_debug_names) {
-              ss << declaration.kind << " " << declaration.name.text;
-            } else if (options.is_embedded_type) {
+            if (options.is_embedded_type) {
               ss << declaration.name.text;
             } else {
               ss << "'" + declaration.name.text;
@@ -344,9 +342,6 @@ std::string TypeRegistry::GetNameFromTypeId(TypeId type_id,
           [&](const TemplateVariableType& type) {
             if (options.is_embedded_type) {
               return type.name.text;
-            }
-            if (options.use_debug_names) {
-              return "$" + type.name.text;
             }
             return "template variable '" + type.name.text + "'";
           },
@@ -384,12 +379,9 @@ std::string TypeRegistry::GetNameFromTypeId(TypeId type_id,
             return GetNameFromTypeId(type.wrapped_type, options) + "?";
           },
           [&](const AliasType& type) {
-            if (options.is_embedded_type) {
+            if (options.is_embedded_type)
               return type.name;
-            }
-            if (options.use_debug_names) {
-              return "Alias[" + type.name + "]";
-            }
+
             return "alias '" + type.name + "'";
           },
           [&](const PlaceholderType& type) {

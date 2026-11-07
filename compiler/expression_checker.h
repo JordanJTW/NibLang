@@ -98,9 +98,10 @@ class ExpressionChecker {
       std::optional<SpannedType> hint_return_type = std::nullopt);
 
   void TypeCheckCallArguments(
-      const std::vector<std::optional<SpannedType>>& call_argument_results,
+      std::vector<std::unique_ptr<Expression>>& argument_expressions,
       const std::vector<TypeId>& expected_argument_types,
-      const Metadata& debug_metadata,
+      const Metadata& call_site_metadata,
+      const Metadata& callee_metadata,
       std::optional<TypeId> variadic_type);
 
   std::optional<ExpressionResult> TypeCheckCallExpr(

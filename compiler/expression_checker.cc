@@ -550,11 +550,12 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
 }
 
 void ExpressionChecker::TypeCheckCallArguments(
-    const std::vector<std::optional<SpannedType>>& call_argument_results,
+    std::vector<std::unique_ptr<Expression>>& argument_expressions,
     const std::vector<TypeId>& expected_argument_types,
-    const Metadata& debug_metadata,
+    const Metadata& call_site_metadata,
+    const Metadata& callee_metadata,
     std::optional<TypeId> variadic_type) {
-  size_t supplied_argc = call_argument_results.size();
+  size_t supplied_argc = argument_expressions.size();
   size_t expected_argc = expected_argument_types.size();
 
   if ((variadic_type && supplied_argc < expected_argc) ||
@@ -563,18 +564,19 @@ void ExpressionChecker::TypeCheckCallArguments(
         .Add("wrong number of arguments expected " +
                  std::to_string(expected_argc) + " but got " +
                  std::to_string(supplied_argc),
-             debug_metadata, FROM_HERE)
-        .WithNote("declared here", debug_metadata);
+             call_site_metadata, FROM_HERE)
+        .WithNote("declared here", callee_metadata);
     return;
   }
-  // If more arguments are supplied than expected, this is a variadic function
-  // and any additional args do not need to be checked ("any" type).
-  for (size_t i = 0; i < call_argument_results.size(); ++i) {
-    const auto& argument_result = call_argument_results[i];
 
+  for (size_t i = 0; i < argument_expressions.size(); ++i) {
+    // If more arguments are supplied than expected, this is a variadic function
     const TypeId expected_type =
         (i < expected_argument_types.size() ? expected_argument_types[i]
                                             : *variadic_type);
+
+    auto argument_result = RequireValue(argument_expressions[i]);
+    auto& argument_span = argument_expressions[i]->meta;
 
     // Even if an argument expression does not parse correctly, continue on to
     // the next to try to collect as many errors as possible.
@@ -582,7 +584,7 @@ void ExpressionChecker::TypeCheckCallArguments(
       continue;
 
     if (!type_resolver_.Resolve(expected_type, argument_result->type_id,
-                                argument_result->metadata) &&
+                                argument_span) &&
         !type_context_.IsTypeSubsetOf(argument_result->type_id,
                                       expected_type)) {
       TypeId resolved_expected = type_resolver_.Prune(expected_type);
@@ -595,7 +597,7 @@ void ExpressionChecker::TypeCheckCallArguments(
 
       error_collector_.Add(
           "expected " + expected_name + ", but got " + actual_name,
-          argument_result->metadata, FROM_HERE);
+          argument_span, FROM_HERE);
     }
   }
 }
@@ -617,18 +619,6 @@ std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
       return std::nullopt;
     }
   }
-
-  // Ensure all arguments are type-checked regardless of the target.
-  std::vector<std::optional<SpannedType>> argument_results;
-  argument_results.reserve(call_expr.arguments.size());
-  std::transform(
-      call_expr.arguments.begin(), call_expr.arguments.end(),
-      std::back_inserter(argument_results),
-      [&](std::unique_ptr<Expression>& expr) -> std::optional<SpannedType> {
-        if (auto result = RequireValue(expr))
-          return SpannedType{result->type_id, expr->meta};
-        return std::nullopt;
-      });
 
   TypeId callable_type_id = callee_result.type_id;
 
@@ -656,7 +646,8 @@ std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
       call_expr.resolved = ResolvedCall{FunctionKind::Anonymous};
     }
 
-    TypeCheckCallArguments(argument_results, fn_type->arg_types, debug_metadata,
+    TypeCheckCallArguments(call_expr.arguments, fn_type->arg_types,
+                           debug_metadata, callee_result.binding->name.metadata,
                            fn_type->variadic_type);
 
     if (hint_return_type) {
@@ -687,8 +678,9 @@ std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
               type_rewriter_.Rewrite(field_type, substitution_map));
         });
 
-    TypeCheckCallArguments(argument_results, realized_field_types,
+    TypeCheckCallArguments(call_expr.arguments, realized_field_types,
                            debug_metadata,
+                           struct_type->symbol->declaration.name.metadata,
                            /*variadic_type=*/std::nullopt);
     CHECK(!call_expr.resolved) << "CallExpression was previously resolved";
     call_expr.resolved =

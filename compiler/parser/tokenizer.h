@@ -96,6 +96,8 @@ struct Metadata {
   size_t file_id;
 
   static Metadata fromTokens(const Token& start, const Token& end);
+
+  Metadata expand(const Metadata& other);
 };
 
 struct Token {

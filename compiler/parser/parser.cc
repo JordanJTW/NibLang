@@ -792,9 +792,11 @@ std::unique_ptr<Expression> Parser::ParsePostFix() {
     }
 
     auto wrap_optional = [&](std::unique_ptr<Expression> expr) {
+      Metadata span = expr->meta;
       return optional_access_metadata.has_value()
                  ? std::make_unique<Expression>(
-                       Expression{OptionalAccessExpression{std::move(expr)}})
+                       Expression{OptionalAccessExpression{std::move(expr)},
+                                  span.expand(*optional_access_metadata)})
                  : std::move(expr);
     };
 

@@ -17,6 +17,8 @@
 #include <string_view>
 #include <utility>
 
+#include "compiler/logging.h"
+
 namespace {
 
 bool isnumber(char ch) {
@@ -344,6 +346,17 @@ Metadata Metadata::fromTokens(const Token& start, const Token& end) {
       TextRange{start.meta.column_range.start, end.meta.column_range.start},
       TextRange{start.meta.line_range.start, end.meta.line_range.start},
       start.meta.file_id};
+}
+
+Metadata Metadata::expand(const Metadata& other) {
+  CHECK_EQ(file_id, other.file_id);
+
+  return Metadata{
+      TextRange{std::min(column_range.start, other.column_range.start),
+                std::max(column_range.end, other.column_range.end)},
+      TextRange{std::min(line_range.start, other.line_range.start),
+                std::max(line_range.end, other.line_range.end)},
+      file_id};
 }
 
 std::ostream& operator<<(std::ostream& os, const TextRange& range) {

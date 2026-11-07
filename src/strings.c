@@ -21,7 +21,7 @@
 
 #include "src/vm.h"
 
-vm_value_t vm_strings_substring(vm_value_t* argv, size_t argc, void* vm) {
+vm_value_t vm_string_substring(vm_value_t* argv, size_t argc, void* vm) {
   assert(argc == 3 && vm_is_string(&argv[0]) && vm_is_i32(&argv[1]) &&
          vm_is_i32(&argv[2]) && "incorrect number of args or arg types");
 
@@ -42,7 +42,7 @@ vm_value_t vm_strings_substring(vm_value_t* argv, size_t argc, void* vm) {
   return allocate_str_from_c_with_len(cstr + start, end - start);
 }
 
-vm_value_t vm_strings_get(vm_value_t* argv, size_t argc, void* vm) {
+vm_value_t vm_string_get(vm_value_t* argv, size_t argc, void* vm) {
   assert(argc == 2 && vm_is_string(&argv[0]) && vm_is_i32(&argv[1]) &&
          "incorrect number of args or arg types");
 
@@ -59,7 +59,7 @@ vm_value_t vm_strings_get(vm_value_t* argv, size_t argc, void* vm) {
   return (vm_value_t){.type = VALUE_TYPE_INT, .as.i32 = cstr[idx]};
 }
 
-vm_value_t vm_strings_starts_with(vm_value_t* argv, size_t argc, void* vm) {
+vm_value_t vm_string_starts_with(vm_value_t* argv, size_t argc, void* vm) {
   assert(argc == 3 && vm_is_string(&argv[0]) && vm_is_string(&argv[1]) &&
          "incorrect number of args or arg types");
 
@@ -145,4 +145,14 @@ vm_value_t vm_string_equals(vm_value_t* argv, size_t argc, void* vm) {
 
   int result = strcmp(v1.as.str->c_str, v2.as.str->c_str);
   return (vm_value_t){.type = VALUE_TYPE_BOOL, .as.boolean = (result == 0)};
+}
+
+vm_value_t vm_string_compare_to(vm_value_t* argv, size_t argc, void* vm) {
+  assert(argc == 2 && vm_is_string(&argv[0]) && vm_is_string(&argv[1]) &&
+         "incorrect number of args or arg types");
+  RC_AUTOFREE vm_value_t v1 = argv[0];
+  RC_AUTOFREE vm_value_t v2 = argv[1];
+
+  int result = strcmp(v1.as.str->c_str, v2.as.str->c_str);
+  return (vm_value_t){.type = VALUE_TYPE_INT, .as.i32 = result};
 }

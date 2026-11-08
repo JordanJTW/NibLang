@@ -219,7 +219,7 @@ int main(int argc, char* argv[]) {
     TypeContext type_context(scope_manager, type_registry, error_collector);
     SemanticAnalyzer analyzer(type_context, scope_manager, error_collector,
                               type_registry);
-    FunctionContext context = {{}, TypeRegistry::Any};
+    FunctionContext context = {{}, {}, TypeRegistry::Any};
     analyzer.Check(file.root_block, context, NarrowedBindings{});
   }
 
@@ -273,7 +273,7 @@ int main(int argc, char* argv[]) {
       return;
     }
 
-    ByteCodeGenerator generator{scope_manager, constant_pool};
+    ByteCodeGenerator generator{scope_manager, type_registry, constant_pool};
     function_objects.push_back(
         std::move(generator).Build(symbol, called_symbols));
 

@@ -60,7 +60,7 @@ struct FunctionSymbol {
     return declaration.function_kind == FunctionKind::Extern;
   }
 
-  inline bool IsMethodBodyRequired() const {
+  inline bool IsFunctionBodyRequired() const {
     return !(IsExtern() || RequiresVirtualDispatch());
   }
 

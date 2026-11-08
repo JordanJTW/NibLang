@@ -72,7 +72,7 @@ class TypeContext {
 
   struct RealizedFunction {
     ScopeId scope_id;
-    FunctionDeclaration& declaration;
+    FunctionSymbol& symbol;
     SpannedType return_type;
   };
 

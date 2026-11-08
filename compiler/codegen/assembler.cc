@@ -80,16 +80,6 @@ Assembler& Assembler::PatchBind(uint32_t idx, uint32_t argc) {
   Bind(idx, argc);
   return *this;
 }
-Assembler& Assembler::NewObject(uint32_t id, uint32_t argc) {
-  PushOpAndArgs(OP_NEW_OBJ, {id, argc});
-  return *this;
-}
-Assembler& Assembler::PatchNewObject(uint32_t id, uint32_t argc) {
-  size_t index_address = data_.size() + 1 /* account for op code */;
-  virtual_patch_locations.emplace_back(id, index_address);
-  NewObject(id, argc);
-  return *this;
-}
 Assembler& Assembler::CallVirtual(uint32_t idx, uint32_t argc) {
   PushOpAndArgs(OP_CALL_VIRTUAL, {idx, argc});
   return *this;
@@ -100,6 +90,13 @@ Assembler& Assembler::PatchCallVirtual(uint32_t idx, uint32_t argc) {
   CallVirtual(idx, argc);
   return *this;
 }
+Assembler& Assembler::PushDispatchIdToPatch(uint32_t symbol_id) {
+  size_t index_address = data_.size() + 1 /* account for op code */;
+  virtual_patch_locations.emplace_back(symbol_id, index_address);
+  PushInt32(symbol_id);
+  return *this;
+}
+
 Assembler& Assembler::PushLocal(uint32_t idx) {
   max_local_index = std::max(max_local_index, idx);
   PushOpAndArgs(OP_PUSH_LOCAL, {idx});

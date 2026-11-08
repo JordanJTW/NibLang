@@ -41,10 +41,11 @@ class Assembler {
   Assembler& Bind(uint32_t idx, uint32_t argc);
   // The same as `Bind` but allows for remapping `idx` during linking.
   Assembler& PatchBind(uint32_t idx, uint32_t argc);
-  Assembler& NewObject(uint32_t id, uint32_t argc);
-  Assembler& PatchNewObject(uint32_t id, uint32_t argc);
   Assembler& CallVirtual(uint32_t idx, uint32_t argc);
   Assembler& PatchCallVirtual(uint32_t idx, uint32_t argc);
+  // Pushes the ID used to look up a struct in the dynamic dispatch table as
+  // part of a fat-pointer pair on the stack (patched during `Build()`.
+  Assembler& PushDispatchIdToPatch(uint32_t symbol_id);
   Assembler& PushLocal(uint32_t idx);
   Assembler& Add();
   Assembler& Subtract();

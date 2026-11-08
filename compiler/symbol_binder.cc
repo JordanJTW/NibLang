@@ -322,7 +322,7 @@ std::optional<NamedBinding> SymbolBinder::NewFunctionSymbol(
   symbol.template_variable_type_ids =
       BindTemplateVariables(symbol.declaration.template_variables);
 
-  if (symbol.IsMethodBodyRequired() && !declaration.body) {
+  if (symbol.IsFunctionBodyRequired() && !declaration.body) {
     error_collector_.Add("non-extern functions MUST have a body",
                          declaration.name.metadata, FROM_HERE);
   }
@@ -338,6 +338,9 @@ std::optional<NamedBinding> SymbolBinder::NewFunctionSymbol(
   NamedBinding binding = scope_manager_.InsertNameIntoScope(
       declaration.name, NamedBinding::Function, type_id, symbol_id,
       /*idx=*/std::nullopt, self_id);
-  declaration.resolved = ResolvedFunction{.function_symbol_id = symbol_id};
+  declaration.resolved = ResolvedFunction{
+      .function_symbol_id = symbol_id,
+      .required_template_variables =
+          type_registry_.type_table().at(type_id).template_variable_types};
   return binding;
 }

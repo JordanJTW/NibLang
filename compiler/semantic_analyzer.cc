@@ -90,29 +90,46 @@ FlowResult SemanticAnalyzer::Check(Block& block,
     if (function_bodies.empty())
       break;
 
-    for (auto [scope_id, declaration, return_type] : function_bodies) {
-      if (!declaration.body)
+    for (auto [scope_id, symbol, return_type] : function_bodies) {
+      if (!symbol.declaration.body)
         continue;
 
       scope_manager_.WithScope(scope_id, [&]() {
-        FunctionContext fn_context{{}, return_type};
+        FunctionContext fn_context{{}, {}, return_type};
         FlowResult result =
-            Check(*declaration.body, fn_context, NarrowedBindings{});
+            Check(*symbol.declaration.body, fn_context, NarrowedBindings{});
 
         bool has_valid_return_type = return_type.type_id != LiteralType::Error;
         if (result.is_fallthrough() && has_valid_return_type) {
           if (return_type.type_id == LiteralType::Unit) {
-            declaration.resolved->should_insert_unit_return = true;
+            symbol.declaration.resolved->should_insert_unit_return = true;
           } else {
             error_collector_.Add(
                 "function with return type " +
                     type_registry_.GetNameFromTypeId(return_type.type_id) +
                     " does not return on all paths",
-                declaration.name.metadata, FROM_HERE);
+                symbol.declaration.name.metadata, FROM_HERE);
           }
         }
 
-        declaration.resolved->required_captures =
+        auto& required_template_variables =
+            symbol.declaration.resolved->required_template_variables;
+
+        required_template_variables.insert(
+            fn_context.required_template_variables.cbegin(),
+            fn_context.required_template_variables.cend());
+
+        for (const auto& template_variable :
+             symbol.template_variable_type_ids) {
+          if (!required_template_variables.contains(template_variable)) {
+            error_collector_.Add(
+                type_registry_.GetNameFromTypeId(template_variable) +
+                    " is not used within this function",
+                symbol.declaration.name.metadata, FROM_HERE);
+          }
+        }
+
+        symbol.declaration.resolved->required_captures =
             std::move(fn_context.required_captures);
       });
     }
@@ -130,14 +147,28 @@ FlowResult SemanticAnalyzer::Check(const std::unique_ptr<Statement>& statement,
   auto check_expression = [&](std::unique_ptr<Expression>& expression,
                               std::optional<SpannedType> hint_return_type =
                                   std::nullopt) {
+    std::vector<TypeId> result_type_ids_for_chain;
     auto result =
         ExpressionChecker(scope_manager_, type_context_, type_registry_,
                           existing_bindings, function_context.required_captures,
                           error_collector_)
-            .CheckChain(expression, hint_return_type);
+            .CheckChain(expression, result_type_ids_for_chain,
+                        hint_return_type);
 
     if (!result)
       return result;
+
+    for (const auto& type_id : result_type_ids_for_chain) {
+      const auto& template_variable_type_ids =
+          type_registry_.type_table().at(type_id).template_variable_types;
+
+      if (template_variable_type_ids.empty())
+        continue;
+
+      function_context.required_template_variables.insert(
+          template_variable_type_ids.cbegin(),
+          template_variable_type_ids.cend());
+    }
 
     auto intersect_with_current = [&](const NarrowedBindings& branch_bindings) {
       NarrowedBindings merged = existing_bindings;

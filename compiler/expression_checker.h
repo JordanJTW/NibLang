@@ -48,13 +48,15 @@ struct ExpressionResult {
     return result;
   }
 
-  static ExpressionResult with_storage_override(
-      TypeId type_id,
-      TypeId storage_type_id,
-      std::optional<NamedBinding> binding) {
-    ExpressionResult res = with_type_override(type_id, binding);
-    res.storage_type_id = storage_type_id;
-    return res;
+  ExpressionResult&& with_storage_override(TypeId type_id) && {
+    this->storage_type_id = type_id;
+    return std::move(*this);
+  }
+
+  ExpressionResult&& with_substitutions(SubstitutionMap new_substitutions) && {
+    this->substitution_map.insert(new_substitutions.begin(),
+                                  new_substitutions.end());
+    return std::move(*this);
   }
 
   // Is this an instance? i.e. "hello world", 2 + 2, foo
@@ -66,6 +68,7 @@ struct ExpressionResult {
   TypeId type_id;
   std::optional<TypeId> storage_type_id;
   std::optional<NamedBinding> binding;
+  SubstitutionMap substitution_map;
 
   NarrowedBindings true_bindings;
   NarrowedBindings false_bindings;
@@ -82,6 +85,7 @@ class ExpressionChecker {
 
   std::optional<ExpressionResult> CheckChain(
       std::unique_ptr<Expression>& root_expression,
+      std::vector<TypeId>& result_type_ids_for_chain,
       std::optional<SpannedType> hint_return_type = std::nullopt);
 
  private:
@@ -117,6 +121,10 @@ class ExpressionChecker {
   void BuildPlaceholderTypes(SymbolId symbol_id,
                              SubstitutionMap& substitution_map);
 
+  std::optional<ImplicitCast> CalculateImplicitCast(
+      const Expression& expression,
+      TypeId expected_type) const;
+
   ScopeManager& scope_manager_;
   TypeContext& type_context_;
   TypeRegistry& type_registry_;
@@ -127,7 +135,10 @@ class ExpressionChecker {
   TypeResolver type_resolver_;
   TypeRewriter type_rewriter_{type_registry_, type_context_};
 
+  // Iteration order must be maintained
   std::vector<std::function<void()>> deferred_type_resolution_;
+
+  std::vector<TypeId> result_type_ids_for_chain_;
 };
 
 std::ostream& operator<<(std::ostream& os,

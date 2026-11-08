@@ -648,15 +648,15 @@ static void run_frame(vm_t* vm, const char* name) {
         uint32_t argc = read_u32_arg(frame, 1);
         DEBUG_LOG("OP_CALL_VIRTUAL idx: %d argc: %d", id, argc);
 
+        vm_value_t object_id = pop_stack(&vm->stack);
+        assert(object_id.type.tag.id == VALUE_TYPE_INT);
+
         assert(vm->stack.sp >= argc && "stack underflow");
         vm->stack.sp -= argc;
-
         vm_value_t* const argv = vm->stack.values + vm->stack.sp;
-        uint32_t object_id = argv[0].type.tag.id;
-        assert(object_id < vm->virtual_table->dispatch_offset &&
-               "invalid object ID");
+
         uint32_t row_displacement =
-            vm->virtual_table->dispatch_table[object_id];
+            vm->virtual_table->dispatch_table[object_id.as.i32];
         uint32_t dispatch_idx = (row_displacement + id) * 2;
         assert(dispatch_idx + 1 < vm->virtual_table->dispatch_size &&
                "invalid dispatch index");
@@ -665,11 +665,11 @@ static void run_frame(vm_t* vm, const char* name) {
         uint32_t fn_idx = data[0];
         fn_idx = patch_function_idx(fn_idx, vm->native_functions_count);
         uint32_t owner_id = data[1];
-        assert(owner_id == object_id &&
+        assert(owner_id == object_id.as.i32 &&
                "virtual method does not belong to object");
         vm_function_t* fn = &vm->functions[fn_idx];
         DEBUG_LOG("OP_CALL idx: %d:%d (%s)", fn_idx, fn->type, fn->name);
-        vm_invoke(vm, fn, vm->stack.values + vm->stack.sp, argc);
+        vm_invoke(vm, fn, argv, argc);
         frame->pc += 9;
         break;
       }

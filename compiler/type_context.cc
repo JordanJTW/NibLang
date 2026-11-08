@@ -373,7 +373,7 @@ TypeId TypeContext::DeclareFunctionType(FunctionSymbol& symbol,
   ScopeId scope_id = scope_manager_.GetActiveScopeId();
 
   realized_functions_.push_back(RealizedFunction{
-      scope_id, fn, SpannedType{return_type, fn.return_type.metadata}});
+      scope_id, symbol, SpannedType{return_type, fn.return_type.metadata}});
 
   auto key =
       FunctionType{std::move(argument_types), return_type, variadic_type};

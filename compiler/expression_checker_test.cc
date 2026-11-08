@@ -61,7 +61,8 @@ TEST_F(SemanticAnalyzerTest, Expression_PrimaryExpr_BuiltInValue) {
     ExpressionChecker expression_checker{scope_manager,     type_context,
                                          type_registry,     bindings,
                                          required_captures, error_collector};
-    auto result = expression_checker.CheckChain(expr);
+    std::vector<TypeId> result_type_ids;
+    auto result = expression_checker.CheckChain(expr, result_type_ids);
 
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(result->type_id, expected_type_id);

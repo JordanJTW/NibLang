@@ -12,6 +12,7 @@
 
 #include "compiler/codegen/bytecode_generator.h"
 
+#include <ranges>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -36,8 +37,11 @@ Overloaded(Ts...) -> Overloaded<Ts...>;
 }  // namespace
 
 ByteCodeGenerator::ByteCodeGenerator(const ScopeManager& scope_manager,
+                                     const TypeRegistry& type_registry,
                                      ConstantPool& constant_pool)
-    : scope_manager_(scope_manager), constant_pool_(constant_pool) {}
+    : scope_manager_(scope_manager),
+      type_registry_(type_registry),
+      constant_pool_(constant_pool) {}
 
 ByteCodeGenerator::FunctionObject ByteCodeGenerator::Build(
     const FunctionSymbol& symbol,
@@ -47,16 +51,25 @@ ByteCodeGenerator::FunctionObject ByteCodeGenerator::Build(
   for (const auto& binding :
        scope_manager_.GetBindingsForScope(symbol.instance_scope_id)) {
     if (binding.kind == NamedBinding::Kind::Capture) {
-      symbol_to_local_idx_[binding.idx.value()] = next_local_idx_++;
-      argument_count++;
+      Slot slot = GetSlotFor(binding);
+      argument_count += slot.width;
     }
   }
 
   for (const auto& binding :
        scope_manager_.GetBindingsForScope(symbol.instance_scope_id)) {
     if (binding.kind == NamedBinding::Kind::Argument) {
-      symbol_to_local_idx_[binding.idx.value()] = next_local_idx_++;
-      argument_count++;
+      Slot slot = GetSlotFor(binding);
+      argument_count += slot.width;
+    }
+  }
+
+  for (const auto& type_id :
+       symbol.declaration.resolved->required_template_variables) {
+    if (type_registry_.GetTypeChecked<TemplateVariableType>(type_id)
+            .constraint_type_id.has_value()) {
+      template_variable_to_local_slot_[type_id] = next_local_idx_++;
+      ++argument_count;
     }
   }
 
@@ -69,8 +82,14 @@ ByteCodeGenerator::FunctionObject ByteCodeGenerator::Build(
   }
 
   called_symbols = std::move(called_symbols_);
-  return FunctionObject{&symbol, bytecode_, argument_count,
-                        symbol_to_local_idx_.size()};
+
+  uint32_t local_count =
+      symbol.declaration.resolved->required_template_variables.size();
+  for (const auto& [idx, width] : symbol_to_local_slot_ | std::views::values) {
+    local_count += width;
+  }
+
+  return FunctionObject{&symbol, bytecode_, argument_count, local_count};
 }
 
 void ByteCodeGenerator::EmitBlock(const Block& block,
@@ -167,43 +186,48 @@ void ByteCodeGenerator::EmitExpression(
       Overloaded{
           [&](const PrimaryExpression& primary) {
             std::visit(
-                Overloaded{[&](const StringLiteral& str) {
-                             bytecode_.PushConstRef(
-                                 constant_pool_.GetIdFor(str.value));
-                           },
-                           [&](const Identifier& ident) {
-                             CHECK(ident.resolved)
-                                 << "Unresolved identifier: " << ident.name;
+                Overloaded{
+                    [&](const StringLiteral& str) {
+                      bytecode_.PushConstRef(
+                          constant_pool_.GetIdFor(str.value));
+                    },
+                    [&](const Identifier& ident) {
+                      CHECK(ident.resolved)
+                          << "Unresolved identifier: " << ident.name;
 
-                             switch (ident.resolved->symbol.kind) {
-                               case NamedBinding::Function:
-                                 CHECK(ident.resolved)
-                                     << "Unresolved function:" << ident.name;
-                                 bytecode_.PatchBind(
-                                     *ident.resolved->symbol.symbol_id,
-                                     /*argc=*/0);
-                                 called_symbols_.push_back(
-                                     *ident.resolved->symbol.symbol_id);
-                                 break;
-                               case NamedBinding::Argument:
-                               case NamedBinding::Variable:
-                               case NamedBinding::Capture: {
-                                 PushSymbol(ident.resolved->symbol);
-                                 break;
-                               }
-                               default:
-                                 NOTREACHED() << "Unsupported identifier kind: "
-                                              << ident.resolved->symbol.kind;
-                                 break;
-                             }
-                           },
-                           [&](int32_t i32) { bytecode_.PushInt32(i32); },
-                           [&](float f32) { bytecode_.PushFloat(f32); },
-                           [&](const CodepointLiteral& codepoint) {
-                             bytecode_.PushInt32(codepoint.value);
-                           },
-                           [&](bool b) { bytecode_.PushBool(b); },
-                           [&](Nil) { bytecode_.PushNil(); }},
+                      switch (ident.resolved->symbol.kind) {
+                        case NamedBinding::Function:
+                          CHECK(ident.resolved)
+                              << "Unresolved function:" << ident.name;
+                          bytecode_.PatchBind(*ident.resolved->symbol.symbol_id,
+                                              /*argc=*/0);
+                          called_symbols_.push_back(
+                              *ident.resolved->symbol.symbol_id);
+                          break;
+                        case NamedBinding::Argument:
+                        case NamedBinding::Variable:
+                        case NamedBinding::Capture: {
+                          PushSymbol(ident.resolved->symbol,
+                                     expr->implicit_cast &&
+                                             expr->implicit_cast->kind ==
+                                                 ImplicitCast::Kind::kSelf
+                                         ? SuppressFatPointer::YES
+                                         : SuppressFatPointer::NO);
+                          break;
+                        }
+                        default:
+                          NOTREACHED() << "Unsupported identifier kind: "
+                                       << ident.resolved->symbol.kind;
+                          break;
+                      }
+                    },
+                    [&](int32_t i32) { bytecode_.PushInt32(i32); },
+                    [&](float f32) { bytecode_.PushFloat(f32); },
+                    [&](const CodepointLiteral& codepoint) {
+                      bytecode_.PushInt32(codepoint.value);
+                    },
+                    [&](bool b) { bytecode_.PushBool(b); },
+                    [&](Nil) { bytecode_.PushNil(); }},
                 primary.value);
           },
           [&](const BinaryExpression& binary) {
@@ -265,7 +289,9 @@ void ByteCodeGenerator::EmitExpression(
                              AccessMode::STORE);
               EmitExpression(assign.rhs);
 
-              bytecode_.Call(VM_BUILTIN_ARRAY_SET, 3);
+              size_t slot_count = GetWidthOf(assign.lhs->type_id);
+
+              bytecode_.Call(VM_BUILTIN_ARRAY_SET, 2 + slot_count);
             } else {
               LOG(FATAL) << "Unsupported LHS for AssignmentExpression: "
                          << assign.lhs->as.index();
@@ -291,14 +317,16 @@ void ByteCodeGenerator::EmitExpression(
               called_symbols_.push_back(method->symbol_id);
             } else if (const auto* field = std::get_if<ResolvedAccess::Field>(
                            &member_access.resolved->type)) {
-              EmitExpression(member_access.object, optional_chain_ctx);
-
-              if (access_mode == AccessMode::LOAD ||
-                  access_mode == AccessMode::STORE) {
+              if (access_mode == AccessMode::LOAD) {
+                for (size_t idx = 0; idx < GetWidthOf(expr->type_id); ++idx) {
+                  EmitExpression(member_access.object, optional_chain_ctx);
+                  bytecode_.PushInt32(field->index + idx);
+                  bytecode_.Call(VM_BUILTIN_ARRAY_GET, 2);
+                }
+              } else if (access_mode == AccessMode::STORE) {
+                EmitExpression(member_access.object, optional_chain_ctx);
                 bytecode_.PushInt32(field->index);
               }
-              if (access_mode == AccessMode::LOAD)
-                bytecode_.Call(VM_BUILTIN_ARRAY_GET, 2);
             } else {
               NOTREACHED() << "MemberAccessExpression resolved to unknown type";
             }
@@ -342,7 +370,7 @@ void ByteCodeGenerator::EmitExpression(
             CHECK(closure.fn.resolved) << "Unresolved function!";
 
             for (const auto& binding : closure.fn.resolved->required_captures)
-              PushSymbol(binding);
+              PushSymbol(binding, SuppressFatPointer::NO);
 
             bytecode_.PatchBind(
                 closure.fn.resolved->function_symbol_id,
@@ -412,13 +440,17 @@ void ByteCodeGenerator::EmitExpression(
             bytecode_.PushInt32(*size_expr.resolved);
           }},
       expr->as);
+
+  if (expr->implicit_cast &&
+      expr->implicit_cast->kind == ImplicitCast::Kind::kInterface) {
+    PushDispatchIdForTypeId(expr->implicit_cast->type_id);
+  }
 }
 
 void ByteCodeGenerator::EmitCall(
     const CallExpression& call,
     const std::optional<OptionalChainContext>& optional_chain_ctx) {
-  size_t argc = call.arguments.size();
-
+  size_t argc = 0;
   if (call.resolved) {
     switch (call.resolved->kind) {
       case Method:
@@ -429,8 +461,29 @@ void ByteCodeGenerator::EmitCall(
       case Free:
       case Extern:
       case StaticMethod: {
-        for (const auto& argument : call.arguments)
+        const auto& symbol = type_registry_.GetSymbolChecked<FunctionSymbol>(
+            call.resolved->target.symbol_id);
+
+        for (const auto& argument : call.arguments) {
           EmitExpression(argument);
+          if (argument->implicit_cast &&
+              argument->implicit_cast->kind == ImplicitCast::Kind::kInterface) {
+            argc += 2;
+          } else {
+            argc += GetWidthOf(argument->type_id);
+          }
+        }
+
+        for (const auto& variable :
+             symbol.declaration.resolved->required_template_variables) {
+          if (type_registry_.GetTypeChecked<TemplateVariableType>(variable)
+                  .constraint_type_id.has_value()) {
+            auto it = call.resolved->template_arguments.find(variable);
+            CHECK_NE(it, call.resolved->template_arguments.end());
+            PushDispatchIdForTypeId(it->second);
+            ++argc;
+          }
+        }
 
         bytecode_.PatchCall(call.resolved->target.symbol_id, argc);
         called_symbols_.push_back(call.resolved->target.symbol_id);
@@ -444,27 +497,34 @@ void ByteCodeGenerator::EmitCall(
         break;
       }
       case Virtual: {
-        EmitExpression(call.callee, optional_chain_ctx,
-                       AccessMode::OBJECT_ONLY);
-        for (const auto& argument : call.arguments)
-          EmitExpression(argument);
+        const auto* member_access =
+            std::get_if<MemberAccessExpression>(&call.callee->as);
+        CHECK(member_access != nullptr) << "Virtual dispatch on non-method?";
 
+        EmitExpression(member_access->object);
+
+        for (const auto& argument : call.arguments) {
+          EmitExpression(argument);
+          argc += GetWidthOf(argument->type_id);
+        }
+
+        PushDispatchIdForTypeId(member_access->object->type_id);
         bytecode_.PatchCallVirtual(call.resolved->target.symbol_id,
                                    argc + 1 /*self*/);
         called_symbols_.push_back(call.resolved->target.symbol_id);
         break;
       }
       case Constructor: {
-        for (const auto& argument : call.arguments)
+        for (const auto& argument : call.arguments) {
           EmitExpression(argument);
+          if (argument->implicit_cast &&
+              argument->implicit_cast->kind == ImplicitCast::Kind::kInterface) {
+            argc += 2;
+          } else {
+            argc += GetWidthOf(argument->type_id);
+          }
+        }
         bytecode_.Call(VM_BUILTIN_ARRAY_INIT, argc);
-        break;
-      }
-      case ConstructorVirtual: {
-        for (const auto& argument : call.arguments)
-          EmitExpression(argument);
-
-        bytecode_.PatchNewObject(call.resolved->target.symbol_id, argc);
         break;
       }
     }
@@ -491,10 +551,9 @@ void ByteCodeGenerator::EmitOp(const Token& op, bool is_string) {
     case TokenKind::kPercent:
       bytecode_.Modulo();
       break;
-    case TokenKind::kAnd: {
+    case TokenKind::kAnd:
       bytecode_.BitwiseAnd();
       break;
-    }
     case TokenKind::kCompareEq:
       bytecode_.Compare(OP_EQUAL);
       break;
@@ -520,24 +579,46 @@ void ByteCodeGenerator::EmitOp(const Token& op, bool is_string) {
   }
 }
 
-void ByteCodeGenerator::PushSymbol(NamedBinding symbol) {
-  uint32_t local_idx = GetIdFor(symbol);
-  bytecode_.PushLocal(local_idx);
+uint32_t ByteCodeGenerator::PushSymbol(
+    NamedBinding symbol,
+    ByteCodeGenerator::SuppressFatPointer suppress_fat_pointer) {
+  Slot slot = GetSlotFor(symbol);
+  if (suppress_fat_pointer == SuppressFatPointer::YES) {
+    bytecode_.PushLocal(slot.idx + 1);
+    return 1;
+  }
+
+  for (uint32_t i = 0; i < slot.width; ++i)
+    bytecode_.PushLocal(slot.idx + i);
+  return slot.width;
 }
 
 void ByteCodeGenerator::StoreSymbol(NamedBinding symbol) {
-  uint32_t local_idx = GetIdFor(symbol);
-  bytecode_.StoreLocal(local_idx);
+  Slot slot = GetSlotFor(symbol);
+  for (uint32_t i = 0; i < slot.width; ++i)
+    bytecode_.StoreLocal(slot.idx + slot.width - i - 1);
 }
 
-uint32_t ByteCodeGenerator::GetIdFor(NamedBinding lookup) {
-  if (auto it = symbol_to_local_idx_.find(lookup.idx.value());
-      it != symbol_to_local_idx_.end())
+ByteCodeGenerator::Slot ByteCodeGenerator::GetSlotFor(NamedBinding lookup) {
+  if (auto it = symbol_to_local_slot_.find(lookup.idx.value());
+      it != symbol_to_local_slot_.end()) {
     return it->second;
+  }
 
-  uint32_t id = next_local_idx_++;
-  symbol_to_local_idx_[lookup.idx.value()] = id;
-  return lookup.idx.value();
+  uint32_t idx = next_local_idx_;
+  uint32_t width = GetWidthOf(lookup.type_id);
+  next_local_idx_ += width;
+  symbol_to_local_slot_[lookup.idx.value()] = Slot{idx, width};
+  return Slot{idx, width};
+}
+
+uint32_t ByteCodeGenerator::GetWidthOf(TypeId type_id) {
+  if (auto* struct_type = type_registry_.GetType<StructType>(type_id)) {
+    if (struct_type->symbol->declaration.IsInterface())
+      return 2;
+  }
+
+  return 1;
 }
 
 uint32_t ConstantPool::GetIdFor(const std::string& value) {
@@ -556,4 +637,20 @@ std::vector<std::string> ConstantPool::GetStrings() const {
   for (const auto& [str, id] : string_constant_to_id_)
     strings[id] = str;
   return strings;
+}
+
+void ByteCodeGenerator::PushDispatchIdForTypeId(TypeId type_id) {
+  if (type_registry_.GetType<TemplateVariableType>(type_id)) {
+    bytecode_.PushLocal(template_variable_to_local_slot_.at(type_id));
+    return;
+  }
+
+  if (const auto* struct_type = type_registry_.GetType<StructType>(type_id)) {
+    if (!struct_type->symbol->declaration.IsInterface())
+      bytecode_.PushDispatchIdToPatch(struct_type->symbol->symbol_id);
+    return;
+  }
+
+  NOTREACHED() << "Invalid type for dynamic dispatch: "
+               << type_registry_.GetNameFromTypeId(type_id);
 }

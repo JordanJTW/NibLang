@@ -37,6 +37,7 @@ class ConstantPool {
 class ByteCodeGenerator {
  public:
   explicit ByteCodeGenerator(const ScopeManager& scope_manager,
+                             const TypeRegistry& type_registry,
                              ConstantPool& constant_pool);
 
   struct FunctionObject {
@@ -50,9 +51,16 @@ class ByteCodeGenerator {
                        std::vector<SymbolId>& called_symbols) &&;
 
  private:
-  void PushSymbol(NamedBinding symbol);
+  struct Slot {
+    uint32_t idx, width;
+  };
+
+  enum class SuppressFatPointer { YES, NO };
+  uint32_t PushSymbol(NamedBinding symbol,
+                      SuppressFatPointer suppress_fat_pointer);
   void StoreSymbol(NamedBinding symbol);
-  uint32_t GetIdFor(NamedBinding lookup);
+  Slot GetSlotFor(NamedBinding lookup);
+  uint32_t GetWidthOf(TypeId type_id);
 
   struct LoopContext {
     std::string break_label;
@@ -68,8 +76,7 @@ class ByteCodeGenerator {
     // Sets up the stack with required values to store it (i.e. LHS expression).
     // An outer expression which enabled STORE is expected to handle the store.
     STORE,
-    // Only sets up the target object on the stack but does not try to access
-    // it.
+    // Sets up the target object on the stack but does not try to access it.
     OBJECT_ONLY,
   };
 
@@ -86,14 +93,18 @@ class ByteCodeGenerator {
                 const std::optional<OptionalChainContext>& optional_chain_ctx);
   void EmitOp(const Token& op, bool is_string);
 
+  void PushDispatchIdForTypeId(TypeId type_id);
+
   const ScopeManager& scope_manager_;
+  const TypeRegistry& type_registry_;
   ConstantPool& constant_pool_;
 
   Assembler bytecode_;
   size_t next_local_idx_{0};
   size_t next_unique_id_{0};  // Used to generate unique labels
 
-  std::unordered_map<uint32_t, uint32_t> symbol_to_local_idx_;
+  std::unordered_map<uint32_t, Slot> symbol_to_local_slot_;
+  std::unordered_map<TypeId, SlotId> template_variable_to_local_slot_;
 
   std::vector<SymbolId> called_symbols_;
 };

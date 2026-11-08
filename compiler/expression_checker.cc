@@ -56,6 +56,7 @@ ExpressionChecker::ExpressionChecker(
 
 std::optional<ExpressionResult> ExpressionChecker::CheckChain(
     std::unique_ptr<Expression>& root_expression,
+    std::vector<TypeId>& result_type_ids_for_chain,
     std::optional<SpannedType> hint_return_type) {
   auto result = RequireValue(root_expression, hint_return_type);
 
@@ -73,6 +74,8 @@ std::optional<ExpressionResult> ExpressionChecker::CheckChain(
     deferred_type_cb();
   }
 
+  // Must be copied AFTER deferred type resolution to resolve placeholders.
+  result_type_ids_for_chain = result_type_ids_for_chain_;
   return result;
 }
 
@@ -503,8 +506,12 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
             if (!concrete_type_id)  // Errors logged in `GetTemplateOf()`
               return std::nullopt;
 
+            type_resolver_.Resolve(result->type_id, *concrete_type_id,
+                                   expression->meta);
+
             return ExpressionResult::with_type_override(*concrete_type_id,
-                                                        result->binding);
+                                                        result->binding)
+                .with_substitutions(result->substitution_map);
           },
           [&](SizeOfExpression& size_expr) -> std::optional<ExpressionResult> {
             auto get_type_size = [](TypeId type_id) {
@@ -532,10 +539,21 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
     expression->type_id = result->type_id;
 
     deferred_type_resolution_.emplace_back(
-        [this, type_id = &expression->type_id]() {
-          *type_id = type_resolver_.Rewrite(type_id->value());
+        [this, expr = expression.get(), expected_type = hint_return_type]() {
+          expr->type_id = type_resolver_.Rewrite(expr->type_id);
+
+          if (expected_type) {
+            // Implicit cast can only be calculated once placeholders resolve
+            expr->implicit_cast =
+                CalculateImplicitCast(*expr, expected_type->type_id);
+          }
+
+          result_type_ids_for_chain_.push_back(expr->type_id);
         });
+  } else {
+    expression->type_id = LiteralType::Error;
   }
+
   return result;
 }
 
@@ -588,6 +606,13 @@ void ExpressionChecker::TypeCheckCallArguments(
       error_collector_.Add(
           "expected " + expected_name + ", but got " + actual_name,
           argument_span, FROM_HERE);
+    } else {
+      // Will run AFTER the deferred resolution scheduled for the `type_id`.
+      deferred_type_resolution_.emplace_back(
+          [this, expr = argument_expressions[i].get(), expected_type]() {
+            // Implicit cast can only be calculated once placeholders resolve
+            expr->implicit_cast = CalculateImplicitCast(*expr, expected_type);
+          });
     }
   }
 }
@@ -624,15 +649,21 @@ std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
           symbol.RequiresVirtualDispatch() ? FunctionKind::Virtual
                                            : symbol.declaration.function_kind,
           CallSymbolicTarget{callee_result.binding->GetSymbolId(),
-                             callable_type_id}};
+                             callable_type_id},
+          callee_result.substitution_map};
 
       deferred_type_resolution_.emplace_back(
-          [this, type_id = &call_expr.resolved->target.type_id]() {
+          [this, type_id = &call_expr.resolved->target.type_id,
+           template_arguments = &call_expr.resolved->template_arguments]() {
             *type_id = type_resolver_.Rewrite(*type_id);
+
+            for (auto& [from, to] : *template_arguments) {
+              to = type_resolver_.Rewrite(to);
+            }
           });
     } else {
       CHECK(!call_expr.resolved) << "CallExpression was previously resolved";
-      // Assume a bound closure on the stack so no `target_symbol_id` is needed.
+      // Assume a closure on the stack so no `target_symbol_id` is needed.
       call_expr.resolved = ResolvedCall{FunctionKind::Anonymous};
     }
 
@@ -674,9 +705,7 @@ std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
                            /*variadic_type=*/std::nullopt);
     CHECK(!call_expr.resolved) << "CallExpression was previously resolved";
     call_expr.resolved =
-        ResolvedCall{struct_type->symbol->interface_types.empty()
-                         ? FunctionKind::Constructor
-                         : FunctionKind::ConstructorVirtual,
+        ResolvedCall{FunctionKind::Constructor,
                      CallSymbolicTarget{callee_result.binding->GetSymbolId(),
                                         callable_type_id}};
 
@@ -726,7 +755,8 @@ std::optional<ExpressionResult> ExpressionChecker::HandlePrimary(
                     type_rewriter_.Rewrite(binding.type_id, substitution_map));
 
                 return ExpressionResult::with_type_override(realized_type_id,
-                                                            binding);
+                                                            binding)
+                    .with_substitutions(substitution_map);
               }
 
               return ExpressionResult::of_binding(binding);
@@ -739,9 +769,9 @@ std::optional<ExpressionResult> ExpressionChecker::HandlePrimary(
               CHECK(!ident.resolved) << "Identifier was previously resolved";
               ident.resolved = ResolvedIdentifier{*binding};
               if (narrowed_bindings_.contains(binding->binding_id)) {
-                return ExpressionResult::with_storage_override(
-                    narrowed_bindings_.at(binding->binding_id),
-                    binding->type_id, binding);
+                return ExpressionResult::with_type_override(
+                           narrowed_bindings_.at(binding->binding_id), binding)
+                    .with_storage_override(binding->type_id);
               }
               return instantiate_result(*binding);
             }
@@ -762,9 +792,9 @@ std::optional<ExpressionResult> ExpressionChecker::HandlePrimary(
               CHECK(!ident.resolved) << "Identifier was previously resolved";
               ident.resolved = ResolvedIdentifier{*binding};
               if (narrowed_bindings_.contains(binding->binding_id)) {
-                return ExpressionResult::with_storage_override(
-                    narrowed_bindings_.at(binding->binding_id),
-                    binding->type_id, binding);
+                return ExpressionResult::with_type_override(
+                           narrowed_bindings_.at(binding->binding_id), binding)
+                    .with_storage_override(binding->type_id);
               }
               return instantiate_result(*binding);
             }
@@ -894,7 +924,9 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
       TypeId realized_type_id = type_resolver_.Rewrite(
           type_rewriter_.Rewrite(binding->type_id, substitution_map));
 
-      return ExpressionResult::with_type_override(realized_type_id, *binding);
+      return ExpressionResult::with_type_override(realized_type_id, *binding)
+          .with_substitutions(object_result->substitution_map)
+          .with_substitutions(substitution_map);
     }
 
     for (ScopeId interface_scope_id : struct_type->symbol->interface_scopes) {
@@ -914,7 +946,8 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
         TypeId realized_type_id = type_resolver_.Rewrite(
             type_rewriter_.Rewrite(binding->type_id, substitution_map));
 
-        return ExpressionResult::with_type_override(realized_type_id, *binding);
+        return ExpressionResult::with_type_override(realized_type_id, *binding)
+            .with_substitutions(substitution_map);
       }
     }
 
@@ -967,7 +1000,9 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
       TypeId realized_type_id = type_resolver_.Rewrite(
           type_rewriter_.Rewrite(binding->type_id, substitution_map));
 
-      return ExpressionResult::with_type_override(realized_type_id, *binding);
+      return ExpressionResult::with_type_override(realized_type_id, *binding)
+          .with_substitutions(object_result->substitution_map)
+          .with_substitutions(substitution_map);
     }
 
     error_collector_
@@ -1023,6 +1058,63 @@ void ExpressionChecker::BuildPlaceholderTypes(
     CHECK(success) << type_registry_.GetNameFromTypeId(template_type_id)
                    << " was previously mapped";
   }
+}
+
+std::optional<ImplicitCast> ExpressionChecker::CalculateImplicitCast(
+    const Expression& expression,
+    TypeId expected_type_id) const {
+  if (expression.type_id == expected_type_id)
+    return std::nullopt;
+
+  {
+    auto* actual_type = type_registry_.GetType<StructType>(expression.type_id);
+    auto* expected_type = type_registry_.GetType<StructType>(expected_type_id);
+
+    if (actual_type && expected_type &&
+        !actual_type->symbol->declaration.IsInterface() &&
+        expected_type->symbol->declaration.IsInterface()) {
+      return ImplicitCast{expression.type_id, ImplicitCast::Kind::kInterface};
+    }
+  }
+
+  {
+    auto* actual_type = type_registry_.GetType<StructType>(expression.type_id);
+    auto* expected_type =
+        type_registry_.GetType<IntersectionType>(expected_type_id);
+
+    if (actual_type && expected_type &&
+        !actual_type->symbol->declaration.IsInterface()) {
+      return ImplicitCast{expression.type_id, ImplicitCast::Kind::kInterface};
+    }
+  }
+
+  {
+    auto* actual_type =
+        type_registry_.GetType<TemplateVariableType>(expression.type_id);
+    auto* expected_type = type_registry_.GetType<StructType>(expected_type_id);
+
+    if (actual_type && expected_type &&
+        expected_type->symbol->declaration.IsInterface()) {
+      return ImplicitCast{expression.type_id, ImplicitCast::Kind::kInterface};
+    }
+  }
+
+  {
+    auto* actual_type =
+        type_registry_.GetType<TemplateVariableType>(expression.type_id);
+    auto* expected_type =
+        type_registry_.GetType<IntersectionType>(expected_type_id);
+
+    if (actual_type && expected_type) {
+      return ImplicitCast{expression.type_id, ImplicitCast::Kind::kInterface};
+    }
+  }
+
+  if (expected_type_id == LiteralType::Self) {
+    return ImplicitCast{expression.type_id, ImplicitCast::Kind::kSelf};
+  }
+
+  return ImplicitCast{expected_type_id, ImplicitCast::Kind::kUnknown};
 }
 
 std::ostream& operator<<(std::ostream& os,

@@ -104,7 +104,7 @@ class GoldenTest : public ::testing::Test {
         .file_id = 0,
     });
 
-    FunctionContext context = {{}, TypeRegistry::Any};
+    FunctionContext context = {{}, {}, TypeRegistry::Any};
     NarrowedBindings narrowed_bindings;
     SemanticAnalyzer{type_context_, scope_manager_, error_collector_,
                      type_registry_}
@@ -126,8 +126,8 @@ class GoldenTest : public ::testing::Test {
 
           std::vector<SymbolId> called_symbols;
           function_objects.push_back(
-              ByteCodeGenerator{scope_manager_, constant_pool}.Build(
-                  *fn_symbol, called_symbols));
+              ByteCodeGenerator{scope_manager_, type_registry_, constant_pool}
+                  .Build(*fn_symbol, called_symbols));
         } else {
           external_functions.push_back(fn_symbol);
         }

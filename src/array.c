@@ -87,24 +87,25 @@ vm_value_t vm_array_length(vm_value_t* argv, size_t argc, void* vm) {
 }
 
 vm_value_t vm_array_set(vm_value_t* argv, size_t argc, void* vm) {
-  assert(argc == 3 && is_array_like(&argv[0]) && vm_is_i32(&argv[1]) &&
+  assert(argc >= 3 && is_array_like(&argv[0]) && vm_is_i32(&argv[1]) &&
          "incorrect number of args or arg types");
 
   RC_AUTOFREE vm_value_t this = argv[0];
 
   Array* array = this.as.array;
 
+  int32_t count = argc - 2;  // <self> <idx> <value>...
+
   int32_t idx = -1;
-  if (!vm_as_int32(&argv[1], &idx) || idx < 0 || idx >= array->len) {
+  if (!vm_as_int32(&argv[1], &idx) || idx < 0 || idx + count > array->len) {
     return vm_throw_exception(vm, allocate_str_from_c("RangeError"));
   }
 
-  vm_free_ref(&array->data[idx]);  // Free whatever is currently there
-
-  array->data[idx] = argv[2];
-
-  vm_adopt_ref(array->data[idx]);  // Take ownership of the new value
-  return array->data[idx];
+  for (size_t i = 0; i < count; i++) {
+    vm_free_ref(&array->data[idx + i]);  // Free whatever is currently there
+    array->data[idx + i] = argv[2 + i];  // Ownership transferred
+  }
+  return (vm_value_t){.type = VALUE_TYPE_UNIT};
 }
 
 vm_value_t vm_array_push(vm_value_t* argv, size_t argc, void* vm) {

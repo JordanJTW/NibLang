@@ -21,7 +21,7 @@ extern struct Array[T] {
 
   fn push(value: T);
   fn get(idx: i32) -> T;
-  fn set(idx: i32, value: T) -> T;
+  fn set(idx: i32, value: T);
   fn length() -> i32;
 
   fn slice(start: i32, count: i32) -> Array[T] {

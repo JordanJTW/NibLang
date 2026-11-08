@@ -31,6 +31,7 @@ struct FlowResult {
 
 struct FunctionContext {
   std::vector<NamedBinding> required_captures;
+  std::unordered_set<TypeId> required_template_variables;
   const SpannedType return_type;
 };
 

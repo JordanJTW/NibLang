@@ -169,8 +169,7 @@ enum FunctionKind {
   Method,
   StaticMethod,
   Constructor,
-  Virtual,             // Assigned to functions needing dynamic dispatch
-  ConstructorVirtual,  // Assigned to objects participating in dispatch
+  Virtual,  // Assigned to functions needing dynamic dispatch
 };
 
 struct CallSymbolicTarget {
@@ -181,6 +180,7 @@ struct CallSymbolicTarget {
 struct ResolvedCall {
   FunctionKind kind;
   CallSymbolicTarget target;
+  SubstitutionMap template_arguments;
 };
 
 struct CallExpression {
@@ -316,6 +316,7 @@ struct ResolvedFunction {
   SymbolId function_symbol_id;
 
   std::vector<NamedBinding> required_captures;
+  std::unordered_set<TypeId> required_template_variables;
   bool should_insert_unit_return = false;
 };
 
@@ -350,6 +351,11 @@ struct TemplateInstantiationExpression {
   std::vector<ParsedType> template_types;
 };
 
+struct ImplicitCast {
+  TypeId type_id;
+  enum class Kind { kUnknown, kInterface, kSelf } kind;
+};
+
 struct Expression {
   std::variant<PrimaryExpression,
                BinaryExpression,
@@ -370,7 +376,8 @@ struct Expression {
       as;
 
   Metadata meta;
-  std::optional<TypeId> type_id;
+  TypeId type_id;
+  std::optional<ImplicitCast> implicit_cast;
 };
 
 struct ReturnStatement {

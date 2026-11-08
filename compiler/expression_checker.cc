@@ -37,16 +37,6 @@ Overloaded(Ts...) -> Overloaded<Ts...>;
 
 using LiteralType = ::TypeRegistry::LiteralType;
 
-// Builds a mapping between generic template variable TypeIds and the concrete
-// arguments assigned to them in `type` i.e. Array[T] => Array[i32].
-void PopulateInstanceTypes(const StructType& type,
-                           SubstitutionMap& substitution_map) {
-  for (size_t i = 0; i < type.instance_template_type_ids.size(); ++i) {
-    substitution_map[type.symbol->template_variable_type_ids[i]] =
-        type.instance_template_type_ids[i];
-  }
-}
-
 }  // namespace
 
 ExpressionChecker::ExpressionChecker(
@@ -663,7 +653,7 @@ std::optional<ExpressionResult> ExpressionChecker::TypeCheckCallExpr(
   if (const auto* const struct_type =
           type_registry_.GetType<StructType>(callable_type_id)) {
     SubstitutionMap substitution_map;
-    PopulateInstanceTypes(*struct_type, substitution_map);
+    struct_type->PopulateInstanceSubstitutions(substitution_map);
 
     std::vector<TypeId> realized_field_types;
     realized_field_types.reserve(struct_type->symbol->field_types.size());
@@ -880,7 +870,10 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
             member_name.text, ScopeManager::Current,
             struct_type->symbol->instance_scope_id)) {
       SubstitutionMap substitution_map;
-      PopulateInstanceTypes(*struct_type, substitution_map);
+      struct_type->PopulateInstanceSubstitutions(substitution_map);
+      // Ensure the original TypeId is always passed as `self` since the
+      // `type_id` may represent an unwrapped or constrained type.
+      substitution_map[LiteralType::Self] = object_result->type_id;
 
       if (binding->kind == NamedBinding::Field) {
         CHECK(binding->idx)
@@ -915,7 +908,7 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
             ResolvedAccess{ResolvedAccess::Method{binding->GetSymbolId()}};
 
         SubstitutionMap substitution_map;
-        PopulateInstanceTypes(*struct_type, substitution_map);
+        struct_type->PopulateInstanceSubstitutions(substitution_map);
         BuildPlaceholderTypes(binding->GetSymbolId(), substitution_map);
 
         TypeId realized_type_id = type_resolver_.Rewrite(

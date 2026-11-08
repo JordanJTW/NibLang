@@ -20,6 +20,7 @@
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -31,6 +32,8 @@ using SymbolId = size_t;
 using ScopeId = size_t;
 using TypeId = size_t;
 using BindingId = size_t;
+
+using SubstitutionMap = std::unordered_map<TypeId, TypeId>;
 
 struct FunctionDeclaration;
 struct StructDeclaration;

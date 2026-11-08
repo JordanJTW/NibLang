@@ -65,6 +65,14 @@ size_t IntersectionType::Hash::operator()(const IntersectionType& key) const {
   return hash;
 }
 
+void StructType::PopulateInstanceSubstitutions(
+    SubstitutionMap& substitutions) const {
+  for (size_t i = 0; i < instance_template_type_ids.size(); ++i) {
+    substitutions[symbol->template_variable_type_ids[i]] =
+        instance_template_type_ids[i];
+  }
+}
+
 bool UnionType::operator==(const UnionType& other) const {
   return other.types == types;
 }

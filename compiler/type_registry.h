@@ -66,6 +66,10 @@ struct PlaceholderType {
 struct StructType {
   const StructSymbol* symbol;
   std::vector<TypeId> instance_template_type_ids;
+
+  // Builds a mapping between generic template variable TypeIds and the concrete
+  // arguments assigned to them in `type` i.e. Array[T] => Array[i32].
+  void PopulateInstanceSubstitutions(SubstitutionMap& substitutions) const;
 };
 
 struct TemplateVariableType {

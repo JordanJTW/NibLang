@@ -17,8 +17,6 @@
 #include "compiler/type_context.h"
 #include "compiler/type_registry.h"
 
-using SubstitutionMap = std::unordered_map<TypeId, TypeId>;
-
 class TypeRewriter {
  public:
   explicit TypeRewriter(TypeRegistry& type_registry, TypeContext& type_context);

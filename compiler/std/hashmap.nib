@@ -10,17 +10,12 @@ struct MapNode[Key, Value] {
     next: MapNode[Key, Value]?;
 }
 
-struct HashMap[Key, Value] {
+struct HashMap[Key: EqualTo & Hashable, Value] {
     buckets: Array[MapNode[Key, Value]?];
     size: i32;
-    equalsFn: fn (Key, Key) -> bool;
-    hashFn: fn (Key) -> i32;
 
-    static fn new[Key, Value](
-        equalsFn: fn (Key, Key) -> bool,
-        hashFn: fn (Key) -> i32,
-    ) -> HashMap[Key, Value] {
-        return HashMap(Array.withSize(13), 0, equalsFn, hashFn);
+    static fn new[Key: EqualTo & Hashable, Value]() -> HashMap[Key, Value] {
+        return HashMap(Array.withSize(13), 0);
     }
 
     fn get(key: Key) -> Value? {
@@ -34,18 +29,18 @@ struct HashMap[Key, Value] {
             return;
         }
 
-        let bucket_idx = (self.hashFn(key) & 0x7FFFFFFF) % self.buckets.length();
-        let head = self.buckets.get(bucket_idx);
+        let bucket_idx = (key.hash() & 0x7FFFFFFF) % self.buckets.length();
+        let head = self.buckets.get(bucket_idx) as MapNode[Key, Value];
 
         self.buckets.set(bucket_idx, MapNode(key, value, head));
         self.size = self.size + 1;
     }
 
     fn find_node(key: Key) -> MapNode[Key, Value]? {
-        let bucket_idx = (self.hashFn(key) & 0x7FFFFFFF) % self.buckets.length();
+        let bucket_idx = (key.hash() & 0x7FFFFFFF) % self.buckets.length();
         let node = self.buckets.get(bucket_idx);
         while (node != Nil) {
-            if (self.equalsFn(node.key, key)) {
+            if (key == node.key) {
                 return node;
             }
             node = node.next;

@@ -1,0 +1,55 @@
+// RUN: %compiler %s --output %t.bin
+// RUN: %run %t.bin
+
+@import "std/types.nib"
+@import "std/hashmap.nib"
+
+extern fn check(success: bool);
+
+struct Point {
+ x: i32;
+ y: i32;
+
+  implements EqualTo {
+    fn equalTo(o: Point) -> bool {
+      return self.x == o.x && self.y == o.y;
+    }
+  }
+  implements Hashable {
+    fn hash() -> i32 {
+      return (self.x * 73856093) ^ (self.y * 19349663);
+    }
+  }
+}
+
+extern fn log(...any);
+
+// TODO: Remove `as String` cast workaround.
+fn main() {
+  let x: HashMap[String, String] = HashMap.new();
+  x.set("Hello", "World");
+  x.set("Jordan", "Creator");
+  x.set("Good", "Bye");
+
+  check(x.get("Hello") as String == "World");
+  check(x.get("hello") == Nil);
+  check(x.get("Jordan") as String == "Creator");
+
+  let y: HashMap[i32, String] = HashMap.new();
+  y.set(123, "World");
+  y.set(456, "Creator");
+  y.set(789, "Bye");
+
+  check(y.get(123) as String == "World");
+  check(y.get(234) == Nil);
+  check(y.get(456) as String == "Creator");
+
+  let z: HashMap[Point, i32] = HashMap.new();
+  z.set(Point(12, 34), 1234);
+  z.set(Point(56, 78), 5678);
+  z.set(Point(109, 369), 109369);
+
+  check(z.get(Point(12, 34)) as i32 == 1234);
+  check(z.get(Point(3087, 2101)) == Nil);
+  check(z.get(Point(109, 369)) as i32 == 109369);
+}

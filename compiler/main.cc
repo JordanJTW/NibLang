@@ -170,8 +170,10 @@ Options ParseArgs(int argc, char* argv[]) {
   return opts;
 }
 
-constexpr std::array<std::string_view, 18> kRuntimeFunctions = {
+constexpr std::array<std::string_view, 20> kRuntimeFunctions = {
     "log",
+    "check",
+    "rand",
     "fetch",
     "Font_load",
     "Font_drawText",

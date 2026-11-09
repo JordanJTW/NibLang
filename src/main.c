@@ -10,10 +10,12 @@
  * SPDX-License-Identifier: GPL-3.0-only OR LicenseRef-Commercial
  */
 
+#include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include "src/map.h"
 #include "src/promise.h"
@@ -88,11 +90,44 @@ static vm_value_t vm_log(vm_value_t* argv, size_t argc, void* vm) {
   return (vm_value_t){.type = VALUE_TYPE_UNIT};
 }
 
-static const vm_function_t kNativeFunctions[1] = {
+static vm_value_t vm_rand(vm_value_t* argv, size_t argc, void* vm) {
+  assert(argc == 2 && vm_is_i32(&argv[0]) && vm_is_i32(&argv[1]) &&
+         "incorrect number of args or arg types");
+
+  RC_AUTOFREE vm_value_t start = argv[0];
+  RC_AUTOFREE vm_value_t end = argv[1];
+
+  int r = rand() % (end.as.i32 - start.as.i32 + 1) + start.as.i32;
+  return (vm_value_t){.type = VALUE_TYPE_INT, .as.i32 = r};
+}
+
+static vm_value_t vm_check(vm_value_t* argv, size_t argc, void* vm) {
+  assert(argc == 1 && vm_is_bool(&argv[0]) &&
+         "incorrect number of args or arg types");
+
+  RC_AUTOFREE vm_value_t success = argv[0];
+
+  if (!success.as.boolean)
+    exit(-1);
+
+  return (vm_value_t){.type = VALUE_TYPE_UNIT};
+}
+
+static const vm_function_t kNativeFunctions[3] = {
+    {
+        .type = VM_NATIVE_FUNC,
+        .argument_count = 0,
+        .name = "log",
+        .as.native = {.fn = vm_log, .userdata = NULL},
+    },
     {.type = VM_NATIVE_FUNC,
-     .argument_count = 0,
-     .name = "log",
-     .as.native = {.fn = vm_log, .userdata = NULL}},
+     .argument_count = 1,
+     .name = "check",
+     .as.native = {.fn = vm_check, .userdata = NULL}},
+    {.type = VM_NATIVE_FUNC,
+     .argument_count = 2,
+     .name = "rand",
+     .as.native = {.fn = vm_rand, .userdata = NULL}},
 };
 
 int main(int argc, char* argv[]) {
@@ -124,6 +159,8 @@ int main(int argc, char* argv[]) {
     fclose(file);
     return 1;
   }
+
+  srand(time(NULL));
 
   vm_t* vm = init_vm(buffer, file_size, kNativeFunctions,
                      sizeof(kNativeFunctions) / sizeof(vm_function_t));

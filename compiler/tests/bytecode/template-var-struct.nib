@@ -1,0 +1,68 @@
+// RUN: %compiler %s --dump --disable-logging | %filecheck %s
+
+@import "std/types.nib"
+
+struct Foo[X: Hashable, Y] {
+  a: X;
+  b: Y;
+  c: X;
+}
+
+fn foo[A: Hashable](value: A) -> Foo[A, A] {
+  let foo = Foo(value, value, value);
+  foo.a.hash();
+  return foo;
+}
+
+fn main() {
+  let x = Foo("Hello", 123, "World");
+  x.a.hash();
+
+  let y = foo("Hello");
+  y.b.hash();
+}
+
+// NOTE: OP_CALL produces two lines of output and we only care about
+// one so CHECK-NEXT {{.*}} is used to skip the uninteresting line :^).
+
+// CHECK-LABEL: Function 0: main
+
+// Direct call to concrete type String
+// CHECK: OP_STORE_LOCAL 0
+// CHECK-NEXT: OP_PUSH_LOCAL 0
+// CHECK-NEXT: OP_PUSH_I32 0
+// CHECK-NEXT: OP_CALL idx: 2147483659 argc: 2
+// CHECK-NEXT: {{.*}}
+// CHECK-NEXT: OP_CALL idx: 2 argc: 1
+
+// Call to foo[A] requires type information
+// CHECK: OP_PUSH_CONST_REF 0
+// CHECK-NEXT: OP_PUSH_I32 0
+// CHECK-NEXT: OP_CALL idx: 1 argc: 2
+
+// But direct call to String within main()
+// CHECK: OP_STORE_LOCAL 1
+// CHECK-NEXT: OP_PUSH_LOCAL 1
+// CHECK-NEXT: OP_PUSH_I32 1
+// CHECK-NEXT: OP_CALL idx: 2147483659 argc: 2
+// CHECK-NEXT: {{.*}}
+// CHECK-NEXT: OP_CALL idx: 2 argc: 1
+
+// CHECK-LABEL: Function 1: foo (args: 2, locals: 3
+
+// Foo is constructed without any type information
+// CHECK-NEXT: OP_PUSH_LOCAL 0
+// CHECK-NEXT: OP_PUSH_LOCAL 0
+// CHECK-NEXT: OP_PUSH_LOCAL 0
+// CHECK-NEXT: OP_CALL idx: 2147483662 argc: 3
+
+// Virtual dispatch within foo[A]()
+// CHECK: OP_STORE_LOCAL 2
+// CHECK-NEXT: OP_PUSH_LOCAL 2
+// CHECK-NEXT: OP_PUSH_I32 0
+// CHECK-NEXT: OP_CALL idx: 2147483659 argc: 2
+// CHECK-NEXT: {{.*}}
+// Push type information for template variable A
+// CHECK-NEXT: OP_PUSH_LOCAL 1
+// CHECK-NEXT: OP_CALL_VIRTUAL idx: 0 argc: 1
+

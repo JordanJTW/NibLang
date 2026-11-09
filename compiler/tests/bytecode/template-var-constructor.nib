@@ -1,0 +1,54 @@
+// RUN: %compiler %s --dump --disable-logging | %filecheck %s
+
+@import "std/types.nib"
+
+struct Foo[X: Hashable, Y] {
+  a: X;
+  b: Y;
+  c: i32;
+  d: Hashable;
+  e: X;
+}
+
+fn main() {
+  let x = Foo("Hello", 123, 456, 789, "World");
+  x.d = "New";
+  x.d.hash();
+}
+
+// CHECK-LABEL: Function 0: main
+
+// Template variables are ALWAYS stored as 1 slot but an
+// interface like Hashable needs a fat-pointer.
+//   let x = Foo("Hello", 123, 456, 789, "World");
+// CHECK-NEXT: OP_PUSH_CONST_REF 0
+// CHECK-NEXT: OP_PUSH_I32 123
+// CHECK-NEXT: OP_PUSH_I32 456
+// CHECK-NEXT: OP_PUSH_I32 789
+// CHECK-NEXT: OP_PUSH_I32 2
+// CHECK-NEXT: OP_PUSH_CONST_REF 1
+// CHECK-NEXT: OP_CALL idx: 2147483662 argc: 6
+
+// Ensure implicit cast to fat-pointer on assign.
+//   x.d = "New"
+// CHECK: OP_PUSH_LOCAL 0
+// CHECK-NEXT: OP_PUSH_I32 3
+// CHECK-NEXT: OP_PUSH_CONST_REF 2
+// CHECK-NEXT: OP_PUSH_I32 0
+// CHECK-NEXT: OP_CALL idx: 2147483660 argc: 4
+
+// NOTE: OP_CALL produces two lines of output and we only care about
+// one so CHECK-NEXT {{.*}} is used to skip the uninteresting line :^).
+
+// Accessing fat-pointer means pulling both slots.
+//   x.d.hash();
+// CHECK: OP_PUSH_LOCAL 0
+// CHECK-NEXT: OP_PUSH_I32 3
+// CHECK-NEXT: OP_CALL idx: 2147483659 argc: 2
+// CHECK-NEXT: {{.*}}
+// CHECK-NEXT: OP_PUSH_LOCAL 0
+// CHECK-NEXT: OP_PUSH_I32 4
+// CHECK-NEXT: OP_CALL idx: 2147483659 argc: 2
+// CHECK-NEXT: {{.*}}
+// CHECK-NEXT: OP_CALL_VIRTUAL idx: 0 argc: 1
+// CHECK-NEXT: {{.*}}

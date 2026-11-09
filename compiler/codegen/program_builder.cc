@@ -343,9 +343,9 @@ bool ProgramBuilder::DumpImage(std::vector<uint8_t> program) {
       name = reinterpret_cast<const char*>(debug_data.data() + fn.name_offset);
     }
 
-    LOG(INFO) << "Function " << i << ": " << name << " (args: " << fn.arg_count
+    std::cout << "Function " << i << ": " << name << " (args: " << fn.arg_count
               << ", locals: " << fn.local_count
-              << ", bytecode size: " << fn.bytecode.size() << ")";
+              << ", bytecode size: " << fn.bytecode.size() << ")" << std::endl;
     DumpByteCode(fn.bytecode);
     printf("\n");
   }

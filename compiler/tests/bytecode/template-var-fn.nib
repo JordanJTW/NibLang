@@ -1,0 +1,73 @@
+// RUN: %compiler %s --dump --disable-logging | %filecheck %s
+
+@import "std/types.nib"
+
+fn with_template[T: Hashable](v1: T) {
+  v1.hash();
+}
+
+fn with_interface(v1: Hashable) {
+  v1.hash();
+}
+
+// Ensure template variables with constraints have their types passed
+// and interfaces are always passed as fat pointers.
+fn foo[X: Hashable, Y: Hashable, Z](v1: X, v2: Hashable, v3: Y, v4: Z) -> Z {
+  v1.hash();
+  v2.hash();
+  v3.hash();
+
+  with_interface(v1);
+  with_template(v1);
+  return v4;
+}
+
+fn main() -> String {
+  let x = foo(123, 456, "hello", "world");
+  return x;
+}
+
+// CHECK-LABEL: Function 0: main
+// template variable 'X'
+// CHECK: OP_PUSH_I32 123
+
+// Fat-pointer for implicit cast to Hashable
+// CHECK-NEXT: OP_PUSH_I32 456
+// CHECK-NEXT: OP_PUSH_I32 2
+
+// template variable 'Y'
+// CHECK-NEXT: OP_PUSH_CONST_REF 0
+
+// template variable 'Z'
+// CHECK-NEXT: OP_PUSH_CONST_REF 1
+
+// Types for template variables X & Y.
+// CHECK-NEXT: OP_PUSH_I32 0
+// CHECK-NEXT: OP_PUSH_I32 2
+// CHECK-NEXT: OP_CALL
+
+// CHECK-LABEL: Function 1: foo
+// v1.hash();
+// CHECK: OP_PUSH_LOCAL 0
+// CHECK-NEXT: OP_PUSH_LOCAL 6
+// CHECK-NEXT: OP_CALL_VIRTUAL idx: 0 argc: 1
+
+// v2.hash();
+// CHECK: OP_PUSH_LOCAL 1
+// CHECK-NEXT: OP_PUSH_LOCAL 2
+// CHECK-NEXT: OP_CALL_VIRTUAL idx: 0 argc: 1
+
+// v3.hash();
+// CHECK: OP_PUSH_LOCAL 3
+// CHECK-NEXT: OP_PUSH_LOCAL 5
+// CHECK-NEXT: OP_CALL_VIRTUAL idx: 0 argc: 1
+
+// with_interface(v1);
+// CHECK: OP_PUSH_LOCAL 0
+// CHECK-NEXT: OP_PUSH_LOCAL 6
+// CHECK-NEXT: OP_CALL idx: {{\d}} argc: 2
+
+// with_template(v1);
+// CHECK: OP_PUSH_LOCAL 0
+// CHECK-NEXT: OP_PUSH_LOCAL 6
+// CHECK-NEXT: OP_CALL idx: {{\d}} argc: 2

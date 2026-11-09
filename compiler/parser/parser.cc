@@ -637,7 +637,8 @@ std::unique_ptr<Expression> Parser::ParseBitwise() {
   if (!lhs)
     return nullptr;
 
-  while (current_token_.kind == TokenKind::kAnd) {
+  while (current_token_.kind == TokenKind::kAnd ||
+         current_token_.kind == TokenKind::kXor) {
     Token op = current_token_;
     AdvanceToken();
 

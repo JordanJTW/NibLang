@@ -78,6 +78,7 @@ enum class TokenKind {
   kOrOr,              // ||
   kAnd,               // &
   kPercent,           // %
+  kXor,               // ^
   kComment,           // // comment text
   kTokenError,        // Token containing an error message from tokenization
   kEndExpr,           // ;

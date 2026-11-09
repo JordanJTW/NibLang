@@ -573,6 +573,17 @@ static void run_frame(vm_t* vm, const char* name) {
         ++frame->pc;
         break;
       }
+      case OP_BITWISE_XOR: {
+        vm_value_t arg2 = pop_stack(&vm->stack);
+        vm_value_t arg1 = pop_stack(&vm->stack);
+        vm_value_t result = (vm_value_t){.type = VALUE_TYPE_INT,
+                                         .as.i32 = arg1.as.i32 ^ arg2.as.i32};
+        DEBUG_LOG("OP_BITWISE_XOR %d & %d = %d", arg1.as.i32, arg2.as.i32,
+                  result.as.i32);
+        push_stack(&vm->stack, result);
+        ++frame->pc;
+        break;
+      }
       case OP_MODULO: {
         vm_value_t arg2 = pop_stack(&vm->stack);
         vm_value_t arg1 = pop_stack(&vm->stack);

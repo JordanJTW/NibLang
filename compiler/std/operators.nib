@@ -32,4 +32,5 @@ interface Modulus {
 
 interface Bitwise {
   fn and(o: Self) -> Self;
+  fn xor(o: Self) -> Self;
 }

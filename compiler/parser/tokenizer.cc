@@ -71,6 +71,8 @@ std::optional<TokenKind> get_single_char_token(char ch) {
       return TokenKind::kAnd;
     case '%':
       return TokenKind::kPercent;
+    case '^':
+      return TokenKind::kXor;
     default:
       return std::nullopt;
   }
@@ -330,6 +332,7 @@ std::ostream& operator<<(std::ostream& os, const TokenKind& type) {
     KIND_TO_NAME(kOrOr);
     KIND_TO_NAME(kAnd);
     KIND_TO_NAME(kPercent);
+    KIND_TO_NAME(kXor);
     KIND_TO_NAME(kComment);
     KIND_TO_NAME(kTokenError);
     KIND_TO_NAME(kEndExpr);

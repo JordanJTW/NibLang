@@ -1155,6 +1155,8 @@ std::optional<ExpressionResult> ExpressionChecker::HandleBinaryInfix(
         return find_implementation("Modulus", "mod");
       case TokenKind::kAnd:
         return find_implementation("Bitwise", "and");
+      case TokenKind::kXor:
+        return find_implementation("Bitwise", "xor");
       default:
         LOG(FATAL) << "Unknown binary operator: " << binary.op;
         return std::nullopt;

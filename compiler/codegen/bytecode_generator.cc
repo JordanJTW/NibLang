@@ -296,6 +296,9 @@ void ByteCodeGenerator::EmitExpression(
                   case IntrinsicId::Int32_BitwiseAnd:
                     bytecode_.BitwiseAnd();
                     break;
+                  case IntrinsicId::Int32_BitwiseXor:
+                    bytecode_.BitwiseXor();
+                    break;
                   case IntrinsicId::Int32_CompareTo:
                   case IntrinsicId::Float32_CompareTo:
                     emit_comparison_operator(binary.op);

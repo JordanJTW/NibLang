@@ -143,6 +143,10 @@ Assembler& Assembler::BitwiseAnd() {
   data_.push_back(OP_BITWISE_AND);
   return *this;
 }
+Assembler& Assembler::BitwiseXor() {
+  data_.push_back(OP_BITWISE_XOR);
+  return *this;
+}
 Assembler& Assembler::Modulo() {
   data_.push_back(OP_MODULO);
   return *this;
@@ -346,6 +350,7 @@ std::string GetOpName(op_t op) {
     CASE_OP_NAME(OP_INC);
     CASE_OP_NAME(OP_CONCAT);
     CASE_OP_NAME(OP_BITWISE_AND);
+    CASE_OP_NAME(OP_BITWISE_XOR);
     CASE_OP_NAME(OP_MODULO);
     CASE_OP_NAME(OP_LESS_THAN);
     CASE_OP_NAME(OP_LESS_OR_EQ);
@@ -495,6 +500,7 @@ void DumpByteCode(const std::vector<uint8_t>& bytecode) {
       case OP_INC:
       case OP_CONCAT:
       case OP_BITWISE_AND:
+      case OP_BITWISE_XOR:
       case OP_MODULO:
       case OP_PUSH_TRUE:
       case OP_PUSH_FALSE:

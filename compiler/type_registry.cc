@@ -49,6 +49,7 @@ std::optional<IntrinsicId> GetIntrinsicId(std::string_view name) {
           {"i32_Divide_divide", IntrinsicId::Int32_Divide},
           {"i32_Modulus_mod", IntrinsicId::Int32_Modulus},
           {"i32_Bitwise_and", IntrinsicId::Int32_BitwiseAnd},
+          {"i32_Bitwise_xor", IntrinsicId::Int32_BitwiseXor},
           {"String_Add_add", IntrinsicId::String_Concat},
       };
 

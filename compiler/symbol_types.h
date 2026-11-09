@@ -37,6 +37,7 @@ enum class IntrinsicId {
   Int32_Divide,
   Int32_Modulus,
   Int32_BitwiseAnd,
+  Int32_BitwiseXor,
   String_Concat,
 };
 

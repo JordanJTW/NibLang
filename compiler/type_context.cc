@@ -459,16 +459,21 @@ bool TypeContext::IsTypeSubsetOf(TypeId sub_type_id,
     // Intentional fall-through
   }
 
-  // Handles `T` being passed from one generic function to another.
-  if (std::holds_alternative<TemplateVariableType>(sub_type) &&
-      std::holds_alternative<StructType>(super_type)) {
-    const auto& super = std::get<StructType>(super_type);
-    const auto& sub = std::get<TemplateVariableType>(sub_type);
+  if (std::holds_alternative<StructType>(sub_type) &&
+      std::holds_alternative<IntersectionType>(super_type)) {
+    const auto& sub = std::get<StructType>(sub_type);
+    const auto& intersection = std::get<IntersectionType>(super_type);
 
-    if (super.symbol->declaration.IsInterface() && sub.constraint_type_id) {
-      return sub.constraint_type_id->type_id == super_type_id;
-    }
-    // Intentional fall-through
+    return std::ranges::all_of(intersection.types, [&](TypeId type_id) {
+      return std::ranges::find(sub.symbol->interface_types, type_id) !=
+             sub.symbol->interface_types.end();
+    });
+  }
+
+  // Handles `T` being passed from one generic function to another.
+  if (std::holds_alternative<TemplateVariableType>(sub_type)) {
+    const auto& sub = std::get<TemplateVariableType>(sub_type);
+    return IsTypeSubsetOf(sub.constraint_type_id->type_id, super_type_id);
   }
 
   // Placeholders should _only_ be used during type inference in which case we

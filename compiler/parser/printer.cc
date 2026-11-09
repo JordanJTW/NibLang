@@ -296,6 +296,13 @@ void Printer::Print(const Expression& expr, size_t indent) {
 
             std::cout << std::string(indent + 2, ' ') << "RHS:" << std::endl;
             Print(*binary.rhs, indent + 4);
+            if (binary.resolved) {
+              std::cout << std::string(indent + 2, ' ')
+                        << "ResolvedBinary(symbolId: "
+                        << type_registry_->GetNameFromSymbolId(
+                               binary.resolved->symbol_id)
+                        << ")" << std::endl;
+            }
           },
           [&](const AssignmentExpression& assign) {
             std::cout << std::string(indent, ' ')

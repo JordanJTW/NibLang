@@ -32,6 +32,32 @@ void ComputeHash(size_t& seed, TypeId value) {
   seed ^= std::hash<TypeId>{}(value) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 }
 
+std::optional<IntrinsicId> GetIntrinsicId(std::string_view name) {
+  static const std::unordered_map<std::string_view, IntrinsicId>
+      kIntrinsicIdMapping = {
+          {"f32_CompareTo_compareTo", IntrinsicId::Float32_CompareTo},
+          {"f32_EqualTo_equalTo", IntrinsicId::Float32_EqualTo},
+          {"f32_Add_add", IntrinsicId::Float32_Add},
+          {"f32_Subtract_subtract", IntrinsicId::Float32_Subtract},
+          {"f32_Multiply_multiply", IntrinsicId::Float32_Multiply},
+          {"f32_Divide_divide", IntrinsicId::Float32_Divide},
+          {"i32_CompareTo_compareTo", IntrinsicId::Int32_CompareTo},
+          {"i32_EqualTo_equalTo", IntrinsicId::Int32_EqualTo},
+          {"i32_Add_add", IntrinsicId::Int32_Add},
+          {"i32_Subtract_subtract", IntrinsicId::Int32_Subtract},
+          {"i32_Multiply_multiply", IntrinsicId::Int32_Multiply},
+          {"i32_Divide_divide", IntrinsicId::Int32_Divide},
+          {"i32_Modulus_mod", IntrinsicId::Int32_Modulus},
+          {"i32_Bitwise_and", IntrinsicId::Int32_BitwiseAnd},
+          {"String_Add_add", IntrinsicId::String_Concat},
+      };
+
+  if (auto it = kIntrinsicIdMapping.find(name); it != kIntrinsicIdMapping.end())
+    return it->second;
+
+  return std::nullopt;
+}
+
 }  // namespace
 
 bool FunctionType::operator==(const FunctionType& other) const {
@@ -106,9 +132,14 @@ SymbolId TypeRegistry::NewFunctionSymbol(
     std::optional<const StructDeclaration*> parent_declaration,
     std::string_view qualified_name) {
   SymbolId symbol_id = next_symbol_id_++;
-  FunctionSymbol symbol{declaration, parent_declaration, symbol_id,
-                        qualified_name.empty() ? declaration.name.text
-                                               : std::string(qualified_name)};
+  FunctionSymbol symbol{
+      declaration,
+      parent_declaration,
+      symbol_id,
+      qualified_name.empty() ? declaration.name.text
+                             : std::string(qualified_name),
+      GetIntrinsicId(qualified_name),
+  };
   auto [it, success] = symbol_table_.emplace(symbol_id, std::move(symbol));
   CHECK(success) << "SymbolId already exists in SymbolTable";
   return symbol_id;
@@ -263,6 +294,28 @@ TypeId TypeRegistry::NewTypeId() {
   return next_type_id_++;
 }
 
+std::string GetBuiltInTypeName(TypeId type_id, bool include_quotes) {
+  using LiteralType = TypeRegistry::LiteralType;
+  static const std::unordered_map<TypeId, std::string> kBuiltInTypeNames = {
+      {LiteralType::Error, "error"},
+      {LiteralType::Unit, "Unit"},
+      {LiteralType::i32, "i32"},
+      {LiteralType::f32, "f32"},
+      {LiteralType::Codepoint, "Codepoint"},
+      {LiteralType::Bool, "bool"},
+      {LiteralType::Any, "any"},
+      {LiteralType::Never, "never"},
+      {LiteralType::Nil, "Nil"},
+      {LiteralType::String, "String"},
+      {LiteralType::Self, "Self"},
+  };
+
+  if (include_quotes)
+    return "'" + kBuiltInTypeNames.at(type_id) + "'";
+
+  return kBuiltInTypeNames.at(type_id);
+}
+
 std::string TypeRegistry::GetNameFromTypeId(TypeId type_id,
                                             FormatOptions options) const {
   auto it = type_table_.find(type_id);
@@ -270,27 +323,15 @@ std::string TypeRegistry::GetNameFromTypeId(TypeId type_id,
     return options.is_embedded_type ? "Unknown" : "'Unknown'";
   }
 
+  // Short-circuit based on TypeId to catch primitives mapped to structs
+  if (type_id < LiteralType::kCount) {
+    return GetBuiltInTypeName(type_id, !options.is_embedded_type);
+  }
+
   return std::visit(
       Overloaded{
           [&](const BuiltInType&) {
-            static const std::unordered_map<TypeId, std::string>
-                kBuiltInTypeNames = {
-                    {LiteralType::Error, "error"},
-                    {LiteralType::Unit, "Unit"},
-                    {LiteralType::i32, "i32"},
-                    {LiteralType::f32, "f32"},
-                    {LiteralType::Codepoint, "Codepoint"},
-                    {LiteralType::Bool, "bool"},
-                    {LiteralType::Any, "any"},
-                    {LiteralType::Never, "never"},
-                    {LiteralType::Nil, "Nil"},
-                    {LiteralType::String, "String"},
-                    {LiteralType::Self, "Self"},
-                };
-            if (options.is_embedded_type)
-              return kBuiltInTypeNames.at(type_id);
-
-            return "'" + kBuiltInTypeNames.at(type_id) + "'";
+            return GetBuiltInTypeName(type_id, !options.is_embedded_type);
           },
           [&](const FunctionType& type) {
             std::stringstream ss;

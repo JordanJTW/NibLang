@@ -14,7 +14,6 @@
 
 #include <cstddef>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 #include "compiler/types.h"
@@ -22,6 +21,24 @@
 using SymbolId = size_t;
 using ScopeId = size_t;
 using TypeId = size_t;
+
+enum class IntrinsicId {
+  Float32_EqualTo,
+  Float32_CompareTo,
+  Float32_Add,
+  Float32_Subtract,
+  Float32_Multiply,
+  Float32_Divide,
+  Int32_EqualTo,
+  Int32_CompareTo,
+  Int32_Add,
+  Int32_Subtract,
+  Int32_Multiply,
+  Int32_Divide,
+  Int32_Modulus,
+  Int32_BitwiseAnd,
+  String_Concat,
+};
 
 struct InstanceHash {
   std::size_t operator()(const std::vector<TypeId>& argument_type_ids) const {
@@ -41,6 +58,7 @@ struct FunctionSymbol {
   const std::optional<const StructDeclaration*> parent_declaration;
   SymbolId symbol_id;
   std::string qualified_name;
+  std::optional<IntrinsicId> intrinsic_id;
   std::vector<TypeId> template_variable_type_ids;
 
   // The lexical environment this symbol was declared in

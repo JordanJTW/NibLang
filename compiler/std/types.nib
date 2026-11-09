@@ -2,13 +2,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause
 
-interface EqualTo {
-  fn equalTo(other: Self) -> bool;
-}
-
-interface CompareTo {
-  fn compareTo(other: Self) -> i32;
-}
+@import "std/operators.nib"
 
 interface Hashable {
   fn hash() -> i32;
@@ -116,10 +110,93 @@ extern struct String {
       return String.hash(self);
     }
   }
-
   implements EqualTo {
-    fn equalTo(other: String) -> bool {
-      return String.equals(self, other);
+    fn equalTo(o: String) -> bool {
+      return String.equals(self, o);
+    }
+  }
+  implements CompareTo {
+    fn compareTo(o: String) -> i32;
+  }
+  implements Add {
+    fn add(o: String) -> String;
+  }
+}
+
+extern struct bool {
+  implements Hashable {
+    fn hash() -> i32 {
+      if (self) { return 1231; } else { return 1237; }
+    }
+  }
+  implements EqualTo {
+    fn equalTo(o: bool) -> bool {
+      return self.hash() == o.hash();
+    }
+  }
+}
+
+extern struct i32 {
+  implements Hashable {
+    fn hash() -> i32 { return self; }
+  }
+  implements EqualTo {
+    fn equalTo(o: i32) -> bool;
+  }
+  implements CompareTo {
+    fn compareTo(o: i32) -> i32;
+  }
+  implements Add {
+    fn add(o: i32) -> i32;
+  }
+  implements Subtract {
+    fn subtract(o: i32) -> i32;
+  }
+  implements Multiply {
+    fn multiply(o: i32) -> i32;
+  }
+  implements Divide {
+    fn divide(o: i32) -> i32;
+  }
+  implements Modulus {
+    fn mod(o: i32) -> i32;
+  }
+  implements Bitwise {
+    fn and(o: i32) -> i32;
+    fn xor(o: i32) -> i32;
+  }
+}
+
+extern struct f32 {
+  implements EqualTo {
+    fn equalTo(o: f32) -> bool;
+  }
+  implements CompareTo {
+    fn compareTo(o: f32) -> i32;
+  }
+  implements Add {
+    fn add(o: f32) -> f32;
+  }
+  implements Subtract {
+    fn subtract(o: f32) -> f32;
+  }
+  implements Multiply {
+    fn multiply(o: f32) -> f32;
+  }
+  implements Divide {
+    fn divide(o: f32) -> f32;
+  }
+}
+
+extern struct Codepoint {
+  implements EqualTo {
+    fn equalTo(o: Codepoint) -> bool {
+      return self as i32 == o as i32;
+     }
+  }
+  implements CompareTo {
+    fn compareTo(o: Codepoint) -> i32 {
+      return self as i32 - o as i32;
     }
   }
 }

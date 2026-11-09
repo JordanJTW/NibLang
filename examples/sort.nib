@@ -14,7 +14,7 @@ fn main() -> any {
   sort(sortable2, fn(v1: String, v2: String) -> i32 { return v1.length() - v2.length(); });
 
   let sortable3 = Array.init("Cupcake", "Apple", "Lava Cake", "Donut", "Eclaire", "KitKat", "BonBon");
-  sort(sortable3, fn(v1: String, v2: String) -> i32 {  return (v1.charAt(0) - v2.charAt(0)) as i32; });
+  sort(sortable3, fn(v1: String, v2: String) -> i32 {  return (v1.charAt(0) as i32) - (v2.charAt(0) as i32); });
 
   let sortable4 = parse_value("[ 3, 14, 6, 19, 18, 12 ]", Parser(0)) as Array[JsonValue];
   sort(sortable4, fn(v1: JsonValue, v2: JsonValue) -> i32 { return (v1 as i32) -(v2 as i32); });

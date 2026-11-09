@@ -91,84 +91,16 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
             return result;
           },
           [&](BinaryExpression& binary) -> std::optional<ExpressionResult> {
-            auto lhs = RequireValue(binary.lhs);
-            auto rhs = RequireValue(binary.rhs);
-
-            if (!lhs || !rhs)
-              return std::nullopt;
-
-            if (lhs->type_id != rhs->type_id &&
-                !((rhs->type_id == LiteralType::Nil &&
-                   type_context_.IsTypeSubsetOf(rhs->type_id, lhs->type_id)) ||
-                  (lhs->type_id == LiteralType::Nil &&
-                   type_context_.IsTypeSubsetOf(lhs->type_id, rhs->type_id)))) {
-              error_collector_
-                  .Add("LHS and RHS are not compatible", expression->meta, FROM_HERE)
-                  .WithNote("LHS type is " +
-                                type_registry_.GetNameFromTypeId(lhs->type_id),
-                            binary.lhs->meta)
-                  .WithNote("But RHS type is " +
-                                type_registry_.GetNameFromTypeId(rhs->type_id),
-                            binary.rhs->meta);
-              return std::nullopt;
+            // == or !=
+            if (binary.IsEquality()) {
+              return HandleBinaryEquality(binary, expression->meta);
+            }
+            // [>, <, >=, <=]
+            if (binary.IsComparison()) {
+              return HandleBinaryComparison(binary, expression->meta);
             }
 
-            ResolvedBinary resolved{ResolvedBinary::Specialization::Number};
-            NarrowedBindings true_bindings, false_bindings;
-            if (lhs->type_id ==
-                type_context_.GetTypeIdFor(ParsedType{"String"})) {
-              resolved.specialization = ResolvedBinary::Specialization::String;
-            } else if (lhs->type_id == LiteralType::Nil ||
-                       rhs->type_id == LiteralType::Nil) {
-              resolved.specialization = ResolvedBinary::Specialization::Nil;
-
-              // TODO: Ensure that NamedBinding is referring to a Variable.
-              std::optional<NamedBinding> symbol_to_narrow;
-              if (lhs->type_id == LiteralType::Nil &&
-                  rhs->binding.has_value()) {
-                symbol_to_narrow = rhs->binding.value();
-              } else if (rhs->type_id == LiteralType::Nil &&
-                         lhs->binding.has_value()) {
-                symbol_to_narrow = lhs->binding.value();
-              }
-
-              if (symbol_to_narrow) {
-                auto unwrapped_type_id =
-                    type_context_.UnwrapOptional(symbol_to_narrow->type_id);
-
-                // This should NEVER be hit. See compatibility check above.
-                CHECK(unwrapped_type_id)
-                    << "Non-optional type cannot be narrowed from Nil";
-
-                TypeId if_branch_type = unwrapped_type_id.value();
-                TypeId else_branch_type = LiteralType::Nil;
-                if (binary.op != TokenKind::kCompareNe) {
-                  std::swap(if_branch_type, else_branch_type);
-                }
-
-                true_bindings[symbol_to_narrow->binding_id] = if_branch_type;
-                false_bindings[symbol_to_narrow->binding_id] = else_branch_type;
-              }
-            }
-
-            CHECK(!binary.resolved)
-                << "BinaryExpression was previously resolved";
-            binary.resolved = resolved;
-
-            // Comparison operators will always generate a boolean
-            if (binary.op == TokenKind::kCompareGt ||
-                binary.op == TokenKind::kCompareLt ||
-                binary.op == TokenKind::kCompareGe ||
-                binary.op == TokenKind::kCompareLe ||
-                binary.op == TokenKind::kCompareEq ||
-                binary.op == TokenKind::kCompareNe) {
-              ExpressionResult result(LiteralType::Bool);
-              result.true_bindings = std::move(true_bindings);
-              result.false_bindings = std::move(false_bindings);
-              return result;
-            }
-
-            return ExpressionResult(lhs->type_id);
+            return HandleBinaryInfix(binary, expression->meta);
           },
           [&](CallExpression& call_expr) -> std::optional<ExpressionResult> {
             auto callee_result = Check(call_expr.callee);
@@ -1070,6 +1002,173 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
   return std::nullopt;
 }
 
+std::optional<ExpressionResult> ExpressionChecker::HandleBinaryEquality(
+    BinaryExpression& binary,
+    Metadata expression_metadata) {
+  auto lhs = RequireValue(binary.lhs);
+  auto rhs = RequireValue(binary.rhs);
+
+  if (!lhs || !rhs)
+    return std::nullopt;
+
+  if (lhs->type_id == rhs->type_id) {
+    // Allows for `Nil == Nil` which will be optimized in the backend.
+    if (lhs->type_id == LiteralType::Nil)
+      return ExpressionResult{LiteralType::Bool};
+
+    auto binding = FindImplementationFor(
+        SpannedType{lhs->type_id, binary.lhs->meta}, "EqualTo", "equalTo",
+        "type " + type_registry_.GetNameFromTypeId(lhs->type_id) +
+            " does not support equality comparison",
+        expression_metadata);
+
+    if (!binding || !binding->symbol_id)
+      return std::nullopt;
+
+    binary.resolved = ResolvedBinary{*binding->symbol_id};
+    return ExpressionResult{LiteralType::Bool};
+  }
+
+  // Only `T? == Nil` is valid if LHS and RHS are not the same type!
+  if (lhs->type_id != LiteralType::Nil && rhs->type_id != LiteralType::Nil) {
+    error_collector_.Add(
+        "incompatible types " + type_registry_.GetNameFromTypeId(lhs->type_id) +
+            " and " + type_registry_.GetNameFromTypeId(rhs->type_id) +
+            " can not be compared",
+        expression_metadata, FROM_HERE);
+    return std::nullopt;
+  }
+
+  NarrowedBindings true_bindings, false_bindings;
+  auto receiver_type = lhs->type_id != LiteralType::Nil
+                           ? SpannedType{lhs->type_id, binary.lhs->meta}
+                           : SpannedType{rhs->type_id, binary.rhs->meta};
+
+  if (!type_registry_.GetType<OptionalType>(receiver_type.type_id)) {
+    error_collector_.Add("only an optional T? can be compared to Nil",
+                         receiver_type.metadata, FROM_HERE);
+    return std::nullopt;
+  }
+
+  // TODO: Ensure that NamedBinding is referring to a Variable.
+  std::optional<NamedBinding> symbol_to_narrow;
+  if (lhs->type_id == LiteralType::Nil && rhs->binding.has_value()) {
+    symbol_to_narrow = rhs->binding.value();
+  } else if (rhs->type_id == LiteralType::Nil && lhs->binding.has_value()) {
+    symbol_to_narrow = lhs->binding.value();
+  }
+
+  if (symbol_to_narrow) {
+    // It is possible that both the LHS and RHS are Nil (see above).
+    auto unwrapped_type_id =
+        type_context_.UnwrapOptional(symbol_to_narrow->type_id)
+            .value_or(LiteralType::Nil);
+
+    TypeId if_branch_type = unwrapped_type_id;
+    TypeId else_branch_type = LiteralType::Nil;
+    if (binary.op != TokenKind::kCompareNe) {
+      std::swap(if_branch_type, else_branch_type);
+    }
+
+    true_bindings[symbol_to_narrow->binding_id] = if_branch_type;
+    false_bindings[symbol_to_narrow->binding_id] = else_branch_type;
+  }
+
+  ExpressionResult result(LiteralType::Bool);
+  result.true_bindings = std::move(true_bindings);
+  result.false_bindings = std::move(false_bindings);
+  return result;
+}
+
+std::optional<ExpressionResult> ExpressionChecker::HandleBinaryComparison(
+    BinaryExpression& binary,
+    Metadata expression_metadata) {
+  auto lhs = RequireValue(binary.lhs);
+  auto rhs = RequireValue(binary.rhs);
+
+  if (!lhs || !rhs)
+    return std::nullopt;
+
+  if (lhs->type_id != rhs->type_id) {
+    error_collector_.Add(
+        "incompatible types " + type_registry_.GetNameFromTypeId(lhs->type_id) +
+            " and " + type_registry_.GetNameFromTypeId(rhs->type_id) +
+            " can not be compared",
+        expression_metadata, FROM_HERE);
+    return std::nullopt;
+  }
+
+  auto binding = FindImplementationFor(
+      SpannedType{lhs->type_id, binary.lhs->meta}, "CompareTo", "compareTo",
+      "binary operator cannot be applied to type " +
+          type_registry_.GetNameFromTypeId(lhs->type_id),
+      expression_metadata);
+
+  if (!binding || !binding->symbol_id)
+    return std::nullopt;
+
+  // CompareTo produces an i32 BUT the expression ultimately produces a bool
+  // when the i32 is compared with the given op to 0 at codegen.
+  binary.resolved = ResolvedBinary{*binding->symbol_id};
+  return ExpressionResult{LiteralType::Bool};
+}
+
+std::optional<ExpressionResult> ExpressionChecker::HandleBinaryInfix(
+    BinaryExpression& binary,
+    Metadata expression_metadata) {
+  auto lhs = RequireValue(binary.lhs);
+  auto rhs = RequireValue(binary.rhs);
+
+  if (!lhs || !rhs)
+    return std::nullopt;
+
+  if (lhs->type_id != rhs->type_id) {
+    error_collector_.Add(
+        "binary operator cannot be applied to operands of type " +
+            type_registry_.GetNameFromTypeId(lhs->type_id) + " and " +
+            type_registry_.GetNameFromTypeId(rhs->type_id),
+        expression_metadata, FROM_HERE);
+    return std::nullopt;
+  }
+
+  auto find_implementation = [&](std::string_view interface_name,
+                                 std::string_view method_name) {
+    return FindImplementationFor(
+        SpannedType{lhs->type_id, binary.lhs->meta}, interface_name,
+        method_name,
+        "binary operator cannot be applied to type " +
+            type_registry_.GetNameFromTypeId(lhs->type_id),
+        expression_metadata);
+  };
+
+  auto binding = [&]() -> std::optional<NamedBinding> {
+    switch (binary.op) {
+      case TokenKind::kPlus:
+        return find_implementation("Add", "add");
+      case TokenKind::kMinus:
+        return find_implementation("Subtract", "subtract");
+      case TokenKind::kMultiply:
+        return find_implementation("Multiply", "multiply");
+      case TokenKind::kDivide:
+        return find_implementation("Divide", "divide");
+      case TokenKind::kPercent:
+        return find_implementation("Modulus", "mod");
+      case TokenKind::kAnd:
+        return find_implementation("Bitwise", "and");
+      default:
+        LOG(FATAL) << "Unknown binary operator: " << binary.op;
+        return std::nullopt;
+    }
+  }();
+
+  if (!binding || !binding->symbol_id)
+    return std::nullopt;
+
+  binary.resolved = ResolvedBinary{*binding->symbol_id};
+
+  return ExpressionResult{lhs->type_id};
+}
+
 std::optional<ExpressionResult> ExpressionChecker::RequireValue(
     std::unique_ptr<Expression>& expression,
     std::optional<SpannedType> hint_expected_type) {
@@ -1111,6 +1210,117 @@ void ExpressionChecker::BuildPlaceholderTypes(
     CHECK(success) << type_registry_.GetNameFromTypeId(template_type_id)
                    << " was previously mapped";
   }
+}
+
+std::optional<NamedBinding> ExpressionChecker::FindImplementationFor(
+    SpannedType receiver_type,
+    std::string_view interface_name,
+    std::string_view method_name,
+    std::string_view error_message,
+    Metadata error_span) const {
+  auto resolve_aliases = [this](TypeId type_id) {
+    std::unordered_set<TypeId> visited;  // Circular alias guard
+    while (auto alias = type_registry_.GetType<AliasType>(type_id)) {
+      if (!visited.insert(type_id).second)
+        break;
+      type_id = alias->target_type_id;
+    }
+    return type_id;
+  };
+
+  auto interface_binding =
+      scope_manager_.FindBindingFor(interface_name, ScopeManager::Current,
+                                    /*override_scope_id=*/0 /*root*/);
+  CHECK(interface_binding) << "missing required built-in interface '"
+                           << interface_name << "'";
+
+  // Finds the interface in `type_ids` that matches `interface_name` binding.
+  // Handles associated types by matching on the base interface SymbolId which
+  // is required to find things like Iterators for `for ... in` loops.
+  auto find_match_interface_from_type =
+      [&](const std::span<const TypeId> type_ids) {
+        return std::ranges::find_if(type_ids, [&](TypeId type_id) {
+          auto [symbol, instance_template_type_ids] =
+              type_registry_.GetTypeChecked<StructType>(
+                  resolve_aliases(type_id));
+          CHECK(symbol->declaration.IsInterface());
+          return symbol->symbol_id == interface_binding->symbol_id;
+        });
+      };
+
+  auto find_method_from_interface_type_id = [&](TypeId type_id) {
+    auto interface = type_registry_.GetTypeChecked<StructType>(type_id);
+    CHECK(interface.symbol->declaration.IsInterface());
+
+    return scope_manager_.FindBindingFor(method_name, ScopeManager::Current,
+                                         interface.symbol->instance_scope_id);
+  };
+
+  if (auto template_key =
+          type_registry_.GetType<TemplateVariableType>(receiver_type.type_id)) {
+    if (template_key->constraint_type_id.has_value()) {
+      receiver_type = *template_key->constraint_type_id;
+    }
+  }
+
+  TypeId resolved_type_id = resolve_aliases(receiver_type.type_id);
+
+  // Intersections will only contain interfaces so this is a virtual dispatch.
+  if (auto intersection_type =
+          type_registry_.GetType<IntersectionType>(resolved_type_id)) {
+    auto it = find_match_interface_from_type(intersection_type->types);
+
+    if (it == intersection_type->types.end()) {
+      error_collector_.Add(std::string(error_message), error_span, FROM_HERE)
+          .WithNote(type_registry_.GetNameFromTypeId(receiver_type.type_id) +
+                        " does not include required interface '" +
+                        std::string(interface_name) + "'",
+                    receiver_type.metadata);
+      return std::nullopt;
+    }
+
+    return find_method_from_interface_type_id(*it);
+  }
+
+  auto* struct_type = type_registry_.GetType<StructType>(resolved_type_id);
+  if (struct_type == nullptr) {
+    error_collector_.Add(std::string(error_message), error_span, FROM_HERE)
+        .WithNote(type_registry_.GetNameFromTypeId(receiver_type.type_id) +
+                      " does not implement interface '" +
+                      std::string(interface_name) + "'",
+                  receiver_type.metadata);
+    return std::nullopt;
+  }
+
+  // The receiver is the interface itself, return the virtual dispatch method.
+  if (struct_type->symbol->symbol_id == interface_binding->symbol_id) {
+    return find_method_from_interface_type_id(resolved_type_id);
+  }
+
+  auto it =
+      find_match_interface_from_type(struct_type->symbol->interface_types);
+
+  if (it == struct_type->symbol->interface_types.end()) {
+    error_collector_.Add(std::string(error_message), error_span, FROM_HERE)
+        .WithNote(type_registry_.GetNameFromTypeId(receiver_type.type_id) +
+                      " does not implement required interface '" +
+                      std::string(interface_name) + "'",
+                  receiver_type.metadata)
+        .WithNote("declared here",
+                  struct_type->symbol->declaration.name.metadata);
+    return std::nullopt;
+  }
+
+  size_t interface_offset =
+      std::distance(struct_type->symbol->interface_types.begin(), it);
+
+  auto method_binding = scope_manager_.FindBindingFor(
+      method_name, ScopeManager::Current,
+      struct_type->symbol->interface_scopes.at(interface_offset));
+
+  CHECK(method_binding) << "interface MUST have required method: "
+                        << method_name;
+  return method_binding;
 }
 
 std::optional<ImplicitCast> ExpressionChecker::CalculateImplicitCast(

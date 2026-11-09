@@ -231,34 +231,99 @@ void ByteCodeGenerator::EmitExpression(
                 primary.value);
           },
           [&](const BinaryExpression& binary) {
-            CHECK(binary.resolved) << "Unresolved binary expression";
-
-            if (binary.resolved->specialization ==
-                ResolvedBinary::Specialization::Nil) {
-              const std::unique_ptr<Expression>& target =
-                  binary.lhs->type_id == TypeRegistry::Nil ? binary.rhs
-                                                           : binary.lhs;
-              EmitExpression(target);
-              switch (binary.op) {
-                case TokenKind::kCompareEq:
-                  bytecode_.Is(value_type_t::VALUE_TYPE_NULL);
+            auto emit_comparison_operator = [this](TokenKind kind) {
+              switch (kind) {
+                case TokenKind::kCompareGt:
+                  bytecode_.Compare(OP_GREATER_THAN);
                   break;
-                case TokenKind::kCompareNe:
-                  bytecode_.Is(value_type_t::VALUE_TYPE_NULL);
-                  bytecode_.Not();
+                case TokenKind::kCompareGe:
+                  bytecode_.Compare(OP_GREAT_OR_EQ);
+                  break;
+                case TokenKind::kCompareLt:
+                  bytecode_.Compare(OP_LESS_THAN);
+                  break;
+                case TokenKind::kCompareLe:
+                  bytecode_.Compare(OP_LESS_OR_EQ);
                   break;
                 default:
-                  NOTREACHED()
-                      << "only equality comparisons allowed against Nil";
+                  LOG(FATAL) << "Invalid comparison op: " << kind;
                   break;
               }
+            };
+
+            if (binary.lhs->type_id == TypeRegistry::Nil ||
+                binary.rhs->type_id == TypeRegistry::Nil) {
+              const std::unique_ptr<Expression>& target =
+                  binary.lhs->type_id != TypeRegistry::Nil ? binary.lhs
+                                                           : binary.rhs;
+              EmitExpression(target);
+              bytecode_.Is(VALUE_TYPE_NULL);
             } else {
-              EmitExpression(binary.lhs);
-              EmitExpression(binary.rhs);
-              EmitOp(Token{.kind = binary.op},
-                     binary.resolved->specialization ==
-                         ResolvedBinary::Specialization::String);
+              CHECK(binary.resolved) << "Unresolved binary expression";
+
+              const auto& symbol =
+                  type_registry_.GetSymbolChecked<FunctionSymbol>(
+                      binary.resolved->symbol_id);
+
+              if (symbol.intrinsic_id.has_value()) {
+                EmitExpression(binary.lhs);
+                EmitExpression(binary.rhs);
+
+                switch (symbol.intrinsic_id.value()) {
+                  case IntrinsicId::Int32_EqualTo:
+                  case IntrinsicId::Float32_EqualTo:
+                    bytecode_.Compare(OP_EQUAL);
+                    break;
+                  case IntrinsicId::Int32_Add:
+                  case IntrinsicId::Float32_Add:
+                    bytecode_.Add();
+                    break;
+                  case IntrinsicId::Int32_Subtract:
+                  case IntrinsicId::Float32_Subtract:
+                    bytecode_.Subtract();
+                    break;
+                  case IntrinsicId::Int32_Multiply:
+                  case IntrinsicId::Float32_Multiply:
+                    bytecode_.Multiply();
+                    break;
+                  case IntrinsicId::Int32_Divide:
+                  case IntrinsicId::Float32_Divide:
+                    bytecode_.Divide();
+                    break;
+                  case IntrinsicId::Int32_Modulus:
+                    bytecode_.Modulo();
+                    break;
+                  case IntrinsicId::Int32_BitwiseAnd:
+                    bytecode_.BitwiseAnd();
+                    break;
+                  case IntrinsicId::Int32_CompareTo:
+                  case IntrinsicId::Float32_CompareTo:
+                    emit_comparison_operator(binary.op);
+                    break;
+                  case IntrinsicId::String_Concat:
+                    bytecode_.Concat();
+                    break;
+                }
+              } else {
+                if (binary.IsComparison())
+                  bytecode_.PushInt32(0);
+
+                EmitExpression(binary.lhs);
+                EmitExpression(binary.rhs);
+                if (symbol.RequiresVirtualDispatch()) {
+                  PushDispatchIdForTypeId(binary.lhs->type_id);
+                  bytecode_.PatchCallVirtual(binary.resolved->symbol_id, 2);
+                } else
+                  bytecode_.PatchCall(binary.resolved->symbol_id, 2);
+                called_symbols_.push_back(binary.resolved->symbol_id);
+
+                if (binary.IsComparison())
+                  emit_comparison_operator(binary.op);
+              }
             }
+
+            if (binary.op == TokenKind::kCompareNe)
+              bytecode_.Not();
           },
           [&](const CallExpression& call) {
             EmitCall(call, optional_chain_ctx);

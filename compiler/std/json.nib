@@ -113,7 +113,7 @@ fn parse_number(input: String, parser: Parser) -> i32 | f32 {
   while (parser.idx < input.length() &&
          is_digit(input.charAt(parser.idx))) {
 
-    let digit: i32 = (input.charAt(parser.idx) - '0') as i32;
+    let digit: i32 = (input.charAt(parser.idx) as i32) - ('0' as i32);
 
     int_part = int_part * 10 + digit;
     parser.idx = parser.idx + 1;
@@ -136,7 +136,7 @@ fn parse_number(input: String, parser: Parser) -> i32 | f32 {
     while (parser.idx < input.length() &&
            is_digit(input.charAt(parser.idx))) {
 
-      let digit = (input.charAt(parser.idx) - '0') as f32;
+      let digit = ((input.charAt(parser.idx) as i32) - ('0' as i32)) as f32;
 
       value = value + digit / divisor;
       divisor = divisor * 10.0;
@@ -178,7 +178,7 @@ fn parse_number(input: String, parser: Parser) -> i32 | f32 {
 
       exponent =
           exponent * 10 +
-          (input.charAt(parser.idx) - '0') as i32;
+          (input.charAt(parser.idx) as i32) - ('0' as i32);
 
       parser.idx = parser.idx + 1;
     }

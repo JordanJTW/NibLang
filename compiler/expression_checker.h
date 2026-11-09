@@ -91,6 +91,15 @@ class ExpressionChecker {
  private:
   std::optional<ExpressionResult> HandlePrimary(PrimaryExpression&, Metadata);
   std::optional<ExpressionResult> HandleMemberAccess(MemberAccessExpression&);
+  std::optional<ExpressionResult> HandleBinaryEquality(
+      BinaryExpression& binary_expression,
+      Metadata expression_metadata);
+  std::optional<ExpressionResult> HandleBinaryComparison(
+      BinaryExpression& binary_expression,
+      Metadata expression_metadata);
+  std::optional<ExpressionResult> HandleBinaryInfix(
+      BinaryExpression& binary_expression,
+      Metadata expression_metadata);
 
   struct ArgumentResult {
     std::optional<ExpressionResult> result;
@@ -120,6 +129,13 @@ class ExpressionChecker {
 
   void BuildPlaceholderTypes(SymbolId symbol_id,
                              SubstitutionMap& substitution_map);
+
+  std::optional<NamedBinding> FindImplementationFor(
+      SpannedType receiver_type,
+      std::string_view interface_name,
+      std::string_view method_name,
+      std::string_view error_message,
+      Metadata trigger_span) const;
 
   std::optional<ImplicitCast> CalculateImplicitCast(
       const Expression& expression,

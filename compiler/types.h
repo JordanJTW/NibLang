@@ -108,8 +108,7 @@ struct Expression;
 struct Statement;
 
 struct ResolvedBinary {
-  enum class Specialization { Number, String, Nil };
-  Specialization specialization = Specialization::Number;
+  SymbolId symbol_id;
 };
 
 struct BinaryExpression {
@@ -117,6 +116,14 @@ struct BinaryExpression {
   std::unique_ptr<Expression> lhs;
   std::unique_ptr<Expression> rhs;
   std::optional<ResolvedBinary> resolved;
+
+  bool IsEquality() const {
+    return op == TokenKind::kCompareEq || op == TokenKind::kCompareNe;
+  }
+  bool IsComparison() const {
+    return op == TokenKind::kCompareGe || op == TokenKind::kCompareGt ||
+           op == TokenKind::kCompareLe || op == TokenKind::kCompareLt;
+  }
 };
 
 struct PrefixUnaryExpression {

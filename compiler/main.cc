@@ -258,6 +258,23 @@ int main(int argc, char* argv[]) {
       return;
     }
 
+    if (symbol.intrinsic_id) {
+      Assembler bytecode;
+      CHECK(symbol.intrinsic_id == IntrinsicId::Int32_EqualTo ||
+            symbol.intrinsic_id == IntrinsicId::Float32_EqualTo)
+          << "Only i32/f32 is supported";
+      bytecode.PushLocal(0).PushLocal(1);
+      bytecode.Compare(OP_EQUAL).Return();
+
+      ByteCodeGenerator::FunctionObject object;
+      object.symbol = &symbol;
+      object.bytecode = bytecode;
+      object.argument_count = 2;
+      object.local_count = 2;
+      function_objects.push_back(std::move(object));
+      return;
+    }
+
     std::vector<SymbolId> called_symbols;
     if (symbol.IsExtern()) {
       external_functions.push_back(&symbol);
@@ -268,8 +285,8 @@ int main(int argc, char* argv[]) {
       for (const auto& symbol_id :
            symbol.implementations | std::views::values) {
         symbols_to_process.push_back(symbol_id);
-        virtual_objects.insert(&symbol);
       }
+      virtual_objects.insert(&symbol);
       return;
     }
 

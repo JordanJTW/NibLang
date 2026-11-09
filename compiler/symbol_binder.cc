@@ -73,10 +73,18 @@ void SymbolBinder::Process(const Block& block) {
 
 SymbolBinder::StructBinding SymbolBinder::ForwardDeclareStruct(
     StructDeclaration& declaration) {
-  // Allow late-binding String while keeping consistent ID for "string literal"
+  // Allow late-binding standard library "Objects" for literal types
+  static const std::unordered_map<std::string_view, TypeId>
+      kLiteralTypeBindings = {
+          {"String", TypeRegistry::String},       {"i32", TypeRegistry::i32},
+          {"Codepoint", TypeRegistry::Codepoint}, {"f32", TypeRegistry::f32},
+          {"bool", TypeRegistry::Bool},
+      };
+
+  auto it = kLiteralTypeBindings.find(declaration.name.text);
   TypeId type_id =
-      (declaration.name.text == "String" ? TypeRegistry::String
-                                         : type_registry_.NewTypeId());
+      (it != kLiteralTypeBindings.end() ? it->second
+                                        : type_registry_.NewTypeId());
   auto [symbol_id, symbol_ref] = type_registry_.NewStructSymbol(declaration);
   auto binding = scope_manager_.InsertNameIntoScope(
       declaration.name, NamedBinding::Struct, type_id, symbol_id);

@@ -1,0 +1,35 @@
+// Copyright (c) 2026, Jordan Werthman <jordanwerthman@gmail.com>
+//
+// SPDX-License-Identifier: BSD-2-Clause
+
+interface EqualTo {
+  fn equalTo(o: Self) -> bool;
+}
+
+interface CompareTo {
+  fn compareTo(o: Self) -> i32;
+}
+
+interface Add {
+  fn add(o: Self) -> Self;
+}
+
+interface Subtract {
+  fn subtract(o: Self) -> Self;
+}
+
+interface Multiply {
+  fn multiply(o: Self) -> Self;
+}
+
+interface Divide {
+  fn divide(o: Self) -> Self;
+}
+
+interface Modulus {
+  fn mod(o: Self) -> Self;
+}
+
+interface Bitwise {
+  fn and(o: Self) -> Self;
+}

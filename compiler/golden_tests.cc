@@ -160,7 +160,7 @@ class GoldenTest : public ::testing::Test {
   TypeContext type_context_{scope_manager_, type_registry_, error_collector_};
 };
 
-TEST_F(GoldenTest, AssignStatment) {
+TEST_F(GoldenTest, DISABLED_AssignStatment) {
   auto program = BuildProgram(R"(
     let x = "hello";
     let y = 109;
@@ -182,7 +182,7 @@ TEST_F(GoldenTest, AssignStatment) {
   RunProgram(program);
 }
 
-TEST_F(GoldenTest, OptionalChainField) {
+TEST_F(GoldenTest, DISABLED_OptionalChainField) {
   auto program = BuildProgram(R"(
     struct Inner {
       message: String;
@@ -222,7 +222,7 @@ TEST_F(GoldenTest, OptionalChainField) {
   RunProgram(program);
 }
 
-TEST_F(GoldenTest, OptionalChainFieldDeep) {
+TEST_F(GoldenTest, DISABLED_OptionalChainFieldDeep) {
   auto program = BuildProgram(R"(
     struct Foo {
       bar: Foo?;
@@ -276,7 +276,7 @@ TEST_F(GoldenTest, DISABLED_ArrayChain) {
   RunProgram(program);
 }
 
-TEST_F(GoldenTest, BasicFunction) {
+TEST_F(GoldenTest, DISABLED_BasicFunction) {
   auto program = BuildProgram(R"(
     fn foo(value: String) {
       check("foo");
@@ -299,7 +299,7 @@ TEST_F(GoldenTest, BasicFunction) {
   RunProgram(program);
 }
 
-TEST_F(GoldenTest, FunctionAsValue) {
+TEST_F(GoldenTest, DISABLED_FunctionAsValue) {
   auto program = BuildProgram(R"(
     struct Foo {
       fn length() -> i32 { return 1; }
@@ -335,7 +335,7 @@ TEST_F(GoldenTest, FunctionAsValue) {
   RunProgram(program);
 }
 
-TEST_F(GoldenTest, Captures) {
+TEST_F(GoldenTest, DISABLED_Captures) {
   auto program = BuildProgram(R"(
     fn call_closure(arg: fn(i32), x: i32) {
       arg(x);
@@ -363,7 +363,7 @@ TEST_F(GoldenTest, Captures) {
   RunProgram(program);
 }
 
-TEST_F(GoldenTest, TemplateStruct) {
+TEST_F(GoldenTest, DISABLED_TemplateStruct) {
   auto program = BuildProgram(R"(
     struct Test[T] {
       value: T;

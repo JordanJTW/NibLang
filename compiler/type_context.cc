@@ -413,8 +413,7 @@ bool TypeContext::IsTypeSubsetOf(TypeId sub_type_id,
   if (!std::holds_alternative<UnionType>(sub_type) &&
       std::holds_alternative<UnionType>(super_type)) {
     const auto& super_types = std::get<UnionType>(super_type).types;
-    return std::binary_search(super_types.begin(), super_types.end(),
-                              sub_type_id);
+    return std::ranges::binary_search(super_types, sub_type_id);
   }
 
   if (std::holds_alternative<UnionType>(sub_type) &&
@@ -427,8 +426,8 @@ bool TypeContext::IsTypeSubsetOf(TypeId sub_type_id,
     const auto& sub_types = std::get<UnionType>(sub_type).types;
     const auto& super_types = std::get<UnionType>(super_type).types;
 
-    return std::all_of(sub_types.begin(), sub_types.end(), [&](TypeId id) {
-      return std::binary_search(super_types.begin(), super_types.end(), id);
+    return std::ranges::all_of(sub_types, [&](TypeId id) {
+      return std::ranges::binary_search(super_types, id);
     });
   }
 
@@ -437,15 +436,12 @@ bool TypeContext::IsTypeSubsetOf(TypeId sub_type_id,
     return true;  // Nil is a subset of any Optional type.
   }
 
-  if (std::holds_alternative<OptionalType>(sub_type) &&
-      std::holds_alternative<OptionalType>(super_type)) {
+  if (std::holds_alternative<OptionalType>(sub_type)) {
     const auto& sub_wrapped = std::get<OptionalType>(sub_type).wrapped_type;
-    const auto& super_wrapped = std::get<OptionalType>(super_type).wrapped_type;
-    return IsTypeSubsetOf(sub_wrapped, super_wrapped);
+    return IsTypeSubsetOf(sub_wrapped, super_type_id);
   }
 
-  if (!std::holds_alternative<OptionalType>(sub_type) &&
-      std::holds_alternative<OptionalType>(super_type)) {
+  if (std::holds_alternative<OptionalType>(super_type)) {
     const auto& super_wrapped = std::get<OptionalType>(super_type).wrapped_type;
     return IsTypeSubsetOf(sub_type_id, super_wrapped);
   }

@@ -893,6 +893,54 @@ std::optional<ExpressionResult> ExpressionChecker::HandleMemberAccess(
       type_id = optional_type->wrapped_type;
     }
 
+    if (auto* intersection_type =
+            type_registry_.GetType<IntersectionType>(type_id)) {
+      std::optional<NamedBinding> binding = std::nullopt;
+      for (const auto& intersect_id : intersection_type->types) {
+        auto& interface_type =
+            type_registry_.GetTypeChecked<StructType>(intersect_id);
+        auto current_binding = scope_manager_.FindBindingFor(
+            member_name.text, ScopeManager::Current,
+            interface_type.symbol->instance_scope_id);
+
+        if (binding && current_binding) {
+          error_collector_
+              .Add("intersection " + type_registry_.GetNameFromTypeId(type_id) +
+                       " has conflicting bindings for '" + member_name.text +
+                       "'",
+                   current_binding->name.metadata, FROM_HERE)
+              .WithNote("previous binding", binding->name.metadata);
+          return std::nullopt;
+        }
+
+        if (current_binding)
+          binding = current_binding;
+      }
+
+      if (!binding) {
+        error_collector_.Add("no member '" + member_name.text +
+                                 "' found on instance of " +
+                                 type_registry_.GetNameFromTypeId(type_id),
+                             member_name.metadata, FROM_HERE);
+        return std::nullopt;
+      }
+
+      CHECK(!member_access.resolved)
+          << "MemberAccessExpression was previously resolved";
+      member_access.resolved =
+          ResolvedAccess{ResolvedAccess::Method{binding->GetSymbolId()}};
+
+      SubstitutionMap substitution_map;
+      substitution_map[LiteralType::Self] = object_result->type_id;
+
+      TypeId realized_type_id = type_resolver_.Rewrite(
+          type_rewriter_.Rewrite(binding->type_id, substitution_map));
+
+      return ExpressionResult::with_type_override(realized_type_id, *binding)
+          .with_substitutions(object_result->substitution_map)
+          .with_substitutions(substitution_map);
+    }
+
     const auto* const struct_type = type_registry_.GetType<StructType>(type_id);
     if (!struct_type) {
       error_collector_.Add("type " + type_registry_.GetNameFromTypeId(type_id) +

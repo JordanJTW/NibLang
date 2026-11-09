@@ -299,13 +299,20 @@ int main(int argc, char* argv[]) {
     }
   };
 
+  bool found_entry_point = false;
   for (const auto& symbol : type_registry.symbol_table() | std::views::values) {
     if (const auto* fn_symbol = std::get_if<FunctionSymbol>(&symbol)) {
       if (fn_symbol->declaration.name.text == "main") {
         process_symbol(*fn_symbol);
+        found_entry_point = true;
         break;
       }
     }
+  }
+
+  if (!found_entry_point) {
+    LOG(ERROR) << "Unable to find entry-point `fn main()`";
+    return 1;
   }
 
   while (!symbols_to_process.empty()) {

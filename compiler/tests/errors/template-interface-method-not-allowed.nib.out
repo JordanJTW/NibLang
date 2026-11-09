@@ -1,4 +1,4 @@
-Error: [[PATH]]:5:6:
+Error: [[PATH]]/compiler/tests/errors/template-interface-method-not-allowed.nib:5:6:
   fn bad[T]() -> bool;
      ^~~ template variables are not allowed on `interface` methods
 

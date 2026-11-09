@@ -1,0 +1,9 @@
+// RUN: %compiler %s --disable-logging 2> %t.err || true
+// RUN: sed "s|%root|[[PATH]]|g" %t.err | diff -u %s.out -
+
+@import "std/types.nib"
+
+fn main() {
+  let x = Array.of().new();
+}
+

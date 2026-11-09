@@ -1,22 +1,22 @@
-Error: [[PATH]]:8:3:
+Error: [[PATH]]/compiler/tests/errors/bad-assign-lhs.nib:8:3:
   123 = 456;
   ^~~ cannot assign to this expression
 
-Error: [[PATH]]:10:3:
+Error: [[PATH]]/compiler/tests/errors/bad-assign-lhs.nib:10:3:
   "Hello" = "World";
   ^~~~~~~ cannot assign to this expression
 
-Error: [[PATH]]:12:3:
+Error: [[PATH]]/compiler/tests/errors/bad-assign-lhs.nib:12:3:
   String = 456;
   ^~~~~~ cannot assign to 'String'
-Note: [[PATH]]:4:8:
-struct String {}
-       ^~~~~~ declared here
+Note: [[PATH]]/compiler/std/types.nib:98:15:
+extern struct String {
+              ^~~~~~ declared here
 
-Error: [[PATH]]:14:3:
+Error: [[PATH]]/compiler/tests/errors/bad-assign-lhs.nib:14:3:
   main = 456;
   ^~~~ cannot assign to 'main'
-Note: [[PATH]]:6:4:
+Note: [[PATH]]/compiler/tests/errors/bad-assign-lhs.nib:6:4:
 fn main() {
    ^~~~ declared here
 

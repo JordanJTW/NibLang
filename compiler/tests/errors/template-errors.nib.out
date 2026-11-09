@@ -1,19 +1,28 @@
-Error: [[PATH]]:12:5:
+Error: [[PATH]]/compiler/tests/errors/template-errors.nib:12:5:
     value = 456;
     ^~~~~~~~~~~ expected template variable 'T', but found 'i32'
+Note: [[PATH]]/compiler/tests/errors/template-errors.nib:9:3:
+  value: T;
+  ^~~~~ declared here
 
-Error: [[PATH]]:16:5:
+Error: [[PATH]]/compiler/tests/errors/template-errors.nib:16:5:
     self.value = Foo.of(N)(value);
     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~ expected template variable 'T', but found 'Foo[N]'
+Note: [[PATH]]/compiler/tests/errors/template-errors.nib:9:3:
+  value: T;
+  ^~~~~ declared here
 
-Error: [[PATH]]:5:9:
+Error: [[PATH]]/compiler/tests/errors/template-errors.nib:5:9:
   value.next();
         ^~~~ no member 'next' found on unconstrained template variable 'T'
-Note: [[PATH]]:4:8:
+Note: [[PATH]]/compiler/tests/errors/template-errors.nib:4:8:
 fn bad[T](value: T) {
        ^ defined here
 
-Error: [[PATH]]:24:3:
+Error: [[PATH]]/compiler/tests/errors/template-errors.nib:24:3:
   x = Foo.of(bool)(true);
   ^~~~~~~~~~~~~~~~~~~~~~ expected 'Foo[i32]', but found 'Foo[bool]'
+Note: [[PATH]]/compiler/tests/errors/template-errors.nib:23:7:
+  let x = Foo.of(i32)(123);
+      ^ declared here
 

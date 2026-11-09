@@ -6,7 +6,7 @@ fn GetWord() -> String? {
   return "Jordan";
 }
 
-fn test_guard() -> i32 {
+fn main() -> i32 {
   let x: String? = GetWord();
 
   if (x == Nil) {

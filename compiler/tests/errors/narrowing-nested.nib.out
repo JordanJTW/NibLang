@@ -1,4 +1,4 @@
-Error: [[PATH]]:20:15:
+Error: [[PATH]]/compiler/tests/errors/narrowing-nested.nib:20:15:
       let s4: String = b;
               ^~~~~~ expected 'String', but found 'Nil'
 

@@ -1,7 +1,7 @@
 // RUN: %compiler %s --disable-logging 2> %t.err || true
-// RUN: sed "s|%s|[[PATH]]|g" %t.err | diff -u %s.out -
+// RUN: sed "s|%root|[[PATH]]|g" %t.err | diff -u %s.out -
 
-struct String {}
+@import "std/types.nib"
 
 fn main() {
   // Do not assign to literal numbers

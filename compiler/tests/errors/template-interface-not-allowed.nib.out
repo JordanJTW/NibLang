@@ -1,8 +1,8 @@
-Error: [[PATH]]:4:11:
+Error: [[PATH]]/compiler/tests/errors/template-interface-not-allowed.nib:4:11:
 interface Bad[T] {}
           ^~~ template variables are not allowed on `interface` declarations
 
-Error: [[PATH]]:7:14:
+Error: [[PATH]]/compiler/tests/errors/template-interface-not-allowed.nib:7:14:
   implements Bad[Foo] {}
              ^~~ template variables are not allowed on `interface` declarations
 

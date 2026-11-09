@@ -1,7 +1,7 @@
-Error: [[PATH]]:38:14:
+Error: [[PATH]]/compiler/tests/errors/template-constrained.nib:38:14:
   takes_hash(Bar());
              ^~~~~ 'Bar' does not satisfy interface constraint 'Hashable'
-Note: [[PATH]]:28:18:
+Note: [[PATH]]/compiler/tests/errors/template-constrained.nib:28:18:
 fn takes_hash[T: Hashable](value: T) -> i32 {
                  ^~~~~~~~ constraint declared here
 

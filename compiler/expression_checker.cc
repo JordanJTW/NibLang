@@ -185,9 +185,14 @@ std::optional<ExpressionResult> ExpressionChecker::Check(
           },
           [&](AssignmentExpression& assign) -> std::optional<ExpressionResult> {
             auto lhs = Check(assign.lhs);
-            auto rhs = RequireValue(assign.rhs);
 
-            if (!lhs.has_value() || !rhs.has_value())
+            if (!lhs.has_value())
+              return std::nullopt;
+
+            auto rhs = RequireValue(
+                assign.rhs, SpannedType{lhs->type_id, assign.lhs->meta});
+
+            if (!rhs.has_value())
               return std::nullopt;
 
             if (!lhs->binding || !lhs->binding->IsVariable()) {

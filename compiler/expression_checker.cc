@@ -1240,7 +1240,7 @@ std::optional<NamedBinding> ExpressionChecker::FindImplementationFor(
   // Handles associated types by matching on the base interface SymbolId which
   // is required to find things like Iterators for `for ... in` loops.
   auto find_match_interface_from_type =
-      [&](const std::span<const TypeId> type_ids) {
+      [&](const std::vector<TypeId>& type_ids) {
         return std::ranges::find_if(type_ids, [&](TypeId type_id) {
           auto [symbol, instance_template_type_ids] =
               type_registry_.GetTypeChecked<StructType>(

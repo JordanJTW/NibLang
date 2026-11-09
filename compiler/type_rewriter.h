@@ -12,10 +12,9 @@
 
 #pragma once
 
-#include <unordered_map>
-
 #include "compiler/type_context.h"
 #include "compiler/type_registry.h"
+#include "compiler/types.h"
 
 class TypeRewriter {
  public:

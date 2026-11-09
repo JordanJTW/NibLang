@@ -100,8 +100,7 @@ TypeId TypeRewriter::Rewrite(TypeId type_id,
             if (!is_updated)
               return type_id;
 
-            return type_registry_.NewUnionType(
-                UnionType{std::move(rewritten_member_types)});
+            return type_context_.GetUnionOf(rewritten_member_types);
           },
           [&](const IntersectionType& type) {
             bool is_updated = false;
@@ -116,15 +115,14 @@ TypeId TypeRewriter::Rewrite(TypeId type_id,
             if (!is_updated)
               return type_id;
 
-            return type_registry_.NewIntersectionType(
-                IntersectionType{std::move(rewritten_member_types)});
+            return type_context_.GetIntersectionOf(rewritten_member_types);
           },
           [&](const OptionalType& type) {
             TypeId rewritten_wrapped_type =
                 Rewrite(type.wrapped_type, substitutions);
 
             return rewritten_wrapped_type != type.wrapped_type
-                       ? type_registry_.NewOptionalType(rewritten_wrapped_type)
+                       ? type_context_.GetOptionalOf(rewritten_wrapped_type)
                        : type_id;
           },
           // TODO: Rewrite `target_type_id` if we support `alias Foo[T] = ...`
